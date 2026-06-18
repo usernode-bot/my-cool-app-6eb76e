@@ -262,7 +262,9 @@ async function transitionToResults(round) {
     const remainder = round.pot % realSurvivors.length;
 
     for (let i = 0; i < realSurvivors.length; i++) {
-      const payout = payoutPerSurvivor + (i === 0 ? remainder : 0);
+      // Payout = original bet + share of the pot
+      const winningsShare = payoutPerSurvivor + (i === 0 ? remainder : 0);
+      const payout = round.entry_stake + winningsShare;
       const placement = i + 1;
 
       await pool.query(

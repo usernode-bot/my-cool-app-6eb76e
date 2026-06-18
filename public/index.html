@@ -218,6 +218,23 @@
       75% { transform: translate(-50%, -62%); }
     }
 
+    @keyframes pocongCorridorHop {
+      0% {
+        left: 5%;
+        top: 50%;
+        opacity: 1;
+      }
+      100% {
+        left: 95%;
+        top: 50%;
+        opacity: 1;
+      }
+    }
+
+    .pocong.corridor {
+      animation: pocongCorridorHop 2.5s ease-in-out forwards !important;
+    }
+
     .pocong::before,
     .pocong::after {
       content: '';
@@ -940,11 +957,18 @@
             const pocongContainer = document.getElementById('pocong-container');
             pocongContainer.innerHTML = '';
             const pocong = document.createElement('div');
-            pocong.className = 'pocong';
+            pocong.className = 'pocong corridor';
             pocongContainer.appendChild(pocong);
-            const room = document.querySelector('[data-room="' + state.latestReveal.pocong_room + '"]');
-            if (room) room.classList.add('active');
-            showRevealWash(state.latestReveal.pocong_room);
+
+            // After corridor animation, move to room and remove corridor class
+            setTimeout(() => {
+              pocong.classList.remove('corridor');
+              pocong.style.left = '50%';
+              pocong.style.top = '50%';
+              const room = document.querySelector('[data-room="' + state.latestReveal.pocong_room + '"]');
+              if (room) room.classList.add('active');
+              showRevealWash(state.latestReveal.pocong_room);
+            }, 2500);
           }
         } else if (state.round.phase === 'results') {
           joinBtn.style.display = 'none';
