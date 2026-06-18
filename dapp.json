@@ -7,6 +7,11 @@
       "path": "/",
       "expectSelector": ".mansion",
       "expectText": "Hall of Survivors"
+    },
+    {
+      "name": "Win tableau renders",
+      "path": "/?demo=win",
+      "expectSelector": ".win-banner"
     }
   ]
 }

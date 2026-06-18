@@ -67,9 +67,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
   <style>
+    :root {
+      --ink: #0c0c0c;
+    }
+
     body {
-      filter: grayscale(100%) contrast(1.1);
-      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/><feColorMatrix in="noise" type="saturate" values="0"/></filter><rect width="100" height="100" fill="%23000000" filter="url(%23noise)" opacity="0.05"/></svg>');
+      background: #050505;
+      overflow: hidden;
+    }
+
+    /* ---- World layer: everything here reads as vintage black & white ----
+       Grayscale lives on this wrapper (NOT on <body>) so the HUD, the
+       reveal/win color washes, and the gold winnings text — all siblings
+       of .world — keep their real color. */
+    .world {
+      filter: grayscale(100%) contrast(1.12);
+      position: relative;
+      min-height: 100vh;
     }
 
     .mansion {
@@ -82,32 +96,52 @@
     .room-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
-      padding: 40px;
-      max-width: 900px;
+      gap: 22px;
+      padding: 48px 40px;
+      max-width: 920px;
       margin: 0 auto;
     }
 
+    /* Heavy, slightly irregular hand-inked tiles. The SVG #inkRoughen
+       displacement filter roughens the edges so they read as drawn, not
+       crisp vector. Applied to the 12 room tiles only (one reused filter
+       def) to keep the cost bounded — sprites wobble via cheap transforms. */
     .room {
       position: relative;
       aspect-ratio: 1;
-      background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
-      border: 3px solid #666;
+      background:
+        linear-gradient(135deg, #d8d8d8 0%, #b4b4b4 55%, #9a9a9a 100%);
+      border: 4px solid var(--ink);
+      border-radius: 6px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: transform 0.18s, box-shadow 0.18s;
       overflow: hidden;
+      box-shadow: inset 0 0 0 2px #000, 4px 5px 0 #000;
+      filter: url(#inkRoughen);
+    }
+
+    /* Cross-hatch / stipple shading layer so walls aren't flat fills. */
+    .room::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(45deg, rgba(0,0,0,.20) 0 1px, transparent 1px 6px),
+        repeating-linear-gradient(-45deg, rgba(0,0,0,.12) 0 1px, transparent 1px 8px),
+        radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.35), transparent 60%);
+      mix-blend-mode: multiply;
+      opacity: .55;
     }
 
     .room:hover {
-      background: linear-gradient(135deg, #4a4a4a 0%, #3a3a3a 100%);
-      border-color: #999;
-      transform: scale(1.05);
+      transform: scale(1.05) rotate(-0.4deg);
+      box-shadow: inset 0 0 0 2px #000, 6px 7px 0 #000;
     }
 
     .room.active {
-      background: linear-gradient(135deg, #5a5a5a 0%, #4a4a4a 100%);
-      border-color: #fff;
-      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+      background: linear-gradient(135deg, #ffffff 0%, #cfcfcf 100%);
+      box-shadow: inset 0 0 0 3px #000, 0 0 22px rgba(255,255,255,.7), 4px 5px 0 #000;
     }
 
     .room-label {
@@ -116,23 +150,27 @@
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
-      color: #fff;
-      font-weight: bold;
-      font-size: 11px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      color: #111;
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: .3px;
+      text-shadow: 1px 1px 0 rgba(255,255,255,.6);
       pointer-events: none;
       width: 90%;
+      z-index: 3;
     }
 
     .room-occupancy {
       position: absolute;
       bottom: 5px;
       right: 5px;
-      background: rgba(0, 0, 0, 0.7);
+      background: var(--ink);
       color: #fff;
       padding: 2px 6px;
       font-size: 10px;
+      font-weight: 700;
       border-radius: 3px;
+      z-index: 3;
     }
 
     .character {
@@ -142,122 +180,194 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: boil 2s infinite ease-in-out;
+      animation: boil 1.6s infinite ease-in-out;
+      z-index: 2;
     }
 
+    /* Stronger "boil" — a hand-animated jitter (shift + tiny rotate).
+       Per-sprite animation-delay (set inline) keeps the scene from
+       pulsing in lockstep. */
     @keyframes boil {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-2px); }
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(0.5px, -0.7px) rotate(-0.6deg); }
+      50% { transform: translate(-0.5px, 0.6px) rotate(0.5deg); }
+      75% { transform: translate(0.4px, 0.3px) rotate(-0.3deg); }
     }
 
-    .char-sprite {
-      width: 20px;
-      height: 20px;
-      background: #fff;
-      border-radius: 50%;
-      position: relative;
-      box-shadow: -3px 0 0 -2px #000, 3px 0 0 -2px #000;
-    }
-
-    .char-sprite::before {
-      content: '';
-      position: absolute;
-      width: 3px;
-      height: 3px;
-      background: #000;
-      border-radius: 50%;
-      top: 6px;
-      left: 3px;
-    }
-
-    .char-sprite::after {
-      content: '';
-      position: absolute;
-      width: 3px;
-      height: 3px;
-      background: #000;
-      border-radius: 50%;
-      top: 6px;
-      right: 3px;
-    }
-
-    .char-glove-left {
-      position: absolute;
-      width: 4px;
-      height: 6px;
-      background: #fff;
-      left: -2px;
-      top: 12px;
-    }
-
-    .char-glove-right {
-      position: absolute;
-      width: 4px;
-      height: 6px;
-      background: #fff;
-      right: -2px;
-      top: 12px;
-    }
+    .char-svg { display: block; }
 
     .pocong {
       position: absolute;
-      width: 30px;
-      height: 40px;
-      background: radial-gradient(ellipse at 50% 30%, #e0e0e0 0%, #a0a0a0 100%);
+      width: 34px;
+      height: 46px;
+      background: radial-gradient(ellipse at 50% 30%, #f0f0f0 0%, #9a9a9a 100%);
+      border: 3px solid var(--ink);
       border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 100;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 12px rgba(255,255,255,.4), inset 0 -4px 6px rgba(0,0,0,.25);
       animation: pocongHop 0.6s ease-in-out infinite;
     }
 
     @keyframes pocongHop {
       0%, 100% { transform: translate(-50%, -50%); }
-      25% { transform: translate(-50%, -55%); }
+      25% { transform: translate(-50%, -58%); }
       50% { transform: translate(-50%, -50%); }
-      75% { transform: translate(-50%, -58%); }
+      75% { transform: translate(-50%, -62%); }
     }
 
     .pocong::before,
     .pocong::after {
       content: '';
       position: absolute;
-      width: 4px;
-      height: 4px;
-      background: #333;
+      width: 5px;
+      height: 5px;
+      background: #111;
       border-radius: 50%;
-      top: 12px;
+      top: 13px;
+    }
+    .pocong::before { left: 7px; }
+    .pocong::after { right: 7px; }
+
+    /* ---- Aged-film overlays (neutral, sit above the world) ---- */
+    .film-grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 5;
+      opacity: .16;
+      mix-blend-mode: overlay;
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/></filter><rect width="120" height="120" filter="url(%23n)"/></svg>');
+      animation: grainShift .35s steps(2) infinite, flicker 4.5s ease-in-out infinite;
     }
 
-    .pocong::before { left: 6px; }
-    .pocong::after { right: 6px; }
+    @keyframes grainShift {
+      0% { transform: translate(0, 0); }
+      50% { transform: translate(-4px, 3px); }
+      100% { transform: translate(3px, -2px); }
+    }
 
-    .hud-coin {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 2px solid #999;
-      padding: 12px 20px;
-      border-radius: 8px;
-      color: #fff;
-      font-weight: bold;
+    @keyframes flicker {
+      0%, 100% { opacity: .16; }
+      48% { opacity: .13; }
+      50% { opacity: .22; }
+      52% { opacity: .14; }
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 6;
+      background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.78) 100%);
+    }
+
+    /* ---- FX overlay: holds the colored reveal/win composition.
+       Outside .world, so red / silver / gold render in true color. ---- */
+    .fx-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 120;
+    }
+
+    .room-wash {
+      position: fixed;
+      border-radius: 6px;
+      background: radial-gradient(ellipse at 50% 40%, rgba(190,18,18,.55), rgba(120,0,0,.72));
+      box-shadow: 0 0 40px 8px rgba(200,0,0,.5), inset 0 0 30px rgba(80,0,0,.6);
+      mix-blend-mode: normal;
+      animation: washIn .5s ease-out;
       display: flex;
       align-items: center;
-      gap: 10px;
+      justify-content: center;
+      gap: 4px;
+      overflow: hidden;
+    }
+
+    @keyframes washIn {
+      0% { opacity: 0; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .slumped { filter: drop-shadow(0 2px 1px rgba(0,0,0,.5)); }
+
+    /* Enlarged top-hat player peeking from behind a bookshelf in a safe room */
+    .player-zoom {
+      position: fixed;
+      z-index: 121;
+      animation: peekIn .6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 6px 6px rgba(0,0,0,.5));
+    }
+
+    @keyframes peekIn {
+      0% { transform: translateY(40px) scale(0.6); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .bookshelf {
+      position: fixed;
+      z-index: 122;
+      filter: drop-shadow(0 4px 4px rgba(0,0,0,.5));
+    }
+
+    /* ---- HUD (true color, metallic) ---- */
+    .metal {
+      background: linear-gradient(160deg, #fafafa 0%, #cfcfcf 16%, #9a9a9a 50%, #c4c4c4 74%, #efefef 100%);
+      border: 2px solid #5f5f5f;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.85),
+        inset 0 -3px 5px rgba(0,0,0,.32),
+        0 4px 12px rgba(0,0,0,.55);
+      color: #161616;
+    }
+
+    .hud-coin {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       z-index: 50;
-      min-width: 120px;
+      min-width: 130px;
+    }
+
+    .hud-coin-text { display: flex; flex-direction: column; line-height: 1.1; }
+    #balance { font-size: 20px; }
+
+    .hud-winnings {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .5px;
+      margin-top: 2px;
+      background: linear-gradient(180deg, #fff4b0 0%, #f5c542 45%, #b8860b 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+      animation: winningsPop .5s ease-out;
+    }
+
+    @keyframes winningsPop {
+      0% { transform: scale(0.6); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
     }
 
     .coin-icon {
-      width: 24px;
-      height: 24px;
-      background: radial-gradient(ellipse at 30% 30%, #ffeb3b, #fbc02d);
+      width: 26px;
+      height: 26px;
+      background: radial-gradient(ellipse at 30% 30%, #fff3b0, #f5c542 45%, #b8860b 100%);
+      border: 2px solid #7a5a00;
       border-radius: 50%;
-      animation: spinCoin 1s linear infinite;
+      animation: spinCoin 1.1s linear infinite;
       flex-shrink: 0;
+      box-shadow: 0 0 8px rgba(245,197,66,.5);
     }
 
     @keyframes spinCoin {
@@ -266,165 +376,156 @@
     }
 
     .hud-panel {
-      position: absolute;
+      position: fixed;
       bottom: 20px;
       right: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      border: 2px solid #999;
-      padding: 16px 20px;
-      border-radius: 8px;
-      color: #fff;
+      padding: 14px 18px;
+      border-radius: 10px;
       font-size: 13px;
       z-index: 50;
-      min-width: 180px;
+      min-width: 190px;
     }
 
     .hud-panel-row {
       display: flex;
       justify-content: space-between;
       margin: 6px 0;
+      font-weight: 700;
     }
 
-    .hud-panel-label {
-      color: #999;
-    }
+    .hud-panel-label { color: #4a4a4a; }
 
-    .hud-timer {
-      font-weight: bold;
-      color: #ffeb3b;
-    }
+    .hud-timer { font-weight: 900; color: #7a1010; }
 
     .hud-status {
       margin-top: 10px;
       padding-top: 10px;
-      border-top: 1px solid #444;
-      color: #ffeb3b;
-      font-weight: bold;
+      border-top: 2px solid rgba(0,0,0,.35);
+      color: #111;
+      font-weight: 900;
       text-align: center;
+      text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
 
     .banner-container {
       position: fixed;
-      top: 50%;
+      top: 42%;
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 200;
       pointer-events: none;
     }
 
+    /* Hand-inked "You Win" title card */
     .win-banner {
-      background: linear-gradient(45deg, #ffeb3b, #fbc02d, #ffeb3b);
-      color: #000;
-      padding: 40px 60px;
-      border-radius: 20px;
+      position: relative;
+      background:
+        repeating-linear-gradient(48deg, rgba(0,0,0,.06) 0 2px, transparent 2px 7px),
+        linear-gradient(45deg, #fff4b0, #f5c542 45%, #e0a81e 70%, #fff4b0);
+      color: #1a1206;
+      padding: 36px 56px;
+      border: 6px solid #1a1206;
+      border-radius: 18px;
       text-align: center;
-      font-weight: bold;
-      font-size: 48px;
+      font-weight: 900;
+      font-size: 52px;
+      letter-spacing: 1px;
+      line-height: 1;
+      text-transform: uppercase;
       animation: dropBanner 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 12px 0 #1a1206, 0 14px 36px rgba(0,0,0,.6);
+      text-shadow: 3px 3px 0 rgba(255,255,255,.5);
     }
 
     @keyframes dropBanner {
-      0% { transform: translate(-50%, -150%); opacity: 0; }
-      100% { transform: translate(-50%, -50%); opacity: 1; }
+      0% { transform: translateY(-150%) rotate(-6deg); opacity: 0; }
+      70% { transform: translateY(8%) rotate(2deg); opacity: 1; }
+      100% { transform: translateY(0) rotate(-1.5deg); opacity: 1; }
     }
 
     .win-amount {
-      font-size: 32px;
-      margin-top: 10px;
-      color: #333;
+      font-size: 30px;
+      margin-top: 12px;
+      color: #5a3a00;
+      text-shadow: 1px 1px 0 rgba(255,255,255,.5);
     }
 
     .hall-of-survivors {
-      position: absolute;
+      position: fixed;
       bottom: 20px;
       left: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      border: 2px solid #999;
-      padding: 16px;
-      border-radius: 8px;
-      color: #fff;
+      padding: 14px;
+      border-radius: 10px;
       font-size: 12px;
       z-index: 50;
-      min-width: 200px;
+      min-width: 210px;
       max-height: 300px;
       overflow-y: auto;
     }
 
     .hall-title {
-      font-weight: bold;
+      font-weight: 900;
       margin-bottom: 10px;
       text-align: center;
-      color: #ffeb3b;
+      color: #1a1206;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
 
     .survivor-row {
       display: flex;
       justify-content: space-between;
       padding: 4px 0;
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid rgba(0,0,0,.25);
+      font-weight: 700;
+      color: #1c1c1c;
     }
-
-    .survivor-row:last-child {
-      border-bottom: none;
-    }
-
-    .survivor-rank {
-      color: #999;
-      min-width: 20px;
-    }
-
-    .survivor-name {
-      flex: 1;
-      margin-left: 10px;
-    }
-
-    .survivor-score {
-      color: #ffeb3b;
-      font-weight: bold;
-      min-width: 30px;
-      text-align: right;
-    }
+    .survivor-row:last-child { border-bottom: none; }
+    .survivor-rank { color: #5a5a5a; min-width: 20px; }
+    .survivor-name { flex: 1; margin-left: 10px; }
+    .survivor-score { color: #7a5a00; font-weight: 900; min-width: 36px; text-align: right; }
 
     .join-button {
       position: fixed;
       bottom: 40px;
       left: 50%;
       transform: translateX(-50%);
-      background: #ffeb3b;
-      color: #000;
-      border: none;
-      padding: 16px 40px;
-      font-size: 16px;
-      font-weight: bold;
-      border-radius: 8px;
+      background: linear-gradient(180deg, #fff4b0, #f5c542 50%, #c98f0e);
+      color: #1a1206;
+      border: 4px solid #1a1206;
+      padding: 14px 44px;
+      font-size: 17px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-radius: 12px;
       cursor: pointer;
       z-index: 60;
-      transition: all 0.2s;
+      transition: transform 0.15s;
+      box-shadow: 0 6px 0 #1a1206;
     }
 
     .join-button:hover:not(:disabled) {
-      background: #fbc02d;
-      transform: translateX(-50%) scale(1.05);
+      transform: translateX(-50%) translateY(-2px);
+      box-shadow: 0 8px 0 #1a1206;
     }
 
     .join-button:disabled {
-      background: #666;
-      color: #999;
+      background: linear-gradient(180deg, #cfcfcf, #9a9a9a);
+      color: #5a5a5a;
       cursor: not-allowed;
+      box-shadow: 0 6px 0 #444;
     }
 
     .lobby-timer {
       position: fixed;
       top: 20px;
       left: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      border: 2px solid #999;
-      padding: 12px 20px;
-      border-radius: 8px;
-      color: #fff;
-      font-weight: bold;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 800;
+      color: #161616;
       z-index: 50;
     }
 
@@ -433,44 +534,58 @@
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(255, 0, 0, 0.3);
-      border: 1px solid #ff0000;
-      color: #ff0000;
-      padding: 6px 12px;
-      border-radius: 4px;
+      background: rgba(170, 12, 12, 0.85);
+      border: 2px solid #ff5252;
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 6px;
       font-size: 12px;
-      z-index: 50;
-      font-weight: bold;
-    }
-
-    .room-tint-red {
-      animation: roomBlast 0.6s ease-out;
-    }
-
-    @keyframes roomBlast {
-      0% { background: linear-gradient(135deg, #ff0000, #800000); }
-      100% { background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%); }
+      z-index: 70;
+      font-weight: 800;
+      letter-spacing: .5px;
     }
   </style>
 </head>
-<body class="bg-stone-950 text-stone-100 min-h-screen flex flex-col">
+<body class="bg-stone-950 text-stone-100 min-h-screen">
+
+  <!-- Shared SVG filter defs (hand-drawn edge roughening), zero footprint -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <filter id="inkRoughen">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="2" seed="7" result="noise"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+    </defs>
+  </svg>
 
   <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
 
-  <div class="mansion flex-1">
-    <div id="lobby-timer" class="lobby-timer" style="display: none;"></div>
-
-    <div class="room-grid" id="room-grid"></div>
-
-    <div id="pocong-container" style="position: absolute; width: 100%; height: 100%; pointer-events: none;"></div>
+  <!-- World (grayscale) -->
+  <div class="world" id="world">
+    <div class="mansion flex-1">
+      <div id="lobby-timer" class="lobby-timer metal" style="display: none;"></div>
+      <div class="room-grid" id="room-grid"></div>
+      <div id="pocong-container" style="position: absolute; width: 100%; height: 100%; pointer-events: none;"></div>
+    </div>
   </div>
 
-  <div class="hud-coin">
+  <!-- Aged-film overlays -->
+  <div class="film-grain"></div>
+  <div class="vignette"></div>
+
+  <!-- Colored reveal/win composition (true color) -->
+  <div class="fx-overlay" id="fx-overlay"></div>
+
+  <!-- HUD (true color, metallic) -->
+  <div class="hud-coin metal">
     <div class="coin-icon"></div>
-    <span id="balance">0</span>
+    <div class="hud-coin-text">
+      <span id="balance">0</span>
+      <div class="hud-winnings" id="hud-winnings" style="display: none;"></div>
+    </div>
   </div>
 
-  <div class="hud-panel">
+  <div class="hud-panel metal">
     <div class="hud-panel-row">
       <span class="hud-panel-label">Stake</span>
       <span id="stake">100</span>
@@ -486,7 +601,7 @@
     <div class="hud-status" id="status">Joining...</div>
   </div>
 
-  <div class="hall-of-survivors">
+  <div class="hall-of-survivors metal">
     <div class="hall-title">Hall of Survivors</div>
     <div id="leaderboard"></div>
   </div>
@@ -499,7 +614,16 @@
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
-    const IS_STAGING = document.querySelector('body').innerHTML.includes('staging');
+
+    // Staging-gated cosmetic preview of the win tableau. ?demo=win forces
+    // the win composition deterministically (blood-red wash, slumped losers,
+    // enlarged top-hat player behind a bookshelf, silver HUD + gold +TKN).
+    // Pure client-side presentation — no server calls, no data mutation, no
+    // payout — so it is harmless if it ever appears outside staging.
+    const DEMO_WIN = params.get('demo') === 'win';
+    const DEMO_POCONG_ROOM = 'Kitchen';
+    const DEMO_SAFE_ROOM = 'Library';
+    const DEMO_PAYOUT = 500;
 
     let state = {
       round: {},
@@ -507,8 +631,8 @@
       roomOccupancy: {},
       latestReveal: null,
       balance: 0,
-      characters: {},
-      lastPayout: 0
+      lastPayout: 0,
+      bannerShown: false
     };
 
     const ROOMS = [
@@ -526,19 +650,65 @@
       'Reading Room'
     ];
 
-    function createCharacter(name) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 20 20');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', '20');
-      svg.innerHTML = `
-        <circle cx="10" cy="8" r="6" fill="white"/>
-        <circle cx="6" cy="6" r="1.5" fill="black"/>
-        <circle cx="14" cy="6" r="1.5" fill="black"/>
-        <rect x="2" y="12" width="4" height="6" fill="white"/>
-        <rect x="14" y="12" width="4" height="6" fill="white"/>
-      `;
-      return svg;
+    // ---- Sprites (thick-ink rubber-hose SVG) ----
+    function characterSVG(opts) {
+      opts = opts || {};
+      const slump = opts.slump;
+      const eyes = slump
+        ? `<path d="M5 5 L9 9 M9 5 L5 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+           <path d="M13 5 L17 9 M17 5 L13 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>`
+        : `<circle cx="7" cy="7" r="1.7" fill="#000"/><circle cx="13" cy="7" r="1.7" fill="#000"/>`;
+      const mouth = slump
+        ? `<path d="M7 13 Q10 10 13 13" stroke="#000" stroke-width="1.5" fill="none" stroke-linecap="round"/>`
+        : `<path d="M7 12 Q10 15 13 12" stroke="#000" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
+      const rot = slump ? 'transform="rotate(18 11 11)"' : '';
+      return `
+        <svg class="char-svg" viewBox="0 0 22 22" width="${opts.size || 22}" height="${opts.size || 22}" ${rot}>
+          <circle cx="11" cy="9" r="6.5" fill="#fff" stroke="#000" stroke-width="2.2"/>
+          ${eyes}
+          ${mouth}
+          <rect x="2.5" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>
+          <rect x="15" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>
+        </svg>`;
+    }
+
+    // Enlarged player wearing a top hat, one glove raised — peeking
+    function playerTopHatSVG(size) {
+      const s = size || 130;
+      return `
+        <svg viewBox="0 0 120 140" width="${s}" height="${s * 140 / 120}">
+          <rect x="30" y="4" width="60" height="30" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>
+          <rect x="33" y="9" width="54" height="6" fill="#3a3a3a"/>
+          <rect x="16" y="32" width="88" height="10" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>
+          <circle cx="60" cy="78" r="34" fill="#fff" stroke="#000" stroke-width="4.5"/>
+          <circle cx="48" cy="72" r="5.5" fill="#000"/>
+          <circle cx="72" cy="72" r="5.5" fill="#000"/>
+          <path d="M46 92 Q60 106 74 92" stroke="#000" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <rect x="14" y="96" width="14" height="20" rx="7" fill="#fff" stroke="#000" stroke-width="4"/>
+        </svg>`;
+    }
+
+    function bookshelfSVG(w, h) {
+      return `
+        <svg viewBox="0 0 120 150" width="${w}" height="${h}">
+          <rect x="5" y="5" width="110" height="140" rx="4" fill="#7a7a7a" stroke="#000" stroke-width="6"/>
+          <line x1="8" y1="42" x2="112" y2="42" stroke="#000" stroke-width="5"/>
+          <line x1="8" y1="80" x2="112" y2="80" stroke="#000" stroke-width="5"/>
+          <line x1="8" y1="118" x2="112" y2="118" stroke="#000" stroke-width="5"/>
+          <g stroke="#000" stroke-width="2.5">
+            <rect x="14" y="14" width="11" height="26" fill="#cfcfcf"/>
+            <rect x="27" y="12" width="11" height="28" fill="#9a9a9a"/>
+            <rect x="40" y="16" width="11" height="24" fill="#e4e4e4"/>
+            <rect x="70" y="14" width="11" height="26" fill="#b4b4b4"/>
+            <rect x="84" y="12" width="11" height="28" fill="#cfcfcf"/>
+            <rect x="16" y="52" width="11" height="26" fill="#b4b4b4"/>
+            <rect x="29" y="50" width="11" height="28" fill="#e4e4e4"/>
+            <rect x="78" y="52" width="11" height="26" fill="#9a9a9a"/>
+            <rect x="91" y="50" width="11" height="28" fill="#cfcfcf"/>
+            <rect x="18" y="90" width="11" height="26" fill="#cfcfcf"/>
+            <rect x="84" y="90" width="11" height="26" fill="#b4b4b4"/>
+          </g>
+        </svg>`;
     }
 
     function renderRoom(roomName, occupancy) {
@@ -553,53 +723,143 @@
 
       const occupancyDiv = document.createElement('div');
       occupancyDiv.className = 'room-occupancy';
-      occupancyDiv.textContent = `${occupancy} people`;
+      occupancyDiv.textContent = occupancy + ' people';
       roomEl.appendChild(occupancyDiv);
 
-      // Add some characters
       for (let i = 0; i < Math.min(occupancy, 5); i++) {
         const char = document.createElement('div');
         char.className = 'character';
-        char.style.top = Math.random() * 60 + 'px';
-        char.style.left = Math.random() * 60 + 'px';
-
-        const sprite = document.createElement('div');
-        sprite.className = 'char-sprite';
-        const gloveL = document.createElement('div');
-        gloveL.className = 'char-glove-left';
-        const gloveR = document.createElement('div');
-        gloveR.className = 'char-glove-right';
-
-        sprite.appendChild(gloveL);
-        sprite.appendChild(gloveR);
-        char.appendChild(sprite);
+        char.style.top = Math.random() * 55 + 'px';
+        char.style.left = Math.random() * 55 + 'px';
+        char.style.animationDelay = (Math.random() * -1.6) + 's';
+        char.innerHTML = characterSVG({});
         roomEl.appendChild(char);
       }
 
       roomEl.addEventListener('click', () => hideInRoom(roomName));
-
       return roomEl;
     }
 
-    async function hideInRoom(roomName) {
-      if (state.round.phase !== 'hiding' || !state.participant || !state.participant.alive) {
-        return;
+    function renderGrid(occupancy) {
+      const gridEl = document.getElementById('room-grid');
+      gridEl.innerHTML = '';
+      ROOMS.forEach(room => {
+        gridEl.appendChild(renderRoom(room, occupancy[room] || 0));
+      });
+    }
+
+    function roomRect(roomName) {
+      const el = document.querySelector('#room-grid [data-room="' + roomName + '"]');
+      return el ? el.getBoundingClientRect() : null;
+    }
+
+    // ---- Reveal: colored red wash over the doomed room (in fx-overlay) ----
+    function showRevealWash(roomName) {
+      const fx = document.getElementById('fx-overlay');
+      let wash = fx.querySelector('.room-wash[data-for="' + roomName + '"]');
+      const r = roomRect(roomName);
+      if (!r) return;
+      if (!wash) {
+        wash = document.createElement('div');
+        wash.className = 'room-wash';
+        wash.dataset.for = roomName;
+        // a couple of slumped silhouettes inside the wash
+        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 24 }) +
+                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 24 }) + '</div>';
+        fx.appendChild(wash);
+      }
+      wash.style.left = r.left + 'px';
+      wash.style.top = r.top + 'px';
+      wash.style.width = r.width + 'px';
+      wash.style.height = r.height + 'px';
+    }
+
+    function clearFx() {
+      document.getElementById('fx-overlay').innerHTML = '';
+    }
+
+    // ---- Win tableau ----
+    function composeWinTableau(pocongRoom, safeRoom, payout) {
+      const fx = document.getElementById('fx-overlay');
+      fx.innerHTML = '';
+
+      // Blood-red wash over the doomed room with slumped losers
+      const dr = roomRect(pocongRoom);
+      if (dr) {
+        const wash = document.createElement('div');
+        wash.className = 'room-wash';
+        wash.style.left = dr.left + 'px';
+        wash.style.top = dr.top + 'px';
+        wash.style.width = dr.width + 'px';
+        wash.style.height = dr.height + 'px';
+        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 26 }) +
+                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 26 }) +
+                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 26 }) + '</div>';
+        fx.appendChild(wash);
       }
 
+      // Enlarged top-hat player peeking from behind a bookshelf in a safe room
+      const sr = roomRect(safeRoom) || dr;
+      if (sr) {
+        const cx = sr.left + sr.width / 2;
+        const player = document.createElement('div');
+        player.className = 'player-zoom';
+        player.style.left = (cx - 65) + 'px';
+        player.style.top = Math.max(4, sr.top - 26) + 'px';
+        player.innerHTML = playerTopHatSVG(130);
+        fx.appendChild(player);
+
+        const shelf = document.createElement('div');
+        shelf.className = 'bookshelf';
+        shelf.style.left = (cx - 46) + 'px';
+        shelf.style.top = (sr.top + sr.height * 0.42) + 'px';
+        shelf.innerHTML = bookshelfSVG(92, 115);
+        fx.appendChild(shelf);
+      }
+
+      // Gold winnings subtext in the HUD
+      const w = document.getElementById('hud-winnings');
+      w.style.display = 'block';
+      w.textContent = '+' + payout + ' TKN';
+
+      // "You Win" hand-inked banner (once)
+      if (!state.bannerShown) {
+        showWinBanner(payout);
+        state.bannerShown = true;
+      }
+    }
+
+    function showWinBanner(payout) {
+      const c = document.getElementById('banner-container');
+      c.innerHTML = '';
+      const banner = document.createElement('div');
+      banner.className = 'win-banner';
+      banner.innerHTML = 'You Win!<div class="win-amount">+' + payout + ' tokens</div>';
+      c.appendChild(banner);
+    }
+
+    function resetWinFx() {
+      if (state.bannerShown || DEMO_WIN) {
+        document.getElementById('banner-container').innerHTML = '';
+        document.getElementById('hud-winnings').style.display = 'none';
+        clearFx();
+      }
+      state.bannerShown = false;
+    }
+
+    async function hideInRoom(roomName) {
+      if (state.round.phase !== 'hiding' || !state.participant || !state.participant.alive) return;
       try {
         const res = await fetch('/api/round/hide', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({ room: roomName })
         });
-
         if (res.ok) {
-          const room = document.querySelector(`[data-room="${roomName}"]`);
+          const room = document.querySelector('[data-room="' + roomName + '"]');
           if (room) room.classList.add('active');
         }
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     }
 
     async function joinRound() {
@@ -608,137 +868,128 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers }
         });
-
-        if (res.ok) {
-          await updateState();
-        } else if (res.status === 400) {
-          console.log('Not in lobby phase');
-        }
-      } catch (err) {
-        console.error(err);
-      }
+        if (res.ok) await updateState();
+      } catch (err) { console.error(err); }
     }
 
     async function loadLeaderboard() {
       try {
         const res = await fetch('/api/leaderboard', { headers });
         if (!res.ok) return;
-
         const { leaderboard } = await res.json();
-        const el = document.getElementById('leaderboard');
-        if (!leaderboard.length) {
-          el.innerHTML = '<p style="text-align: center; color: #666;">No survivors yet</p>';
-          return;
+
+        // Staging detection (no server change): the boot seed only creates
+        // staging-demo-survivor-* rows in staging, so their presence is a
+        // reliable signal to show the badge.
+        if (leaderboard.some(r => (r.username || '').startsWith('staging-demo'))) {
+          document.getElementById('staging-badge').style.display = 'block';
         }
 
-        el.innerHTML = leaderboard.slice(0, 10).map((r, i) => `
-          <div class="survivor-row">
-            <span class="survivor-rank">${i + 1}.</span>
-            <span class="survivor-name">${r.username}</span>
-            <span class="survivor-score">${r.balance}</span>
-          </div>
-        `).join('');
-      } catch (err) {
-        console.error(err);
-      }
+        const el = document.getElementById('leaderboard');
+        if (!leaderboard.length) {
+          el.innerHTML = '<p style="text-align:center;color:#5a5a5a">No survivors yet</p>';
+          return;
+        }
+        el.innerHTML = leaderboard.slice(0, 10).map((r, i) =>
+          '<div class="survivor-row"><span class="survivor-rank">' + (i + 1) +
+          '.</span><span class="survivor-name">' + r.username +
+          '</span><span class="survivor-score">' + r.balance + '</span></div>'
+        ).join('');
+      } catch (err) { console.error(err); }
     }
 
     async function updateState() {
       try {
         const res = await fetch('/api/round/state', { headers });
         if (!res.ok) return;
-
         const data = await res.json();
         state = { ...state, ...data };
 
-        // Update UI
         document.getElementById('balance').textContent = state.balance;
         document.getElementById('stake').textContent = state.round.entry_stake;
-        document.getElementById('round-display').textContent = `${state.round.id}.${state.round.subround}`;
+        document.getElementById('round-display').textContent = state.round.id + '.' + state.round.subround;
         document.getElementById('timer').textContent = state.round.secondsRemaining + 's';
 
         // Room grid
-        const gridEl = document.getElementById('room-grid');
-        gridEl.innerHTML = '';
-        ROOMS.forEach(room => {
-          const occupancy = state.roomOccupancy[room] || 0;
-          gridEl.appendChild(renderRoom(room, occupancy));
-        });
+        renderGrid(state.roomOccupancy || {});
 
-        // Status
         const statusEl = document.getElementById('status');
+        const joinBtn = document.getElementById('join-button');
+        const lobbyTimer = document.getElementById('lobby-timer');
+
         if (state.round.phase === 'lobby') {
+          resetWinFx();
+          document.getElementById('pocong-container').innerHTML = '';
           statusEl.textContent = 'Joining...';
-          document.getElementById('join-button').style.display = 'block';
-          document.getElementById('join-button').disabled = state.participant ? true : false;
-          document.getElementById('lobby-timer').style.display = 'block';
-          document.getElementById('lobby-timer').textContent = 'Lobby: ' + state.round.secondsRemaining + 's';
+          joinBtn.style.display = 'block';
+          joinBtn.disabled = !!state.participant;
+          joinBtn.textContent = state.participant ? 'Joined' : 'Join';
+          lobbyTimer.style.display = 'block';
+          lobbyTimer.textContent = 'Lobby: ' + state.round.secondsRemaining + 's';
         } else if (state.round.phase === 'hiding') {
-          statusEl.textContent = state.participant?.alive ? 'Hide now!' : 'Eliminated';
-          document.getElementById('join-button').style.display = 'none';
-          document.getElementById('lobby-timer').style.display = 'none';
+          resetWinFx();
+          document.getElementById('pocong-container').innerHTML = '';
+          statusEl.textContent = state.participant && state.participant.alive ? 'Hide now!' : 'Eliminated';
+          joinBtn.style.display = 'none';
+          lobbyTimer.style.display = 'none';
         } else if (state.round.phase === 'reveal') {
           statusEl.textContent = 'The pocong is coming...';
-          document.getElementById('join-button').style.display = 'none';
-          document.getElementById('lobby-timer').style.display = 'none';
-
-          // Show pocong
+          joinBtn.style.display = 'none';
+          lobbyTimer.style.display = 'none';
           if (state.latestReveal) {
             const pocongContainer = document.getElementById('pocong-container');
             pocongContainer.innerHTML = '';
             const pocong = document.createElement('div');
             pocong.className = 'pocong';
-            pocong.style.left = '50%';
-            pocong.style.top = '50%';
             pocongContainer.appendChild(pocong);
-
-            // Tint the pocong room
-            const room = document.querySelector(`[data-room="${state.latestReveal.pocong_room}"]`);
-            if (room) {
-              room.classList.add('room-tint-red');
-            }
+            const room = document.querySelector('[data-room="' + state.latestReveal.pocong_room + '"]');
+            if (room) room.classList.add('active');
+            showRevealWash(state.latestReveal.pocong_room);
           }
         } else if (state.round.phase === 'results') {
-          if (state.participant?.alive && state.participant?.payout > 0 && !state.bannerShown) {
-            showWinBanner(state.participant.payout);
-            state.bannerShown = true;
+          joinBtn.style.display = 'none';
+          lobbyTimer.style.display = 'none';
+          document.getElementById('pocong-container').innerHTML = '';
+          const won = state.participant && state.participant.alive && state.participant.payout > 0;
+          if (won) {
+            const pocongRoom = (state.latestReveal && state.latestReveal.pocong_room) || ROOMS[2];
+            const safeRoom = state.participant.current_room ||
+              ROOMS.find(r => r !== pocongRoom) || ROOMS[1];
+            composeWinTableau(pocongRoom, safeRoom, state.participant.payout);
+            statusEl.textContent = 'You survived!';
+          } else {
+            statusEl.textContent = state.participant && state.participant.alive ? 'You survived!' : 'Game ended';
           }
-          statusEl.textContent = state.participant?.alive ? 'You survived!' : 'Game ended';
-          document.getElementById('join-button').style.display = 'none';
-          document.getElementById('lobby-timer').style.display = 'none';
         }
 
-        // Join button
-        document.getElementById('join-button').addEventListener('click', joinRound);
-
-        // Leaderboard
         await loadLeaderboard();
 
-        // Staging badge
-        if (window.location.href.includes('USERNODE_ENV=staging') || document.body.innerHTML.includes('staging-demo')) {
+        // Deterministic win-tableau preview (?demo=win). Re-composed each
+        // poll so the washes stay aligned as the grid re-renders.
+        if (DEMO_WIN) {
           document.getElementById('staging-badge').style.display = 'block';
+          composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+          statusEl.textContent = 'You survived!';
         }
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     }
 
-    function showWinBanner(payout) {
-      const banner = document.createElement('div');
-      banner.className = 'win-banner';
-      banner.innerHTML = `
-        You Won!
-        <div class="win-amount">+${payout} tokens</div>
-      `;
-      document.getElementById('banner-container').appendChild(banner);
+    document.getElementById('join-button').addEventListener('click', joinRound);
+    window.addEventListener('resize', () => {
+      if (DEMO_WIN) composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+    });
 
-      setTimeout(() => {
-        banner.style.animation = 'none';
-        banner.style.opacity = '0';
-      }, 3000);
+    // ?demo=win: render a self-sufficient win tableau immediately, without
+    // depending on the API poll — so the composition is deterministic even
+    // before (or regardless of) the first /api/round/state response.
+    if (DEMO_WIN) {
+      document.getElementById('staging-badge').style.display = 'block';
+      const occ = {};
+      ROOMS.forEach((r, i) => { occ[r] = (i % 3) + 1; });
+      renderGrid(occ);
+      composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
     }
 
-    // Poll state every 1s
     updateState();
     setInterval(updateState, 1000);
   </script>
