@@ -560,9 +560,17 @@ async function start() {
         eliminated_subround INTEGER,
         placement INTEGER,
         payout INTEGER DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(round_id, user_id) WHERE user_id IS NOT NULL
+        created_at TIMESTAMPTZ DEFAULT NOW()
       )
+    `);
+
+    // Partial unique index: one participant row per real user per round
+    // (bots have NULL user_id and are exempt). A table-level UNIQUE
+    // constraint can't carry a WHERE clause, so this must be its own index.
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS round_participants_round_user_uniq
+      ON round_participants (round_id, user_id)
+      WHERE user_id IS NOT NULL
     `);
 
     await pool.query(`
@@ -609,29 +617,38 @@ async function start() {
         );
       }
 
-      // Seed a completed round
-      const { rows: roundRows } = await pool.query(
-        `INSERT INTO rounds (status, phase, phase_ends_at, pot, entry_stake, subround, started_at, ended_at)
-         VALUES ('closed', 'results', NOW(), 500, 100, 5, NOW() - INTERVAL '5 minutes', NOW())
-         ON CONFLICT DO NOTHING
-         RETURNING id`
+      // Seed a completed demo round. The rounds table has no natural
+      // unique constraint, so a bare ON CONFLICT DO NOTHING is invalid;
+      // guard idempotency with an explicit existence check on the seeded
+      // demo participants instead.
+      const { rows: existingDemo } = await pool.query(
+        `SELECT round_id FROM round_participants
+         WHERE user_id BETWEEN 9001 AND 9005
+         ORDER BY round_id LIMIT 1`
       );
 
-      if (roundRows.length > 0) {
+      if (existingDemo.length === 0) {
+        const { rows: roundRows } = await pool.query(
+          `INSERT INTO rounds (status, phase, phase_ends_at, pot, entry_stake, subround, started_at, ended_at)
+           VALUES ('closed', 'results', NOW(), 500, 100, 5, NOW() - INTERVAL '5 minutes', NOW())
+           RETURNING id`
+        );
+
         const roundId = roundRows[0].id;
         for (let i = 1; i <= 5; i++) {
+          // The round was just created in this same guarded block, so
+          // (round_id, user_id) is unique by construction — no ON CONFLICT
+          // needed (and a bare one against the partial index would throw).
           await pool.query(
             `INSERT INTO round_participants (round_id, user_id, username, is_bot, stake, alive, placement, payout)
-             VALUES ($1, $2, $3, false, 100, true, $4, $5)
-             ON CONFLICT DO NOTHING`,
+             VALUES ($1, $2, $3, false, 100, true, $4, $5)`,
             [roundId, 9000 + i, `staging-demo-survivor-${i}`, i, 100 - (i-1)*10]
           );
         }
 
         await pool.query(
           `INSERT INTO round_reveals (round_id, subround, pocong_room, eliminated_count, revealed_at)
-           VALUES ($1, 1, $2, 2, NOW())
-           ON CONFLICT DO NOTHING`,
+           VALUES ($1, 1, $2, 2, NOW())`,
           [roundId, 'Kitchen']
         );
       }
