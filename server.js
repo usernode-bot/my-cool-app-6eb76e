@@ -25,19 +25,18 @@ const SURVIVAL_THRESHOLD = 3; // Stop when <= 3 alive
 const LOCK_ID = 1001; // Advisory lock ID for ticker
 
 const ROOMS = [
-  'Kamar Utama',
+  'Master Bedroom',
   'Library',
-  'Kamar Asisten',
-  'Laundry Room',
   'Kitchen',
-  'Kamar Anak-Anak',
-  'Play Room',
+  'Laundry Room',
+  'Kids Bedroom',
+  'Playing Room',
   'Living Room',
-  'Kamar Mandi',
-  'Kamar Mandi Kedua',
+  'Bathroom',
+  'Powder Room',
   'Backyard',
-  'Gudang',
-  'Ruang Baca'
+  'Warehouse',
+  'Reading Room'
 ];
 
 const BOT_NAMES = [
