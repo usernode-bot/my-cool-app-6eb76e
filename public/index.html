@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <script>
   // usernode-dev-console@1
   (function () {
@@ -63,59 +63,683 @@
     try { post('info', ['[dev-console ready]'], { kind: 'ready' }); } catch (_) {}
   })();
   </script>
-  <title>my cool app</title>
+  <title>Awas Ada Pocong</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
+  <style>
+    body {
+      filter: grayscale(100%) contrast(1.1);
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/><feColorMatrix in="noise" type="saturate" values="0"/></filter><rect width="100" height="100" fill="%23000000" filter="url(%23noise)" opacity="0.05"/></svg>');
+    }
+
+    .mansion {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      perspective: 1000px;
+    }
+
+    .room-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      padding: 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .room {
+      position: relative;
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+      border: 3px solid #666;
+      cursor: pointer;
+      transition: all 0.2s;
+      overflow: hidden;
+    }
+
+    .room:hover {
+      background: linear-gradient(135deg, #4a4a4a 0%, #3a3a3a 100%);
+      border-color: #999;
+      transform: scale(1.05);
+    }
+
+    .room.active {
+      background: linear-gradient(135deg, #5a5a5a 0%, #4a4a4a 100%);
+      border-color: #fff;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    }
+
+    .room-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #fff;
+      font-weight: bold;
+      font-size: 11px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      width: 90%;
+    }
+
+    .room-occupancy {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 2px 6px;
+      font-size: 10px;
+      border-radius: 3px;
+    }
+
+    .character {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: boil 2s infinite ease-in-out;
+    }
+
+    @keyframes boil {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    .char-sprite {
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      position: relative;
+      box-shadow: -3px 0 0 -2px #000, 3px 0 0 -2px #000;
+    }
+
+    .char-sprite::before {
+      content: '';
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: #000;
+      border-radius: 50%;
+      top: 6px;
+      left: 3px;
+    }
+
+    .char-sprite::after {
+      content: '';
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: #000;
+      border-radius: 50%;
+      top: 6px;
+      right: 3px;
+    }
+
+    .char-glove-left {
+      position: absolute;
+      width: 4px;
+      height: 6px;
+      background: #fff;
+      left: -2px;
+      top: 12px;
+    }
+
+    .char-glove-right {
+      position: absolute;
+      width: 4px;
+      height: 6px;
+      background: #fff;
+      right: -2px;
+      top: 12px;
+    }
+
+    .pocong {
+      position: absolute;
+      width: 30px;
+      height: 40px;
+      background: radial-gradient(ellipse at 50% 30%, #e0e0e0 0%, #a0a0a0 100%);
+      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 100;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      animation: pocongFloat 2s ease-in-out infinite;
+    }
+
+    @keyframes pocongFloat {
+      0%, 100% { transform: translate(-50%, -50%); }
+      50% { transform: translate(-50%, -60%); }
+    }
+
+    .pocong::before,
+    .pocong::after {
+      content: '';
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #333;
+      border-radius: 50%;
+      top: 12px;
+    }
+
+    .pocong::before { left: 6px; }
+    .pocong::after { right: 6px; }
+
+    .hud-coin {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid #999;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 50;
+      min-width: 120px;
+    }
+
+    .coin-icon {
+      width: 24px;
+      height: 24px;
+      background: radial-gradient(ellipse at 30% 30%, #ffeb3b, #fbc02d);
+      border-radius: 50%;
+      animation: spinCoin 1s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spinCoin {
+      0% { transform: rotateY(0deg); }
+      100% { transform: rotateY(360deg); }
+    }
+
+    .hud-panel {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid #999;
+      padding: 16px 20px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      z-index: 50;
+      min-width: 180px;
+    }
+
+    .hud-panel-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0;
+    }
+
+    .hud-panel-label {
+      color: #999;
+    }
+
+    .hud-timer {
+      font-weight: bold;
+      color: #ffeb3b;
+    }
+
+    .hud-status {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #444;
+      color: #ffeb3b;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .banner-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .win-banner {
+      background: linear-gradient(45deg, #ffeb3b, #fbc02d, #ffeb3b);
+      color: #000;
+      padding: 40px 60px;
+      border-radius: 20px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 48px;
+      animation: dropBanner 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes dropBanner {
+      0% { transform: translate(-50%, -150%); opacity: 0; }
+      100% { transform: translate(-50%, -50%); opacity: 1; }
+    }
+
+    .win-amount {
+      font-size: 32px;
+      margin-top: 10px;
+      color: #333;
+    }
+
+    .hall-of-survivors {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid #999;
+      padding: 16px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      z-index: 50;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .hall-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      text-align: center;
+      color: #ffeb3b;
+    }
+
+    .survivor-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .survivor-row:last-child {
+      border-bottom: none;
+    }
+
+    .survivor-rank {
+      color: #999;
+      min-width: 20px;
+    }
+
+    .survivor-name {
+      flex: 1;
+      margin-left: 10px;
+    }
+
+    .survivor-score {
+      color: #ffeb3b;
+      font-weight: bold;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    .join-button {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffeb3b;
+      color: #000;
+      border: none;
+      padding: 16px 40px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      z-index: 60;
+      transition: all 0.2s;
+    }
+
+    .join-button:hover:not(:disabled) {
+      background: #fbc02d;
+      transform: translateX(-50%) scale(1.05);
+    }
+
+    .join-button:disabled {
+      background: #666;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    .lobby-timer {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      border: 2px solid #999;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      z-index: 50;
+    }
+
+    .staging-badge {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 0, 0, 0.3);
+      border: 1px solid #ff0000;
+      color: #ff0000;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 50;
+      font-weight: bold;
+    }
+
+    .room-tint-red {
+      animation: roomBlast 0.6s ease-out;
+    }
+
+    @keyframes roomBlast {
+      0% { background: linear-gradient(135deg, #ff0000, #800000); }
+      100% { background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%); }
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">my cool app</h1>
+<body class="bg-stone-950 text-stone-100 min-h-screen flex flex-col">
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
+  <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
 
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
+  <div class="mansion flex-1">
+    <div id="lobby-timer" class="lobby-timer" style="display: none;"></div>
 
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+    <div class="room-grid" id="room-grid"></div>
+
+    <div id="pocong-container" style="position: absolute; width: 100%; height: 100%; pointer-events: none;"></div>
   </div>
+
+  <div class="hud-coin">
+    <div class="coin-icon"></div>
+    <span id="balance">0</span>
+  </div>
+
+  <div class="hud-panel">
+    <div class="hud-panel-row">
+      <span class="hud-panel-label">Stake</span>
+      <span id="stake">100</span>
+    </div>
+    <div class="hud-panel-row">
+      <span class="hud-panel-label">Round</span>
+      <span id="round-display">1.1</span>
+    </div>
+    <div class="hud-panel-row">
+      <span class="hud-panel-label">Time</span>
+      <span class="hud-timer" id="timer">20s</span>
+    </div>
+    <div class="hud-status" id="status">Joining...</div>
+  </div>
+
+  <div class="hall-of-survivors">
+    <div class="hall-title">Hall of Survivors</div>
+    <div id="leaderboard"></div>
+  </div>
+
+  <button id="join-button" class="join-button" disabled>Joining...</button>
+
+  <div class="banner-container" id="banner-container"></div>
 
   <script>
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
+    const IS_STAGING = document.querySelector('body').innerHTML.includes('staging');
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard', { headers });
-      if (!res.ok) return;
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
-        return;
-      }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
+    let state = {
+      round: {},
+      participant: null,
+      roomOccupancy: {},
+      latestReveal: null,
+      balance: 0,
+      characters: {},
+      lastPayout: 0
+    };
+
+    const ROOMS = [
+      'Kamar Utama',
+      'Library',
+      'Kamar Asisten',
+      'Laundry Room',
+      'Kitchen',
+      'Kamar Anak-Anak',
+      'Play Room',
+      'Living Room',
+      'Kamar Mandi',
+      'Kamar Mandi Kedua',
+      'Backyard',
+      'Gudang',
+      'Ruang Baca'
+    ];
+
+    function createCharacter(name) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 20 20');
+      svg.setAttribute('width', '20');
+      svg.setAttribute('height', '20');
+      svg.innerHTML = `
+        <circle cx="10" cy="8" r="6" fill="white"/>
+        <circle cx="6" cy="6" r="1.5" fill="black"/>
+        <circle cx="14" cy="6" r="1.5" fill="black"/>
+        <rect x="2" y="12" width="4" height="6" fill="white"/>
+        <rect x="14" y="12" width="4" height="6" fill="white"/>
+      `;
+      return svg;
     }
 
-    document.getElementById('press-btn').addEventListener('click', async () => {
+    function renderRoom(roomName, occupancy) {
+      const roomEl = document.createElement('div');
+      roomEl.className = 'room';
+      roomEl.dataset.room = roomName;
+
+      const label = document.createElement('div');
+      label.className = 'room-label';
+      label.textContent = roomName;
+      roomEl.appendChild(label);
+
+      const occupancyDiv = document.createElement('div');
+      occupancyDiv.className = 'room-occupancy';
+      occupancyDiv.textContent = `${occupancy} people`;
+      roomEl.appendChild(occupancyDiv);
+
+      // Add some characters
+      for (let i = 0; i < Math.min(occupancy, 5); i++) {
+        const char = document.createElement('div');
+        char.className = 'character';
+        char.style.top = Math.random() * 60 + 'px';
+        char.style.left = Math.random() * 60 + 'px';
+
+        const sprite = document.createElement('div');
+        sprite.className = 'char-sprite';
+        const gloveL = document.createElement('div');
+        gloveL.className = 'char-glove-left';
+        const gloveR = document.createElement('div');
+        gloveR.className = 'char-glove-right';
+
+        sprite.appendChild(gloveL);
+        sprite.appendChild(gloveR);
+        char.appendChild(sprite);
+        roomEl.appendChild(char);
+      }
+
+      roomEl.addEventListener('click', () => hideInRoom(roomName));
+
+      return roomEl;
+    }
+
+    async function hideInRoom(roomName) {
+      if (state.round.phase !== 'hiding' || !state.participant || !state.participant.alive) {
+        return;
+      }
+
       try {
-        const res = await fetch('/api/press', {
+        const res = await fetch('/api/round/hide', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ room: roomName })
         });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
-    });
 
-    loadLeaderboard();
+        if (res.ok) {
+          const room = document.querySelector(`[data-room="${roomName}"]`);
+          if (room) room.classList.add('active');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function joinRound() {
+      try {
+        const res = await fetch('/api/round/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers }
+        });
+
+        if (res.ok) {
+          await updateState();
+        } else if (res.status === 400) {
+          console.log('Not in lobby phase');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const res = await fetch('/api/leaderboard', { headers });
+        if (!res.ok) return;
+
+        const { leaderboard } = await res.json();
+        const el = document.getElementById('leaderboard');
+        if (!leaderboard.length) {
+          el.innerHTML = '<p style="text-align: center; color: #666;">No survivors yet</p>';
+          return;
+        }
+
+        el.innerHTML = leaderboard.slice(0, 10).map((r, i) => `
+          <div class="survivor-row">
+            <span class="survivor-rank">${i + 1}.</span>
+            <span class="survivor-name">${r.username}</span>
+            <span class="survivor-score">${r.balance}</span>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function updateState() {
+      try {
+        const res = await fetch('/api/round/state', { headers });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        state = { ...state, ...data };
+
+        // Update UI
+        document.getElementById('balance').textContent = state.balance;
+        document.getElementById('stake').textContent = state.round.entry_stake;
+        document.getElementById('round-display').textContent = `${state.round.id}.${state.round.subround}`;
+        document.getElementById('timer').textContent = state.round.secondsRemaining + 's';
+
+        // Room grid
+        const gridEl = document.getElementById('room-grid');
+        gridEl.innerHTML = '';
+        ROOMS.forEach(room => {
+          const occupancy = state.roomOccupancy[room] || 0;
+          gridEl.appendChild(renderRoom(room, occupancy));
+        });
+
+        // Status
+        const statusEl = document.getElementById('status');
+        if (state.round.phase === 'lobby') {
+          statusEl.textContent = 'Joining...';
+          document.getElementById('join-button').style.display = 'block';
+          document.getElementById('join-button').disabled = state.participant ? true : false;
+          document.getElementById('lobby-timer').style.display = 'block';
+          document.getElementById('lobby-timer').textContent = 'Lobby: ' + state.round.secondsRemaining + 's';
+        } else if (state.round.phase === 'hiding') {
+          statusEl.textContent = state.participant?.alive ? 'Hide now!' : 'Eliminated';
+          document.getElementById('join-button').style.display = 'none';
+          document.getElementById('lobby-timer').style.display = 'none';
+        } else if (state.round.phase === 'reveal') {
+          statusEl.textContent = 'The pocong is coming...';
+          document.getElementById('join-button').style.display = 'none';
+          document.getElementById('lobby-timer').style.display = 'none';
+
+          // Show pocong
+          if (state.latestReveal) {
+            const pocongContainer = document.getElementById('pocong-container');
+            pocongContainer.innerHTML = '';
+            const pocong = document.createElement('div');
+            pocong.className = 'pocong';
+            pocong.style.left = '50%';
+            pocong.style.top = '50%';
+            pocongContainer.appendChild(pocong);
+
+            // Tint the pocong room
+            const room = document.querySelector(`[data-room="${state.latestReveal.pocong_room}"]`);
+            if (room) {
+              room.classList.add('room-tint-red');
+            }
+          }
+        } else if (state.round.phase === 'results') {
+          if (state.participant?.alive && state.participant?.payout > 0 && !state.bannerShown) {
+            showWinBanner(state.participant.payout);
+            state.bannerShown = true;
+          }
+          statusEl.textContent = state.participant?.alive ? 'You survived!' : 'Game ended';
+          document.getElementById('join-button').style.display = 'none';
+          document.getElementById('lobby-timer').style.display = 'none';
+        }
+
+        // Join button
+        document.getElementById('join-button').addEventListener('click', joinRound);
+
+        // Leaderboard
+        await loadLeaderboard();
+
+        // Staging badge
+        if (window.location.href.includes('USERNODE_ENV=staging') || document.body.innerHTML.includes('staging-demo')) {
+          document.getElementById('staging-badge').style.display = 'block';
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showWinBanner(payout) {
+      const banner = document.createElement('div');
+      banner.className = 'win-banner';
+      banner.innerHTML = `
+        You Won!
+        <div class="win-amount">+${payout} tokens</div>
+      `;
+      document.getElementById('banner-container').appendChild(banner);
+
+      setTimeout(() => {
+        banner.style.animation = 'none';
+        banner.style.opacity = '0';
+      }, 3000);
+    }
+
+    // Poll state every 1s
+    updateState();
+    setInterval(updateState, 1000);
   </script>
 </body>
 </html>

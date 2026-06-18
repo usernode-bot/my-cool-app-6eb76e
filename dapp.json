@@ -1,3 +1,12 @@
 {
-  "secrets": []
+  "name": "Awas Ada Pocong",
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Game loads with mansion and HUD",
+      "path": "/",
+      "expectSelector": ".mansion",
+      "expectText": "Hall of Survivors"
+    }
+  ]
 }
