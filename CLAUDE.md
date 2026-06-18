@@ -26,13 +26,14 @@ tables you've marked private), etc.
 
 ---
 
-## About my cool app
+## About Awas Ada Pocong
 
-_(add a sentence or two of product context here so Claude Code has a
-shared understanding of what this app is for)_
+A multiplayer survival hide-and-seek game in a 1930s rubber-hose cartoon aesthetic. Players stake play-money tokens, hide in mansion rooms, and try to survive the pocong (wrapped ghost) each round. Last survivors split the pot. Always 50 characters in-lobby via bot backfill for a populated feel.
 
 ## App-specific conventions
 
-_(optional — e.g. "all currency values stored as integer cents, not
-floats"; "the `posts` table is append-only"; "avoid adding new
-dependencies"; etc.)_
+- **Play-money only:** integer token values (cents equivalent internally), no on-chain currency. Bots' winnings are discarded; only real survivors get paid out.
+- **Round loop state machine:** phases are lobby → hiding → reveal → results, driven by a Postgres-guarded ticker (~750ms) with advisory locks to prevent overlaps.
+- **Real-time via polling:** client polls `/api/round/state` every ~1s; no WebSocket support on the platform.
+- **Bot roster is always seeded:** 60 bot names seeded on every boot in all environments (core gameplay, not staging-only). Real users are identified by non-null `user_id` in `round_participants`.
+- **All tables public:** no private tables (no DMs, no real financial data beyond play-money balances). Staging gets a copy of prod data plus seeded demo accounts/completed rounds for testing.
