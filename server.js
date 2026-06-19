@@ -12,14 +12,16 @@ const IS_STAGING = process.env.USERNODE_ENV === 'staging';
 const PUBLIC_API_PATHS = new Set(['/health']);
 
 // Game constants
-const STARTING_BALANCE = 1000;
+const STARTING_BALANCE = 0;         // new accounts start with 0 TKN, must deposit
 const MIN_BALANCE_FLOOR = 200;
 const SMALLEST_CHIP = 100;          // below this, faucet tops up
 const DEFAULT_STANDARD_BET = 100;
 const BET_CAP = 100000;             // max single bet amount
-const PAYOUT_MULTIPLIER = 2;        // safe-room bets pay 2x
+const PAYOUT_MULTIPLIER = 3;        // safe-room bets pay 3x
 const MAX_REAL_PLAYERS = 100;       // real participants per round
 const TARGET_BOARD_SIZE = 50;       // bots backfill the board to here
+const WITHDRAWAL_FEE = 10;          // 10 TKN fee per withdrawal
+const ON_CHAIN_ADDRESS = 'ut1xqgzkzd8tesvwg3f4pm7ghspqpd3edwgydkcpvlha3em0frm78es6uft0u';
 
 const BETTING_DURATION = 20000;     // 20s
 const REVEAL_DURATION = 6000;       // 6s (covers ~2.5s corridor hop + settle)
@@ -547,6 +549,152 @@ app.get('/api/leaderboard', async (_req, res) => {
   }
 });
 
+// API: wallet state
+app.get('/api/wallet/state', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT balance, pending_tx, pending_tx_type, pending_tx_amount FROM token_accounts WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const account = rows.length ? rows[0] : { balance: STARTING_BALANCE, pending_tx: null, pending_tx_type: null, pending_tx_amount: null };
+    res.json({
+      balance: account.balance,
+      address: ON_CHAIN_ADDRESS,
+      pending_tx: account.pending_tx,
+      pending_tx_type: account.pending_tx_type,
+      pending_tx_amount: account.pending_tx_amount
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: start a deposit (create pending tx)
+app.post('/api/wallet/deposit-start', async (req, res) => {
+  try {
+    const amount = parseInt(req.body.amount, 10);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > BET_CAP) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+
+    const account = await ensureAccount(req.user.id, req.user.username);
+    const txHash = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+
+    await pool.query(
+      `UPDATE token_accounts SET pending_tx = $2, pending_tx_type = 'deposit', pending_tx_amount = $3
+       WHERE user_id = $1`,
+      [req.user.id, txHash, amount]
+    );
+
+    res.json({ ok: true, txHash, address: ON_CHAIN_ADDRESS, amount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: confirm a deposit (credit balance after tx confirms)
+app.post('/api/wallet/deposit-confirm', async (req, res) => {
+  try {
+    const txHash = req.body.txHash;
+    if (!txHash) {
+      return res.status(400).json({ error: 'Missing txHash' });
+    }
+
+    const { rows: pending } = await pool.query(
+      `SELECT balance, pending_tx, pending_tx_type, pending_tx_amount FROM token_accounts
+       WHERE user_id = $1 AND pending_tx = $2 AND pending_tx_type = 'deposit'`,
+      [req.user.id, txHash]
+    );
+
+    if (pending.length === 0) {
+      return res.status(400).json({ error: 'No pending deposit for this tx' });
+    }
+
+    const amount = pending[0].pending_tx_amount;
+
+    const { rows: updated } = await pool.query(
+      `UPDATE token_accounts
+       SET balance = balance + $2, pending_tx = NULL, pending_tx_type = NULL, pending_tx_amount = NULL
+       WHERE user_id = $1
+       RETURNING balance`,
+      [req.user.id, amount]
+    );
+
+    res.json({ ok: true, balance: updated[0].balance, amount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: start a withdrawal (debit balance, mark as pending)
+app.post('/api/wallet/withdrawal-start', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT balance FROM token_accounts WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'No account' });
+    }
+
+    const balance = rows[0].balance;
+    if (balance < WITHDRAWAL_FEE) {
+      return res.status(400).json({ error: 'Insufficient balance for withdrawal (need at least 10 TKN)' });
+    }
+
+    const withdrawAmount = balance - WITHDRAWAL_FEE;
+    const txHash = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+
+    const { rows: updated } = await pool.query(
+      `UPDATE token_accounts
+       SET balance = 0, pending_tx = $2, pending_tx_type = 'withdrawal', pending_tx_amount = $3
+       WHERE user_id = $1
+       RETURNING balance`,
+      [req.user.id, txHash, withdrawAmount]
+    );
+
+    res.json({ ok: true, txHash, address: ON_CHAIN_ADDRESS, amount: withdrawAmount, fee: WITHDRAWAL_FEE });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: confirm a withdrawal (clear pending tx)
+app.post('/api/wallet/withdrawal-confirm', async (req, res) => {
+  try {
+    const txHash = req.body.txHash;
+    if (!txHash) {
+      return res.status(400).json({ error: 'Missing txHash' });
+    }
+
+    const { rows: pending } = await pool.query(
+      `SELECT pending_tx_type FROM token_accounts WHERE user_id = $1 AND pending_tx = $2`,
+      [req.user.id, txHash]
+    );
+
+    if (pending.length === 0 || pending[0].pending_tx_type !== 'withdrawal') {
+      return res.status(400).json({ error: 'No pending withdrawal for this tx' });
+    }
+
+    await pool.query(
+      `UPDATE token_accounts
+       SET pending_tx = NULL, pending_tx_type = NULL, pending_tx_amount = NULL
+       WHERE user_id = $1`,
+      [req.user.id]
+    );
+
+    res.json({ ok: true, message: 'Withdrawal confirmed' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('*', (req, res) => {
@@ -570,13 +718,17 @@ async function start() {
       CREATE TABLE IF NOT EXISTS token_accounts (
         user_id INTEGER PRIMARY KEY,
         username VARCHAR(255) NOT NULL,
-        balance INTEGER DEFAULT 1000,
+        balance INTEGER DEFAULT 0,
         wins INTEGER DEFAULT 0,
         rounds_played INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    await pool.query(`ALTER TABLE token_accounts ADD COLUMN IF NOT EXISTS pending_tx VARCHAR(255)`);
+    await pool.query(`ALTER TABLE token_accounts ADD COLUMN IF NOT EXISTS pending_tx_type VARCHAR(20)`);
+    await pool.query(`ALTER TABLE token_accounts ADD COLUMN IF NOT EXISTS pending_tx_amount INTEGER`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS rounds (

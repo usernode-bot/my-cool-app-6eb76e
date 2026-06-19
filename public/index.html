@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-bridge/v1/bridge.js"></script>
+
   <script>
   // usernode-dev-console@1
   (function () {
@@ -71,7 +73,6 @@
 
     body { background: #050505; overflow: hidden; }
 
-    /* World layer carries the grayscale; HUD / overlays sit outside it. */
     .world {
       filter: grayscale(100%) contrast(1.12);
       position: relative;
@@ -148,7 +149,6 @@
       z-index: 3;
     }
 
-    /* Aggregate stake badge (bottom-left) + your stake chip (bottom-right) */
     .room-total {
       position: absolute;
       bottom: 5px;
@@ -311,7 +311,6 @@
       color: #161616;
     }
 
-    /* ---- Title banner ---- */
     .title-banner {
       position: fixed;
       top: 14px;
@@ -421,7 +420,6 @@
       text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
 
-    /* ---- Bet chips bar (bottom-center) ---- */
     .chips-bar {
       position: fixed;
       bottom: 24px;
@@ -467,7 +465,6 @@
     }
     .standard-readout small { display: block; font-size: 10px; color: #4a4a4a; font-weight: 700; }
 
-    /* ---- Room Bets board (right side) ---- */
     .bet-board {
       position: fixed;
       top: 84px;
@@ -613,7 +610,6 @@
       letter-spacing: .5px;
     }
 
-    /* ---- How-to-play modal ---- */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -622,12 +618,13 @@
       display: none;
       align-items: center;
       justify-content: center;
+      overflow-y: auto;
     }
     .modal-backdrop.open { display: flex; }
     .modal-card {
-      max-width: 440px;
+      max-width: 480px;
       margin: 20px;
-      padding: 26px 30px;
+      padding: 30px;
       border-radius: 16px;
       color: #1a1206;
     }
@@ -635,22 +632,126 @@
       font-weight: 900;
       font-size: 24px;
       text-transform: uppercase;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
       text-align: center;
     }
-    .modal-card ol { margin: 0 0 16px 18px; }
-    .modal-card li { margin: 7px 0; font-weight: 600; line-height: 1.35; }
-    .modal-close {
-      width: 100%;
-      border: 3px solid #1a1206;
+    .modal-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border: 2px solid #1a1206;
       background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      border-radius: 8px;
+      font-weight: 900;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Wallet page styles */
+    .wallet-page {
+      position: relative;
+      padding-top: 40px;
+    }
+    .wallet-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .wallet-header h2 {
+      font-size: 28px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .balance-display {
+      font-size: 24px;
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-top: 18px;
+      margin-bottom: 12px;
+      color: #1a1206;
+    }
+    .chips-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .chip-sm {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 3px dashed #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+    }
+    .chip-sm.selected { outline: 3px solid #1a1206; transform: translateY(-3px); }
+    .chip-sm:active { transform: translateY(-1px); }
+    .adjust-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .adjust-sm {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 2px solid #1a1206;
+      background: #e8e8e8;
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .amount-display {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 12px;
+    }
+    .deposit-btn, .withdraw-btn {
+      display: block;
+      margin: 12px auto;
+      border: 3px solid #1a1206;
+      background: linear-gradient(180deg, #fff4b0, #f5c542 50%, #c98f0e);
       color: #1a1206;
       border-radius: 10px;
       font-weight: 900;
       text-transform: uppercase;
-      padding: 10px;
+      padding: 10px 24px;
       cursor: pointer;
       box-shadow: 0 4px 0 #1a1206;
+      font-size: 14px;
+    }
+    .deposit-btn:active, .withdraw-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #1a1206; }
+    .withdraw-note {
+      font-size: 11px;
+      color: #5a5a5a;
+      text-align: center;
+      margin-top: 8px;
+    }
+    .withdrawal-disabled {
+      text-align: center;
+      color: #5a5a5a;
+      font-weight: 700;
+      padding: 12px 0;
     }
   </style>
 </head>
@@ -689,13 +790,14 @@
   <!-- Colored reveal/win composition -->
   <div class="fx-overlay" id="fx-overlay"></div>
 
-  <!-- Coin HUD -->
+  <!-- Coin HUD (with wallet button) -->
   <div class="hud-coin metal">
     <div class="coin-icon"></div>
     <div class="hud-coin-text">
       <span id="balance">0</span>
       <div class="hud-winnings" id="hud-winnings" style="display: none;"></div>
     </div>
+    <button id="wallet-btn" class="icon-btn" title="Open wallet" style="display: none; margin-left: 6px;">💼</button>
   </div>
 
   <!-- Status panel -->
@@ -741,18 +843,55 @@
 
   <div class="banner-container" id="banner-container"></div>
 
+  <!-- Wallet Modal -->
+  <div class="modal-backdrop" id="wallet-modal">
+    <div class="modal-card metal" style="position: relative;">
+      <button class="modal-close-btn" id="wallet-close">×</button>
+      <div class="wallet-page">
+        <div class="wallet-header">
+          <h2>Wallet</h2>
+          <div class="balance-display">Balance: <span id="wallet-balance">0</span> TKN</div>
+        </div>
+
+        <div class="section-title">Deposit TKN</div>
+        <div class="chips-row" id="deposit-chips">
+          <button class="chip-sm" data-deposit="100">100</button>
+          <button class="chip-sm" data-deposit="200">200</button>
+          <button class="chip-sm" data-deposit="500">500</button>
+          <button class="chip-sm" data-deposit="1000">1000</button>
+        </div>
+        <div class="adjust-row">
+          <button class="adjust-sm" id="deposit-minus">−</button>
+          <button class="adjust-sm" id="deposit-plus">+</button>
+        </div>
+        <div class="amount-display">Deposit: <span id="deposit-amount">100</span> TKN</div>
+        <button class="deposit-btn" id="deposit-btn">Deposit</button>
+
+        <div id="withdrawal-section" style="display: none;">
+          <div class="section-title">Withdraw TKN</div>
+          <div style="text-align: center; margin-bottom: 12px; font-size: 14px; color: #1c1c1c; font-weight: 700;">
+            Withdraw: <span id="withdrawal-net">0</span> TKN <span style="font-size: 12px; color: #5a5a5a;">(10 TKN fee)</span>
+          </div>
+          <button class="withdraw-btn" id="withdraw-btn">Withdraw</button>
+          <div class="withdraw-note">Withdrawals can take up to 24 hours to appear.</div>
+        </div>
+        <div id="no-withdrawal" class="withdrawal-disabled" style="display: none;">Balance too low to withdraw (need 10 TKN fee)</div>
+      </div>
+    </div>
+  </div>
+
   <!-- How-to-play modal -->
   <div class="modal-backdrop" id="help-modal">
     <div class="modal-card metal">
       <h2>How to Play</h2>
-      <ol>
-        <li>Pick your <b>standard bet</b> with the chips (100 / 200 / 500 / 1000), or nudge it with + / −.</li>
-        <li>During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
-        <li>Refund any room or <b>Clear all</b> while betting is open.</li>
-        <li>The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
-        <li>Every <b>safe</b> room pays out <b>2×</b> your stake. Come out ahead and the win fanfare plays!</li>
+      <ol style="margin: 0 0 16px 18px;">
+        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Pick your <b>standard bet</b> with the chips (100 / 200 / 500 / 1000), or nudge it with + / −.</li>
+        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
+        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Refund any room or <b>Clear all</b> while betting is open.</li>
+        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
+        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Every <b>safe</b> room pays out <b>3×</b> your stake. Come out ahead and the win fanfare plays!</li>
       </ol>
-      <button class="modal-close" id="help-close">Got it!</button>
+      <button class="modal-close-btn" id="help-close" style="position: static; width: 100%; margin: 0; border-radius: 10px; padding: 10px;">Got it!</button>
     </div>
   </div>
 
@@ -761,21 +900,10 @@
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
 
-    // ?demo=win forces the win tableau deterministically (cosmetic only).
     const DEMO_WIN = params.get('demo') === 'win';
     const DEMO_POCONG_ROOM = 'Kitchen';
     const DEMO_SAFE_ROOM = 'Library';
     const DEMO_PAYOUT = 800;
-
-    // 14 rooms — MUST stay in sync with server.js ROOMS
-    const ROOMS = [
-      'Master Bedroom', 'Library', 'Kitchen', 'Dining Room',
-      'Laundry Room', 'Kids Bedroom', 'Playing Room', 'Living Room',
-      'Bathroom', 'Powder Room', 'Backyard', 'Warehouse',
-      'Reading Room', 'Theater Room'
-    ];
-
-    const CHIPS = [100, 200, 500, 1000];
 
     let state = {
       round: {},
@@ -785,13 +913,28 @@
       balance: 0,
       hauntedRoom: null,
       bannerShown: false,
-      revealStarted: false
+      revealStarted: false,
+      page: 'game' // 'game' or 'wallet'
+    };
+
+    let walletState = {
+      balance: 0,
+      pending_tx: null,
+      pending_tx_type: null
     };
 
     let standardBet = parseInt(localStorage.getItem('aap_standard_bet') || '100', 10);
-    if (!CHIPS.includes(standardBet) && standardBet <= 0) standardBet = 100;
+    let depositAmount = 100;
+    if (!([100,200,500,1000].includes(standardBet))) standardBet = 100;
 
-    // ---------- Audio (procedural Web Audio SFX) ----------
+    const ROOMS = [
+      'Master Bedroom', 'Library', 'Kitchen', 'Dining Room',
+      'Laundry Room', 'Kids Bedroom', 'Playing Room', 'Living Room',
+      'Bathroom', 'Powder Room', 'Backyard', 'Warehouse',
+      'Reading Room', 'Theater Room'
+    ];
+
+    // Audio
     let muted = localStorage.getItem('aap_muted') === '1';
     let audioCtx = null;
     function ac() {
@@ -834,7 +977,161 @@
     }
     function updateMuteBtn() { document.getElementById('mute-btn').textContent = muted ? '✕' : '♪'; }
 
-    // ---------- Sprites ----------
+    // --- Page navigation ---
+    function showPage(page) {
+      state.page = page;
+      if (page === 'wallet') {
+        document.getElementById('world').style.display = 'none';
+        document.getElementById('wallet-modal').classList.add('open');
+        updateWalletUI();
+      } else {
+        document.getElementById('world').style.display = 'block';
+        document.getElementById('wallet-modal').classList.remove('open');
+      }
+    }
+
+    async function loadWalletState() {
+      try {
+        const res = await fetch('/api/wallet/state', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        walletState = data;
+        state.balance = data.balance;
+
+        if (state.balance === 0) {
+          showPage('wallet');
+        } else if (state.page === 'wallet') {
+          showPage('game');
+        }
+
+        document.getElementById('wallet-btn').style.display = state.balance > 0 ? 'flex' : 'none';
+      } catch (err) { console.error(err); }
+    }
+
+    function updateWalletUI() {
+      document.getElementById('wallet-balance').textContent = walletState.balance;
+      const withdrawalNet = Math.max(0, walletState.balance - 10);
+      document.getElementById('withdrawal-net').textContent = withdrawalNet;
+
+      if (walletState.balance > 10) {
+        document.getElementById('withdrawal-section').style.display = 'block';
+        document.getElementById('no-withdrawal').style.display = 'none';
+      } else {
+        document.getElementById('withdrawal-section').style.display = 'none';
+        document.getElementById('no-withdrawal').style.display = 'block';
+      }
+    }
+
+    // Deposit flow
+    async function startDeposit() {
+      try {
+        const res = await fetch('/api/wallet/deposit-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ amount: depositAmount })
+        });
+        if (!res.ok) { alert('Failed to start deposit'); return; }
+        const data = await res.json();
+        const txHash = data.txHash;
+        const amount = data.amount;
+
+        // Open bridge modal
+        if (window.usernode && window.usernode.sendTransaction) {
+          await window.usernode.sendTransaction({
+            to: data.address,
+            amount: amount,
+            memo: 'Deposit: ' + amount + ' TKN',
+            txId: txHash
+          });
+
+          // Poll for tx completion
+          let polling = setInterval(async () => {
+            try {
+              if (window.usernode && window.usernode.getTxStatus) {
+                const status = await window.usernode.getTxStatus(txHash);
+                if (status && (status.status === 'confirmed' || status.status === 'completed')) {
+                  clearInterval(polling);
+                  await confirmDeposit(txHash);
+                }
+              }
+            } catch (err) { console.error(err); }
+          }, 1000);
+
+          // Timeout after 5 minutes
+          setTimeout(() => clearInterval(polling), 300000);
+        } else {
+          alert('Bridge not available');
+        }
+      } catch (err) { console.error(err); alert('Deposit error: ' + err.message); }
+    }
+
+    async function confirmDeposit(txHash) {
+      try {
+        const res = await fetch('/api/wallet/deposit-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (!res.ok) return;
+        await loadWalletState();
+        showPage('game');
+      } catch (err) { console.error(err); }
+    }
+
+    // Withdrawal flow
+    async function startWithdrawal() {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) { alert('Failed to start withdrawal'); return; }
+        const data = await res.json();
+        const txHash = data.txHash;
+        const amount = data.amount;
+
+        if (window.usernode && window.usernode.sendTransaction) {
+          await window.usernode.sendTransaction({
+            to: data.address,
+            amount: amount,
+            memo: 'Withdraw: ' + amount + ' TKN',
+            txId: txHash
+          });
+
+          let polling = setInterval(async () => {
+            try {
+              if (window.usernode && window.usernode.getTxStatus) {
+                const status = await window.usernode.getTxStatus(txHash);
+                if (status && (status.status === 'confirmed' || status.status === 'completed')) {
+                  clearInterval(polling);
+                  await confirmWithdrawal(txHash);
+                }
+              }
+            } catch (err) { console.error(err); }
+          }, 1000);
+
+          setTimeout(() => clearInterval(polling), 300000);
+        } else {
+          alert('Bridge not available');
+        }
+      } catch (err) { console.error(err); alert('Withdrawal error: ' + err.message); }
+    }
+
+    async function confirmWithdrawal(txHash) {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (!res.ok) return;
+        alert('Withdrawal initiated. It may take up to 24 hours to appear.');
+        showPage('game');
+      } catch (err) { console.error(err); }
+    }
+
+    // Sprites
     function characterSVG(opts) {
       opts = opts || {};
       const slump = opts.slump;
@@ -877,7 +1174,7 @@
         '<rect x="84" y="90" width="11" height="26" fill="#b4b4b4"/></g></svg>';
     }
 
-    // ---------- Room grid ----------
+    // Room grid
     function renderGrid() {
       const gridEl = document.getElementById('room-grid');
       gridEl.innerHTML = '';
@@ -903,7 +1200,6 @@
         if (mine > 0) { mineEl.style.display = 'block'; mineEl.textContent = 'you ' + mine; }
         roomEl.appendChild(mineEl);
 
-        // a couple of milling cartoon characters
         const crowd = Math.min(4, Math.max(0, Math.round(total / 200)));
         for (let i = 0; i < crowd; i++) {
           const char = document.createElement('div');
@@ -925,11 +1221,10 @@
       return el ? el.getBoundingClientRect() : null;
     }
 
-    // ---------- Betting actions ----------
+    // Betting
     async function placeBet(room) {
       if (state.round.phase !== 'betting') return;
-      ac(); // unlock audio on user gesture
-      // optimistic
+      ac();
       state.bets[room] = (state.bets[room] || 0) + standardBet;
       state.roomTotals[room] = (state.roomTotals[room] || 0) + standardBet;
       state.balance = Math.max(0, state.balance - standardBet);
@@ -940,7 +1235,7 @@
           headers: { 'Content-Type': 'application/json', ...headers },
           body: JSON.stringify({ room: room, amount: standardBet })
         });
-        if (!res.ok) await updateState(); // reconcile on rejection
+        if (!res.ok) await updateState();
       } catch (err) { console.error(err); }
     }
 
@@ -968,7 +1263,7 @@
       } catch (err) { console.error(err); }
     }
 
-    // ---------- Renders ----------
+    // Renders
     function renderHud() {
       document.getElementById('balance').textContent = state.balance;
       document.getElementById('stake').textContent = standardBet;
@@ -1171,7 +1466,7 @@
       } catch (err) { console.error(err); }
     }
 
-    // ---------- Chip / control wiring ----------
+    // Chip/control wiring
     function selectChip(val) {
       standardBet = val;
       localStorage.setItem('aap_standard_bet', String(val));
@@ -1206,23 +1501,55 @@
       if (e.target.id === 'help-modal') e.target.classList.remove('open');
     });
 
+    // Wallet UI
+    document.getElementById('wallet-btn').addEventListener('click', () => showPage('wallet'));
+    document.getElementById('wallet-close').addEventListener('click', () => {
+      if (state.balance > 0) showPage('game');
+    });
+
+    document.querySelectorAll('.chip-sm').forEach(c => {
+      c.addEventListener('click', () => {
+        ac();
+        const amt = parseInt(c.dataset.deposit, 10);
+        depositAmount = amt;
+        document.getElementById('deposit-amount').textContent = depositAmount;
+        document.querySelectorAll('.chip-sm').forEach(cc => cc.classList.toggle('selected', parseInt(cc.dataset.deposit, 10) === depositAmount));
+      });
+    });
+
+    document.getElementById('deposit-plus').addEventListener('click', () => {
+      depositAmount = Math.min(100000, depositAmount + 100);
+      document.getElementById('deposit-amount').textContent = depositAmount;
+      document.querySelectorAll('.chip-sm').forEach(c => c.classList.remove('selected'));
+    });
+
+    document.getElementById('deposit-minus').addEventListener('click', () => {
+      depositAmount = Math.max(100, depositAmount - 100);
+      document.getElementById('deposit-amount').textContent = depositAmount;
+      document.querySelectorAll('.chip-sm').forEach(c => c.classList.remove('selected'));
+    });
+
+    document.getElementById('deposit-btn').addEventListener('click', startDeposit);
+    document.getElementById('withdraw-btn').addEventListener('click', startWithdrawal);
+
     window.addEventListener('resize', () => {
       if (DEMO_WIN) composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
     });
 
     // Init
-    selectChip(CHIPS.includes(standardBet) ? standardBet : 100);
+    selectChip(standardBet);
     updateMuteBtn();
 
     if (DEMO_WIN) {
       document.getElementById('staging-badge').style.display = 'block';
       state.roomTotals = {}; state.bets = {};
       ROOMS.forEach((r, i) => { state.roomTotals[r] = (i % 4) * 100; });
-      state.bets[DEMO_SAFE_ROOM] = 400;
+      state.bets['Library'] = 400;
       renderGrid(); renderBetBoard();
       composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
     } else {
       renderGrid();
+      loadWalletState();
     }
 
     updateState();
