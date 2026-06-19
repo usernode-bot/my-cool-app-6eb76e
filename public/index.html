@@ -64,53 +64,97 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
-    canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; cursor: grab; }
-    canvas.panning { cursor: grabbing; }
-    canvas.rotating { cursor: ew-resize; }
+
+    @keyframes shake {
+      0%,100%{transform:translate(0)}
+      20%{transform:translate(-4px,2px)}
+      40%{transform:translate(4px,-2px)}
+      60%{transform:translate(-2px,4px)}
+      80%{transform:translate(2px,-4px)}
+    }
+    body.shaking { animation: shake 0.5s ease; }
+
+    canvas#game-canvas {
+      display: block; position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%; cursor: grab;
+    }
 
     #title {
       position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-      font-family: 'Creepster', cursive; font-size: clamp(1.4rem, 3.5vw, 2.6rem);
+      font-family: 'Creepster', cursive; font-size: clamp(1.4rem, 3.2vw, 2.4rem);
       color: #f0f0f0; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000,
         1px -1px 0 #000, -1px 1px 0 #000, 3px 3px 6px rgba(0,0,0,0.8);
       letter-spacing: 2px; z-index: 10; pointer-events: none; white-space: nowrap;
     }
 
     #compass {
-      position: fixed; top: 12px; left: 16px; z-index: 10;
-      pointer-events: none;
-      font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
-      background: rgba(10,10,10,0.65); border: 1px solid #555; border-radius: 5px;
+      position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
+      font-family: 'Creepster', cursive; font-size: 0.85rem; letter-spacing: 1px;
+      background: rgba(10,10,10,0.7); border: 1px solid #555; border-radius: 5px;
       padding: 4px 10px; color: #ccc;
     }
     #compass-hint {
-      position: fixed; top: 42px; left: 16px; z-index: 10;
-      pointer-events: none;
-      font-family: monospace; font-size: 0.65rem; color: #555;
-      line-height: 1.4;
+      position: fixed; top: 42px; left: 16px; z-index: 10; pointer-events: none;
+      font-family: monospace; font-size: 0.62rem; color: #444; line-height: 1.5;
     }
 
+    /* Mascot */
+    @keyframes mascot-bob {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-6px); }
+    }
+    #mascot-canvas {
+      position: fixed; right: 16px; top: 80px; z-index: 11;
+      pointer-events: none;
+      animation: mascot-bob 2s ease-in-out infinite;
+    }
+
+    /* Tutorial panel */
+    #tutorial-panel {
+      position: fixed; right: 16px; top: 240px; z-index: 12;
+      width: 200px;
+      background: rgba(240,240,235,0.94); border: 2px solid #333;
+      border-radius: 12px; padding: 12px 14px;
+      box-shadow: 3px 3px 12px rgba(0,0,0,0.7);
+    }
+    #tutorial-panel .tut-header {
+      font-family: 'Creepster', cursive; font-size: 1.1rem;
+      color: #1a1a1a; letter-spacing: 1px; text-align: center;
+      margin-bottom: 6px;
+    }
+    #tut-canvas { display: block; margin: 0 auto 8px; }
+    #tutorial-panel .tut-body {
+      font-family: sans-serif; font-size: 0.7rem; color: #333; line-height: 1.4;
+      text-align: center; margin-bottom: 8px;
+    }
+    #tutorial-start {
+      font-family: 'Creepster', cursive; font-size: 1rem;
+      color: #cc0000; text-align: center; letter-spacing: 1px;
+    }
+
+    /* HUD coin */
     #hud-coin {
-      position: fixed; top: 12px; right: 16px; z-index: 10;
+      position: fixed; top: 12px; right: 170px; z-index: 10;
       pointer-events: none; text-align: right;
     }
     #hud-coin .row1 {
-      font-family: 'Creepster', cursive; font-size: 1.2rem;
+      font-family: 'Creepster', cursive; font-size: 1.1rem;
       background: linear-gradient(135deg, #c0c0c0, #f0f0f0, #a8a8a8);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
     }
     #hud-coin .row2 {
-      font-family: 'Creepster', cursive; font-size: 0.9rem;
+      font-family: 'Creepster', cursive; font-size: 0.85rem;
       background: linear-gradient(135deg, #ffd700, #ffec6e, #b8860b);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
     }
 
+    /* HUD status */
     #hud-status {
-      position: fixed; bottom: 16px; right: 16px; z-index: 10;
+      position: fixed; bottom: 80px; right: 16px; z-index: 10;
       pointer-events: none; border: 1px solid #888; border-radius: 6px;
-      background: rgba(10,10,10,0.75); padding: 8px 14px;
+      background: rgba(10,10,10,0.78); padding: 8px 14px;
       font-family: 'Creepster', cursive; font-size: 1rem; line-height: 1.6;
       background-image: linear-gradient(135deg, rgba(192,192,192,0.08), rgba(255,255,255,0.04));
     }
@@ -119,17 +163,34 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
     }
+    #status-outcome.outcome-won {
+      background: none !important;
+      -webkit-text-fill-color: #c8a800 !important;
+      color: #c8a800 !important; filter: none !important;
+    }
+    #status-outcome.outcome-lost {
+      background: none !important;
+      -webkit-text-fill-color: #882222 !important;
+      color: #882222 !important; filter: none !important;
+    }
+    #win-calc {
+      display: none;
+      position: fixed; bottom: 62px; right: 16px; z-index: 10;
+      pointer-events: none;
+      font-family: 'Creepster', cursive; font-size: 0.75rem;
+      color: #c8a800; background: rgba(10,10,10,0.7);
+      border: 1px solid #8a7000; border-radius: 5px; padding: 3px 10px;
+    }
 
+    /* Dev controls */
     #dev-controls {
       display: none;
-      position: fixed; bottom: 16px; left: 16px; z-index: 10;
-      background: rgba(10,10,10,0.82); border: 1px solid #ff4422;
+      position: fixed; bottom: 80px; left: 16px; z-index: 10;
+      background: rgba(10,10,10,0.85); border: 1px solid #ff4422;
       border-radius: 8px; padding: 10px 14px;
       font-family: 'Creepster', cursive;
     }
-    #dev-controls .dev-label {
-      font-size: 0.75rem; color: #ff6644; letter-spacing: 1px; margin-bottom: 8px;
-    }
+    #dev-controls .dev-label { font-size: 0.72rem; color: #ff6644; letter-spacing: 1px; margin-bottom: 8px; }
     #dev-controls button {
       display: block; width: 100%; margin-top: 6px;
       font-family: 'Creepster', cursive; font-size: 1rem;
@@ -140,11 +201,12 @@
     #btn-newround { background: #1a3d1a; color: #aaffaa; }
     #btn-newround.hidden { display: none; }
 
+    /* Win banner */
     #win-banner {
       display: none;
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
       z-index: 20; text-align: center;
-      background: rgba(0,0,0,0.85); border: 3px solid #ff2222;
+      background: rgba(0,0,0,0.88); border: 3px solid #ff2222;
       border-radius: 12px; padding: 24px 48px;
       box-shadow: 0 0 40px rgba(255,0,0,0.5);
     }
@@ -155,22 +217,74 @@
     }
     #win-banner p { font-family: 'Creepster', cursive; font-size: 1.1rem; color: #ccc; margin-top: 8px; }
 
-    #bet-modal {
+    /* Bet panel */
+    #bet-panel {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 11; display: flex; align-items: center; gap: 6px;
+      background: rgba(10,10,10,0.85); border: 1px solid #666;
+      border-radius: 12px; padding: 8px 14px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.7);
+    }
+    .bet-adj {
+      font-family: 'Creepster', cursive; font-size: 1.4rem; color: #ccc;
+      background: #222; border: 1px solid #555; border-radius: 6px;
+      width: 34px; height: 34px; cursor: pointer; line-height: 1;
+      transition: background 0.15s;
+    }
+    .bet-adj:hover:not(:disabled) { background: #333; }
+    .bet-adj:disabled { opacity: 0.4; cursor: default; }
+    #bet-chips { display: flex; gap: 5px; align-items: center; }
+    .bet-chip {
+      font-family: 'Creepster', cursive; font-size: 0.9rem; color: #aaa;
+      background: #1a1a1a; border: 1px solid #444; border-radius: 7px;
+      padding: 5px 10px; cursor: pointer; transition: all 0.15s;
+    }
+    .bet-chip:hover:not(:disabled) { background: #2a2a2a; color: #ddd; }
+    .bet-chip.active {
+      background: #7a6000; border-color: #c8a800; color: #ffd700;
+      font-size: 1rem;
+      box-shadow: 0 0 8px rgba(200,160,0,0.5);
+    }
+    .bet-chip:disabled { opacity: 0.4; cursor: default; }
+    .bet-tkn-label {
+      font-family: 'Creepster', cursive; font-size: 0.85rem; color: #666;
+      padding-left: 2px;
+    }
+
+    /* Confirm chip */
+    #confirm-chip {
       display: none;
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      z-index: 30; background: #111; border: 2px solid #555; border-radius: 10px;
-      padding: 24px; min-width: 280px; text-align: center;
-      box-shadow: 0 0 30px rgba(0,0,0,0.9);
+      position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%);
+      z-index: 12;
+      background: rgba(10,10,10,0.92); border: 1px solid #888;
+      border-radius: 10px; padding: 8px 16px;
+      align-items: center; gap: 10px;
+      font-family: 'Creepster', cursive; font-size: 1rem; color: #eee;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.8);
+      white-space: nowrap;
     }
-    #bet-modal h3 { font-family: 'Creepster', cursive; font-size: 1.5rem; color: #f0f0f0; margin-bottom: 16px; }
-    #bet-modal p { font-family: monospace; color: #aaa; margin-bottom: 16px; font-size: 0.9rem; }
-    #bet-modal .btn {
-      font-family: 'Creepster', cursive; font-size: 1.1rem;
-      padding: 8px 24px; border-radius: 6px; border: none; cursor: pointer; margin: 4px;
+    #confirm-chip.visible {
+      display: flex;
+      animation: slideUp 0.18s ease-out;
     }
-    #bet-modal .btn-confirm { background: #7c3aed; color: white; }
-    #bet-modal .btn-cancel { background: #333; color: #ccc; }
-    #bet-modal .btn:hover { filter: brightness(1.2); }
+    @keyframes slideUp {
+      from { transform: translateX(-50%) translateY(12px); opacity: 0; }
+      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+    }
+    #confirm-yes, #confirm-no {
+      font-family: 'Creepster', cursive; font-size: 1rem;
+      border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer;
+    }
+    #confirm-yes { background: #7c3aed; color: #fff; }
+    #confirm-no  { background: #333;    color: #aaa; }
+    #confirm-yes:hover { filter: brightness(1.2); }
+    #confirm-no:hover  { filter: brightness(1.2); }
+
+    @media (max-width: 768px) {
+      #tutorial-panel, #mascot-canvas { display: none; }
+      #hud-coin { right: 16px; }
+      .bet-chip { padding: 4px 7px; font-size: 0.8rem; }
+    }
   </style>
 </head>
 <body>
@@ -179,9 +293,18 @@
   <div id="compass">◆ NE</div>
   <div id="compass-hint">scroll: zoom<br>drag: pan<br>right-drag: rotate</div>
 
+  <canvas id="mascot-canvas" width="130" height="130"></canvas>
+
+  <div id="tutorial-panel">
+    <div class="tut-header">RANDOM DOOR</div>
+    <canvas id="tut-canvas" width="172" height="56"></canvas>
+    <div class="tut-body">Hantu pocong lompat di sepanjang lorong sebelum masuk pintu acak.</div>
+    <div id="tutorial-start">→ START</div>
+  </div>
+
   <div id="hud-coin">
     <div class="row1">🪙 <span id="tkn-balance">1000 TKN</span></div>
-    <div class="row2" id="tkn-winnings" style="display:none">+1000 TKN</div>
+    <div class="row2" id="tkn-winnings" style="display:none">+0 TKN</div>
   </div>
 
   <div id="hud-status">
@@ -189,6 +312,7 @@
     <span id="status-round">round: —</span><br>
     <span id="status-outcome">status: watching</span>
   </div>
+  <div id="win-calc">Perhitungan Kemenangan: Modal + 2× Bet</div>
 
   <div id="dev-controls">
     <div class="dev-label">🛠 Dev Controls (staging)</div>
@@ -201,12 +325,23 @@
     <p id="win-sub">The Pocong entered Kamar Utama. You were safe!</p>
   </div>
 
-  <div id="bet-modal">
-    <h3 id="modal-title">Place Bet</h3>
-    <p id="modal-room">Room: —</p>
-    <p>Bet: 1000 TKN</p>
-    <button class="btn btn-confirm" id="modal-confirm">Confirm Bet</button>
-    <button class="btn btn-cancel" id="modal-cancel">Cancel</button>
+  <div id="bet-panel">
+    <button id="btn-decrement" class="bet-adj">−</button>
+    <div id="bet-chips">
+      <button class="bet-chip" data-amount="100">100</button>
+      <button class="bet-chip" data-amount="200">200</button>
+      <button class="bet-chip" data-amount="500">500</button>
+      <button class="bet-chip active" data-amount="1000">1000</button>
+      <button class="bet-chip" data-amount="5000">5000</button>
+    </div>
+    <button id="btn-increment" class="bet-adj">+</button>
+    <span class="bet-tkn-label">TKN</span>
+  </div>
+
+  <div id="confirm-chip">
+    <span id="confirm-text">Bet 1000 TKN on ...?</span>
+    <button id="confirm-yes">✓ OK</button>
+    <button id="confirm-no">✕</button>
   </div>
 
   <script type="importmap">
@@ -221,18 +356,23 @@
   <script type="module">
     import * as THREE from 'three';
     import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-    import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
-    import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+    import { RenderPass }    from 'three/addons/postprocessing/RenderPass.js';
+    import { OutlinePass }   from 'three/addons/postprocessing/OutlinePass.js';
+    import { ShaderPass }    from 'three/addons/postprocessing/ShaderPass.js';
     import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
 
+    // ── Auth ──────────────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || '';
     const authHeaders = token ? { 'x-usernode-token': token } : {};
 
     // ── Renderer ──────────────────────────────────────────────────────────────
-    const canvas = document.createElement('canvas');
-    document.body.appendChild(canvas);
+    const canvas = document.getElementById('game-canvas') || (() => {
+      const c = document.createElement('canvas');
+      c.id = 'game-canvas';
+      document.body.appendChild(c);
+      return c;
+    })();
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -245,17 +385,17 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0a0a);
 
-    // ── Camera state & controller ─────────────────────────────────────────────
+    // ── Camera ────────────────────────────────────────────────────────────────
     const camState = {
       target: new THREE.Vector3(6, 0, 6),
-      viewSize: 22,
-      liveAzimuth: 0,   // degrees, current live value (animates during snap)
-      azimuth: 0,       // last snapped cardinal (0/90/180/270)
+      viewSize: 16,
+      liveAzimuth: 0,
+      azimuth: 0,
       snapTarget: 0,
       isSnapping: false,
     };
 
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
     const FACING_NAMES = { 0: 'NE', 90: 'NW', 180: 'SW', 270: 'SE' };
     const ISO_ELEV = 35.264 * Math.PI / 180;
 
@@ -266,7 +406,7 @@
       camera.top    =  camState.viewSize;
       camera.bottom = -camState.viewSize;
       const az = camState.liveAzimuth * Math.PI / 180;
-      const r  = camState.viewSize * 2;
+      const r  = camState.viewSize * 2.5;
       camera.position.set(
         camState.target.x + r * Math.cos(ISO_ELEV) * Math.sin(az),
         camState.target.y + r * Math.sin(ISO_ELEV),
@@ -275,15 +415,13 @@
       camera.lookAt(camState.target);
       camera.updateProjectionMatrix();
     }
-
     updateCamera();
 
     function snapAzimuth() {
-      const normalized = ((camState.liveAzimuth % 360) + 360) % 360;
-      const cardinals = [0, 90, 180, 270, 360];
+      const n = ((camState.liveAzimuth % 360) + 360) % 360;
       let best = 0, bestDist = Infinity;
-      for (const c of cardinals) {
-        const d = Math.abs(normalized - c);
+      for (const c of [0, 90, 180, 270, 360]) {
+        const d = Math.abs(n - c);
         if (d < bestDist) { bestDist = d; best = c % 360; }
       }
       camState.snapTarget = best;
@@ -291,28 +429,32 @@
     }
 
     function updateCompass(az) {
-      const snap = (Math.round(az / 90) * 90 + 360) % 360;
+      const snap = ((Math.round(az / 90) * 90) + 360) % 360;
       document.getElementById('compass').textContent = `◆ ${FACING_NAMES[snap] || '—'}`;
     }
 
     // ── Lights ────────────────────────────────────────────────────────────────
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(10, 20, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
-    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight1.position.set(10, 20, 10);
+    dirLight1.castShadow = true;
+    dirLight1.shadow.mapSize.width = 1024;
+    dirLight1.shadow.mapSize.height = 1024;
+    scene.add(dirLight1);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+    dirLight2.position.set(-10, 10, -10);
+    scene.add(dirLight2);
 
-    // ── Gradient map for toon shading ─────────────────────────────────────────
+    // ── Toon gradient ─────────────────────────────────────────────────────────
     function makeToonGradient() {
       const c = document.createElement('canvas');
       c.width = 4; c.height = 1;
       const ctx = c.getContext('2d');
       const g = ctx.createLinearGradient(0, 0, 4, 0);
-      g.addColorStop(0, '#222'); g.addColorStop(0.4, '#888');
-      g.addColorStop(0.7, '#ddd'); g.addColorStop(1, '#fff');
+      g.addColorStop(0,   '#1a1a1a');
+      g.addColorStop(0.35,'#777');
+      g.addColorStop(0.65,'#ddd');
+      g.addColorStop(1,   '#fff');
       ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 1);
       const tex = new THREE.CanvasTexture(c);
       tex.minFilter = THREE.NearestFilter;
@@ -321,24 +463,26 @@
     }
     const gradientMap = makeToonGradient();
 
-    // ── Materials ─────────────────────────────────────────────────────────────
-    const texLoader = new THREE.TextureLoader();
-    texLoader.load('/assets/hatch.png', t => {
-      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2);
-    });
-
-    function toonMat(color, opacity = 1) {
-      return new THREE.MeshToonMaterial({
-        color: new THREE.Color(color), gradientMap,
-        transparent: opacity < 1, opacity,
-      });
+    function toonMat(color, opacity) {
+      const opts = { color: new THREE.Color(color), gradientMap };
+      if (opacity !== undefined && opacity < 1) { opts.transparent = true; opts.opacity = opacity; }
+      return new THREE.MeshToonMaterial(opts);
     }
 
-    const matFloor = toonMat(0xdddddd);
-    const matWall  = toonMat(0xf5f5f5);
+    const matFloor = toonMat(0xe0e0e0);
+    const matWall  = toonMat(0xf0f0ea);
     const matFurn  = toonMat(0x999999);
     const matDark  = toonMat(0x444444);
-    const matCorr  = toonMat(0xbbbbbb);
+    const matCorr  = toonMat(0xb0b0b0);
+    const matCeil  = toonMat(0x888888);
+
+    // ── Constants ─────────────────────────────────────────────────────────────
+    const GRID_SPACING = 4.0;
+    const ROOM_W = 4.0, ROOM_D = 4.0, WALL_H = 2.8, WALL_T = 0.12;
+    const DOOR_GAP = 1.2, DOOR_H = 2.1;
+    const SEG_W = (ROOM_W - DOOR_GAP) / 2;   // 1.4
+    const LINTEL_H = WALL_H - DOOR_H;         // 0.7
+    const CEIL_DEPTH = 0.65;
 
     // ── Room definitions ──────────────────────────────────────────────────────
     const ROOMS = [
@@ -360,113 +504,192 @@
       { slug: null, label: null, gridX: 3, gridZ: 3, type: 'corridor' },
     ];
 
-    const GRID_SPACING = 4;
-    const ROOM_W = 3.6, ROOM_D = 3.6, WALL_H = 1.8, WALL_T = 0.1;
+    // ── Wall group builders ───────────────────────────────────────────────────
+    function solidWallGroup(w, h, d) {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
+      m.position.y = h / 2;
+      m.castShadow = true; m.receiveShadow = true;
+      g.add(m); return g;
+    }
 
-    const roomGroups  = {};  // slug → THREE.Group
-    const roomOverlays = {}; // slug → red overlay mesh
-    const roomCenters  = {}; // slug → { x, z }
+    function doorwayWallGroupX(totalLen) {
+      // Wall running along X (negZ / posZ face); doorway in center
+      const g = new THREE.Group();
+      const segW = (totalLen - DOOR_GAP) / 2;
+      function seg(w, h, d, x, yBot, z) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
+        m.position.set(x, yBot + h / 2, z);
+        m.castShadow = true; m.receiveShadow = true;
+        g.add(m);
+      }
+      seg(segW, DOOR_H, WALL_T, -(DOOR_GAP / 2 + segW / 2), 0, 0);
+      seg(segW, DOOR_H, WALL_T,  (DOOR_GAP / 2 + segW / 2), 0, 0);
+      if (LINTEL_H > 0.01) seg(totalLen, LINTEL_H, WALL_T, 0, DOOR_H, 0);
+      return g;
+    }
 
+    function doorwayWallGroupZ(totalLen) {
+      // Wall running along Z (negX / posX face); doorway in center
+      const g = new THREE.Group();
+      const segD = (totalLen - DOOR_GAP) / 2;
+      function seg(w, h, d, x, yBot, z) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
+        m.position.set(x, yBot + h / 2, z);
+        m.castShadow = true; m.receiveShadow = true;
+        g.add(m);
+      }
+      seg(WALL_T, DOOR_H, segD, 0, 0, -(DOOR_GAP / 2 + segD / 2));
+      seg(WALL_T, DOOR_H, segD, 0, 0,  (DOOR_GAP / 2 + segD / 2));
+      if (LINTEL_H > 0.01) seg(WALL_T, LINTEL_H, totalLen, 0, DOOR_H, 0);
+      return g;
+    }
+
+    // ── Blood splatter texture ────────────────────────────────────────────────
+    let sharedBloodTex = null;
+    function makeBloodSplatter() {
+      if (sharedBloodTex) return sharedBloodTex;
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      for (let i = 0; i < 9; i++) {
+        const angle = (i / 9) * Math.PI * 2 + 0.3 * (i % 3);
+        const dist  = 28 + (i % 5) * 16;
+        const cx = 128 + Math.cos(angle) * dist;
+        const cy = 128 + Math.sin(angle) * dist;
+        const rx = 14 + (i % 4) * 8;
+        const ry = 9  + (i % 3) * 7;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle + i * 0.4);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#cc0000';
+        ctx.fill();
+        ctx.restore();
+      }
+      // center pool
+      ctx.beginPath();
+      ctx.ellipse(128, 128, 42, 36, 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = '#aa0000';
+      ctx.fill();
+      // tiny secondary drops
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05;
+        const d = 70 + i * 10;
+        ctx.beginPath();
+        ctx.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 5 + i % 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#cc0000';
+        ctx.fill();
+      }
+      sharedBloodTex = new THREE.CanvasTexture(c);
+      return sharedBloodTex;
+    }
+
+    // ── Label sprites ─────────────────────────────────────────────────────────
     function makeLabelSprite(text) {
       const c = document.createElement('canvas');
       c.width = 256; c.height = 64;
       const ctx = c.getContext('2d');
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.roundRect ? ctx.roundRect(2, 2, 252, 60, 6) : ctx.fillRect(2, 2, 252, 60);
+      ctx.fillStyle = 'rgba(0,0,0,0.68)';
+      if (ctx.roundRect) { ctx.roundRect(2, 2, 252, 60, 6); } else { ctx.rect(2, 2, 252, 60); }
       ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.strokeRect(2, 2, 252, 60);
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(2, 2, 252, 60);
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 22px sans-serif';
+      ctx.font = 'bold 20px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(text, 128, 32);
       const tex = new THREE.CanvasTexture(c);
       const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(2.2, 0.55, 1);
+      sprite.scale.set(2.4, 0.6, 1);
       return sprite;
     }
 
+    // ── Furniture ─────────────────────────────────────────────────────────────
     function addFurniture(group, type) {
       const P = [];
       if (type === 'bedroom') {
-        P.push({ geo: new THREE.BoxGeometry(1.4, 0.25, 0.9), mat: matFurn, x: 0.6, y: 0.125, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.4, 0.1, 0.25), mat: matDark, x: 0.6, y: 0.25, z: -0.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2, 0.3), mat: matDark, x: -1.2, y: 0.6, z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2, 0.3), mat: matDark, x: -0.65, y: 0.6, z: -1.2 });
+        P.push({ geo: new THREE.BoxGeometry(1.4, 0.25, 0.9),  mat: matFurn, x: 0.5,  y: 0.125, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(1.4, 0.1,  0.25), mat: matDark, x: 0.5,  y: 0.26,  z: -0.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2,  0.3),  mat: matDark, x: -1.1, y: 0.6,   z: -1.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2,  0.3),  mat: matDark, x: -0.55,y: 0.6,   z: -1.2 });
       } else if (type === 'library') {
         for (let i = 0; i < 3; i++) {
-          P.push({ geo: new THREE.BoxGeometry(0.8, 1.6, 0.25), mat: matDark, x: -1.1 + i * 0.85, y: 0.8, z: -1.3 });
+          P.push({ geo: new THREE.BoxGeometry(0.7, 1.6, 0.25), mat: matDark, x: -1.0 + i * 0.75, y: 0.8,  z: -1.4 });
           for (let j = 0; j < 3; j++)
-            P.push({ geo: new THREE.BoxGeometry(0.8, 0.05, 0.2), mat: matFurn, x: -1.1 + i * 0.85, y: 0.4 + j * 0.5, z: -1.28 });
+            P.push({ geo: new THREE.BoxGeometry(0.7, 0.05, 0.2), mat: matFurn, x: -1.0 + i * 0.75, y: 0.4 + j * 0.5, z: -1.38 });
         }
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.07, 0.5), mat: matFurn, x: 0.8, y: 0.5, z: 0.5 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 0.5, y: 0.25, z: 0.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 1.1, y: 0.25, z: 0.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.7, 0.07, 0.5),  mat: matFurn, x: 0.8, y: 0.5, z: 0.4 });
+        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 0.5, y: 0.25, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 1.1, y: 0.25, z: 0.2 });
       } else if (type === 'laundry') {
-        P.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.8, 12), mat: matFurn, x: -0.8, y: 0.4, z: -0.8 });
-        P.push({ geo: new THREE.CylinderGeometry(0.25, 0.2, 0.45, 10), mat: matDark, x: 0.6, y: 0.225, z: 0.4 });
+        P.push({ geo: new THREE.CylinderGeometry(0.33, 0.33, 0.8, 12), mat: matFurn, x: -0.8, y: 0.4, z: -0.8 });
+        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.18, 0.44, 10), mat: matDark, x: 0.6, y: 0.22, z: 0.4 });
         P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), mat: matDark, x: -0.5, y: 0.8, z: 0.8 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), mat: matDark, x: 0.5, y: 0.8, z: 0.8 });
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), mat: matDark, x: 0.5,  y: 0.8, z: 0.8 });
       } else if (type === 'kitchen') {
-        P.push({ geo: new THREE.BoxGeometry(2.0, 0.65, 0.4), mat: matFurn, x: 0, y: 0.325, z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.05, 0.4), mat: matDark, x: -0.5, y: 0.68, z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.35), mat: toonMat(0x888888), x: 0.6, y: 0.68, z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.45, 1.4, 0.4), mat: matFurn, x: -1.2, y: 0.7, z: -1.2 });
+        P.push({ geo: new THREE.BoxGeometry(2.0, 0.65, 0.4), mat: matFurn, x: 0,    y: 0.325, z: -1.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.8, 0.05, 0.4), mat: matDark, x: -0.5, y: 0.68,  z: -1.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.35),mat: toonMat(0x888888), x: 0.6, y: 0.68, z: -1.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.45, 1.4, 0.4), mat: matFurn, x: -1.3, y: 0.7,  z: -1.3 });
       } else if (type === 'playroom') {
-        P.push({ geo: new THREE.BoxGeometry(0.7, 0.06, 0.5), mat: matFurn, x: 0, y: 0.4, z: 0 });
+        P.push({ geo: new THREE.BoxGeometry(0.7, 0.06, 0.5),  mat: matFurn, x: 0,    y: 0.4,  z: 0 });
         P.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), mat: matFurn, x: -0.28, y: 0.2, z: -0.18 });
-        P.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), mat: matFurn, x: 0.28, y: 0.2, z: -0.18 });
-        P.push({ geo: new THREE.BoxGeometry(0.6, 0.4, 0.4), mat: matDark, x: -0.9, y: 0.2, z: -0.9 });
-        P.push({ geo: new THREE.SphereGeometry(0.18, 8, 8), mat: toonMat(0xaaaaaa), x: 0.7, y: 0.18, z: 0.6 });
+        P.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), mat: matFurn, x:  0.28, y: 0.2, z: -0.18 });
+        P.push({ geo: new THREE.BoxGeometry(0.6, 0.4, 0.4),   mat: matDark, x: -0.9, y: 0.2,  z: -0.9 });
+        P.push({ geo: new THREE.SphereGeometry(0.18, 8, 8),   mat: toonMat(0xaaaaaa), x: 0.7, y: 0.18, z: 0.6 });
       } else if (type === 'living') {
-        P.push({ geo: new THREE.BoxGeometry(1.5, 0.3, 0.55), mat: matDark, x: 0, y: 0.15, z: 0.5 });
-        P.push({ geo: new THREE.BoxGeometry(1.5, 0.5, 0.15), mat: matDark, x: 0, y: 0.4, z: 0.78 });
-        P.push({ geo: new THREE.BoxGeometry(0.7, 0.07, 0.45), mat: matFurn, x: 0, y: 0.3, z: -0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.0, 0.07, 0.3), mat: matDark, x: 0, y: 0.6, z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.5, 0.07), mat: matFurn, x: 0, y: 0.9, z: -1.2 });
+        P.push({ geo: new THREE.BoxGeometry(1.5, 0.3,  0.55), mat: matDark, x: 0, y: 0.15, z: 0.5 });
+        P.push({ geo: new THREE.BoxGeometry(1.5, 0.5,  0.15), mat: matDark, x: 0, y: 0.4,  z: 0.78 });
+        P.push({ geo: new THREE.BoxGeometry(0.7, 0.07, 0.45), mat: matFurn, x: 0, y: 0.3,  z: -0.2 });
+        P.push({ geo: new THREE.BoxGeometry(1.0, 0.07, 0.3),  mat: matDark, x: 0, y: 0.6,  z: -1.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.8, 0.5,  0.07), mat: matFurn, x: 0, y: 0.9,  z: -1.3 });
       } else if (type === 'bathroom') {
         P.push({ geo: new THREE.CylinderGeometry(0.22, 0.25, 0.35, 10), mat: matFurn, x: -0.9, y: 0.175, z: -0.9 });
         P.push({ geo: new THREE.BoxGeometry(0.45, 0.08, 0.32), mat: matFurn, x: -0.9, y: 0.38, z: -0.9 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.3), mat: matFurn, x: 0.8, y: 0.65, z: -1.1 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.65, 0.1), mat: matDark, x: 0.8, y: 0.325, z: -1.27 });
+        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.3),   mat: matFurn, x: 0.8,  y: 0.65, z: -1.1 });
+        P.push({ geo: new THREE.BoxGeometry(0.4, 0.65, 0.1),   mat: matDark, x: 0.8,  y: 0.325,z: -1.3 });
         P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), mat: matFurn, x: 0.9, y: 0.75, z: 0.9 });
       } else if (type === 'backyard') {
         P.push({ geo: new THREE.CylinderGeometry(0.12, 0.15, 1.0, 8), mat: matDark, x: -0.8, y: 0.5, z: -0.8 });
-        P.push({ geo: new THREE.SphereGeometry(0.45, 8, 8), mat: toonMat(0x888888), x: -0.8, y: 1.2, z: -0.8 });
-        P.push({ geo: new THREE.BoxGeometry(0.9, 0.07, 0.25), mat: matFurn, x: 0.6, y: 0.4, z: 0.4 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.25, y: 0.2, z: 0.32 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.95, y: 0.2, z: 0.32 });
+        P.push({ geo: new THREE.SphereGeometry(0.44, 8, 8), mat: toonMat(0x888888), x: -0.8, y: 1.2, z: -0.8 });
+        P.push({ geo: new THREE.BoxGeometry(0.9, 0.07, 0.25), mat: matFurn, x: 0.6,  y: 0.4, z: 0.4 });
+        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.25, y: 0.2, z: 0.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.95, y: 0.2, z: 0.3 });
       } else if (type === 'storage') {
         for (let i = 0; i < 2; i++) {
-          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -1.0 + i * 1.8, y: 0.7, z: -1.2 });
-          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -1.0 + i * 1.8, y: 0.7, z: -0.85 });
+          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -0.9 + i * 1.6, y: 0.7, z: -1.3 });
+          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -0.9 + i * 1.6, y: 0.7, z: -0.95 });
           for (let j = 0; j < 3; j++)
-            P.push({ geo: new THREE.BoxGeometry(1.8, 0.05, 0.4), mat: matFurn, x: -0.1 + i * 0.9, y: 0.3 + j * 0.45, z: -1.0 });
+            P.push({ geo: new THREE.BoxGeometry(1.6, 0.05, 0.38), mat: matFurn, x: -0.1 + i * 0.8, y: 0.3 + j * 0.45, z: -1.1 });
         }
         P.push({ geo: new THREE.BoxGeometry(0.4, 0.35, 0.35), mat: toonMat(0x777777), x: 0.5, y: 0.175, z: 0.5 });
       } else if (type === 'reading') {
-        P.push({ geo: new THREE.BoxGeometry(0.75, 0.3, 0.65), mat: matDark, x: -0.6, y: 0.15, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.75, 0.55, 0.12), mat: matDark, x: -0.6, y: 0.5, z: 0.52 });
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.97, y: 0.37, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.22, y: 0.37, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.0, 1.4, 0.25), mat: matDark, x: 0.9, y: 0.7, z: -1.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.75, 0.3,  0.65), mat: matDark, x: -0.6, y: 0.15, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.75, 0.55, 0.12), mat: matDark, x: -0.6, y: 0.5,  z: 0.52 });
+        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.97,y: 0.37, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.22,y: 0.37, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(1.0,  1.4,  0.25), mat: matDark, x:  0.9, y: 0.7,  z: -1.3 });
         P.push({ geo: new THREE.CylinderGeometry(0.02, 0.04, 1.4, 6), mat: matFurn, x: -0.1, y: 0.7, z: -0.3 });
         P.push({ geo: new THREE.ConeGeometry(0.18, 0.25, 8), mat: matFurn, x: -0.1, y: 1.45, z: -0.3 });
       }
       for (const p of P) {
-        const mesh = new THREE.Mesh(p.geo, p.mat);
-        mesh.position.set(p.x, p.y, p.z);
-        mesh.castShadow = true; mesh.receiveShadow = true;
-        group.add(mesh);
+        const m = new THREE.Mesh(p.geo, p.mat);
+        m.position.set(p.x, p.y, p.z);
+        m.castShadow = true; m.receiveShadow = true;
+        group.add(m);
       }
     }
 
-    function makeWall(w, h, d) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
-      m.castShadow = true; m.receiveShadow = true;
-      return m;
-    }
+    // ── Room store ────────────────────────────────────────────────────────────
+    const roomGroups   = {};
+    const roomOverlays = {};
+    const roomBloods   = {};
+    const roomCenters  = {};
 
+    // ── Build rooms ───────────────────────────────────────────────────────────
     function buildRoom(roomDef) {
       const { slug, label, gridX, gridZ, type } = roomDef;
       const group = new THREE.Group();
@@ -474,45 +697,100 @@
       const oz = gridZ * GRID_SPACING;
       group.position.set(ox, 0, oz);
 
-      if (type === 'corridor') {
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.1, ROOM_D), matCorr);
-        floor.position.y = -0.05; floor.receiveShadow = true;
-        group.add(floor); scene.add(group); return;
+      const isCorr = type === 'corridor';
+
+      // Floor (slightly inset to avoid Z-fighting at shared edges)
+      const floorMat = isCorr ? matCorr : matFloor;
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W - 0.005, 0.1, ROOM_D - 0.005), floorMat);
+      floor.position.y = -0.05;
+      floor.receiveShadow = true;
+      group.add(floor);
+      scene.add(group);
+
+      if (isCorr) return;
+
+      // Which walls to build
+      const hasCellNegZ = gridZ > 0;
+      const hasCellNegX = gridX > 0;
+      const buildPosX   = (gridX === 3);
+      const buildPosZ   = (gridZ === 3);
+
+      const walls = {};
+
+      // negZ wall (north face)
+      {
+        const wg = hasCellNegZ
+          ? doorwayWallGroupX(ROOM_W)
+          : solidWallGroup(ROOM_W, WALL_H, WALL_T);
+        wg.position.set(0, 0, -ROOM_D / 2);
+        group.add(wg);
+        walls.negZ = wg;
       }
 
-      // Floor
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W, 0.1, ROOM_D), matFloor);
-      floor.position.y = -0.05; floor.receiveShadow = true;
-      group.add(floor);
+      // negX wall (west face)
+      {
+        const wg = hasCellNegX
+          ? doorwayWallGroupZ(ROOM_D)
+          : solidWallGroup(WALL_T, WALL_H, ROOM_D);
+        wg.position.set(-ROOM_W / 2, 0, 0);
+        group.add(wg);
+        walls.negX = wg;
+      }
 
-      // All four walls — default visibility matches azimuth=0 (NE: negX and negZ visible)
-      const negZWall = makeWall(ROOM_W, WALL_H, WALL_T);
-      negZWall.position.set(0, WALL_H / 2, -ROOM_D / 2);
-      negZWall.visible = true;
-      group.add(negZWall);
+      // posX wall (east face) — only right boundary
+      if (buildPosX) {
+        const wg = solidWallGroup(WALL_T, WALL_H, ROOM_D);
+        wg.position.set(ROOM_W / 2, 0, 0);
+        wg.visible = false;
+        group.add(wg);
+        walls.posX = wg;
+      } else { walls.posX = null; }
 
-      const negXWall = makeWall(WALL_T, WALL_H, ROOM_D);
-      negXWall.position.set(-ROOM_W / 2, WALL_H / 2, 0);
-      negXWall.visible = true;
-      group.add(negXWall);
+      // posZ wall (south face) — only bottom row
+      if (buildPosZ) {
+        const wg = solidWallGroup(ROOM_W, WALL_H, WALL_T);
+        wg.position.set(0, 0, ROOM_D / 2);
+        wg.visible = false;
+        group.add(wg);
+        walls.posZ = wg;
+      } else { walls.posZ = null; }
 
-      const posXWall = makeWall(WALL_T, WALL_H, ROOM_D);
-      posXWall.position.set(ROOM_W / 2, WALL_H / 2, 0);
-      posXWall.visible = false;
-      group.add(posXWall);
+      // Ceiling panels (one per wall side, match visibility)
+      const ceilings = {};
+      function makeCeilMesh(w, d) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), matCeil);
+        m.receiveShadow = true;
+        return m;
+      }
 
-      const posZWall = makeWall(ROOM_W, WALL_H, WALL_T);
-      posZWall.position.set(0, WALL_H / 2, ROOM_D / 2);
-      posZWall.visible = false;
-      group.add(posZWall);
+      const cN = makeCeilMesh(ROOM_W, CEIL_DEPTH);
+      cN.position.set(0, WALL_H + 0.045, -ROOM_D / 2 + CEIL_DEPTH / 2);
+      group.add(cN); ceilings.negZ = cN;
 
-      group.userData.walls = { negX: negXWall, posX: posXWall, negZ: negZWall, posZ: posZWall };
+      const cX = makeCeilMesh(CEIL_DEPTH, ROOM_D);
+      cX.position.set(-ROOM_W / 2 + CEIL_DEPTH / 2, WALL_H + 0.045, 0);
+      group.add(cX); ceilings.negX = cX;
+
+      const cPN = makeCeilMesh(ROOM_W, CEIL_DEPTH);
+      cPN.position.set(0, WALL_H + 0.045, ROOM_D / 2 - CEIL_DEPTH / 2);
+      cPN.visible = false;
+      group.add(cPN); ceilings.posZ = buildPosZ ? cPN : null;
+      if (!buildPosZ) { group.remove(cPN); ceilings.posZ = null; }
+
+      const cPX = makeCeilMesh(CEIL_DEPTH, ROOM_D);
+      cPX.position.set(ROOM_W / 2 - CEIL_DEPTH / 2, WALL_H + 0.045, 0);
+      cPX.visible = false;
+      group.add(cPX); ceilings.posX = buildPosX ? cPX : null;
+      if (!buildPosX) { group.remove(cPX); ceilings.posX = null; }
+
+      group.userData.walls    = walls;
+      group.userData.ceilings = ceilings;
 
       addFurniture(group, type);
 
-      // Red overlay (hidden by default)
+      // Red overlay (plain, for general win state)
       const overlay = new THREE.Mesh(
-        new THREE.PlaneGeometry(ROOM_W - 0.1, ROOM_D - 0.1),
+        new THREE.PlaneGeometry(ROOM_W - 0.18, ROOM_D - 0.18),
         new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0, depthWrite: false })
       );
       overlay.rotation.x = -Math.PI / 2;
@@ -520,47 +798,80 @@
       group.add(overlay);
       if (slug) roomOverlays[slug] = overlay;
 
+      // Blood splatter overlay
+      const blood = new THREE.Mesh(
+        new THREE.PlaneGeometry(ROOM_W - 0.12, ROOM_D - 0.12),
+        new THREE.MeshBasicMaterial({ map: makeBloodSplatter(), transparent: true, opacity: 0, depthWrite: false })
+      );
+      blood.rotation.x = -Math.PI / 2;
+      blood.position.y = 0.065;
+      group.add(blood);
+      if (slug) roomBloods[slug] = blood;
+
+      // Label sprite
       if (label) {
         const sprite = makeLabelSprite(label);
-        sprite.position.set(0, 2.4, 0);
+        sprite.position.set(0, WALL_H + 0.85, 0);
         group.add(sprite);
       }
 
-      scene.add(group);
-      if (slug) { roomGroups[slug] = group; roomCenters[slug] = { x: ox, z: oz }; }
+      if (slug) {
+        roomGroups[slug]  = group;
+        roomCenters[slug] = { x: ox, z: oz };
+      }
     }
 
     for (const r of ROOMS) buildRoom(r);
 
-    // ── Wall visibility by azimuth ─────────────────────────────────────────────
-    // Azimuth 0 (NE): negX and negZ visible (camera is at +X,+Z from scene)
-    // Azimuth 90 (NW): posX and negZ visible
-    // Azimuth 180 (SW): posX and posZ visible
-    // Azimuth 270 (SE): negX and posZ visible
+    // ── Wall visibility ───────────────────────────────────────────────────────
     function updateWallsForAzimuth(az) {
-      const snap = (Math.round(az / 90) * 90 + 360) % 360;
+      const snap = ((Math.round(az / 90) * 90) + 360) % 360;
+      const showNegX = (snap === 0 || snap === 270);
+      const showPosX = (snap === 90 || snap === 180);
+      const showNegZ = (snap === 0 || snap === 90);
+      const showPosZ = (snap === 180 || snap === 270);
+
       for (const slug of Object.keys(roomGroups)) {
-        const walls = roomGroups[slug].userData.walls;
+        const { walls, ceilings } = roomGroups[slug].userData;
         if (!walls) continue;
-        walls.negX.visible = (snap === 0 || snap === 270);
-        walls.posX.visible = (snap === 90 || snap === 180);
-        walls.negZ.visible = (snap === 0 || snap === 90);
-        walls.posZ.visible = (snap === 180 || snap === 270);
+        if (walls.negX) walls.negX.visible = showNegX;
+        if (walls.posX) walls.posX.visible = showPosX;
+        if (walls.negZ) walls.negZ.visible = showNegZ;
+        if (walls.posZ) walls.posZ.visible = showPosZ;
+        if (ceilings) {
+          if (ceilings.negX) ceilings.negX.visible = showNegX;
+          if (ceilings.posX) ceilings.posX.visible = showPosX;
+          if (ceilings.negZ) ceilings.negZ.visible = showNegZ;
+          if (ceilings.posZ) ceilings.posZ.visible = showPosZ;
+        }
       }
     }
 
+    // ── Hover overlay ─────────────────────────────────────────────────────────
+    const hoverOverlay = new THREE.Mesh(
+      new THREE.PlaneGeometry(ROOM_W - 0.3, ROOM_D - 0.3),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.13, depthWrite: false })
+    );
+    hoverOverlay.rotation.x = -Math.PI / 2;
+    hoverOverlay.position.y = 0.07;
+    hoverOverlay.visible = false;
+    hoverOverlay.renderOrder = 2;
+    scene.add(hoverOverlay);
+    let hoveredRoomSlug = null;
+
     // ── Pocong ghost sprite ───────────────────────────────────────────────────
     let pocongSprite = null;
-    const pocongTex = texLoader.load('/assets/pocong.jpg', () => {
-      const mat = new THREE.SpriteMaterial({ map: pocongTex, depthTest: false });
-      pocongSprite = new THREE.Sprite(mat);
-      pocongSprite.scale.set(1.0, 1.5, 1);
-      pocongSprite.position.set(4, 0.9, 12);
+    const texLoader = new THREE.TextureLoader();
+    texLoader.load('/assets/pocong.jpg', tex => {
+      pocongSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+      pocongSprite.scale.set(1.1, 1.6, 1);
+      pocongSprite.position.set(4, 1.1, 12);
       scene.add(pocongSprite);
     });
 
     // ── Player tokens ─────────────────────────────────────────────────────────
     const playerSprites = [];
+    const TOKEN_COLORS  = ['#555','#444','#666','#333','#777','#222','#888'];
 
     function makeTokenSprite(initial, color) {
       const c = document.createElement('canvas');
@@ -568,31 +879,31 @@
       const ctx = c.getContext('2d');
       ctx.fillStyle = color || '#555';
       ctx.beginPath(); ctx.arc(32, 32, 28, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 3; ctx.stroke();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 28px sans-serif';
+      ctx.font = 'bold 26px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(initial.toUpperCase(), 32, 33);
-      const tex = new THREE.CanvasTexture(c);
-      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+      const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false });
       const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.38, 0.38, 1);
+      sprite.scale.set(0.4, 0.4, 1);
       return sprite;
     }
-
-    const TOKEN_COLORS = ['#555','#444','#666','#333','#777','#222','#888','#111'];
 
     function placePlayerTokens(players) {
       for (const s of playerSprites) scene.remove(s);
       playerSprites.length = 0;
+      const offsets = {};
       for (let i = 0; i < Math.min(players.length, 50); i++) {
         const p = players[i];
         const center = roomCenters[p.room_slug];
         if (!center) continue;
+        offsets[p.room_slug] = (offsets[p.room_slug] || 0) + 1;
+        const n   = offsets[p.room_slug];
+        const ang = n * 2.1;
+        const r   = Math.min(0.3 + n * 0.12, 1.2);
         const sprite = makeTokenSprite(p.username[0], TOKEN_COLORS[i % TOKEN_COLORS.length]);
-        const rx = (Math.random() - 0.5) * (ROOM_W - 0.8);
-        const rz = (Math.random() - 0.5) * (ROOM_D - 0.8);
-        sprite.position.set(center.x + rx, 0.5, center.z + rz);
+        sprite.position.set(center.x + r * Math.cos(ang), 0.55, center.z + r * Math.sin(ang));
         sprite.userData.slug = p.room_slug;
         sprite.userData.username = p.username;
         scene.add(sprite);
@@ -607,110 +918,189 @@
     const outlinePass = new OutlinePass(
       new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera
     );
-    outlinePass.edgeStrength = 4.0;
-    outlinePass.edgeGlow = 0;
-    outlinePass.edgeThickness = 2.0;
+    outlinePass.edgeStrength  = 6.0;
+    outlinePass.edgeGlow      = 0;
+    outlinePass.edgeThickness = 2.5;
     outlinePass.visibleEdgeColor.set('#000000');
     outlinePass.hiddenEdgeColor.set('#000000');
     composer.addPass(outlinePass);
-
-    const gammaPass = new ShaderPass(GammaCorrectionShader);
-    composer.addPass(gammaPass);
+    composer.addPass(new ShaderPass(GammaCorrectionShader));
 
     function refreshOutlineObjects() {
       const objs = [];
-      scene.traverse(obj => { if (obj.isMesh) objs.push(obj); });
+      scene.traverse(o => { if (o.isMesh) objs.push(o); });
       outlinePass.selectedObjects = objs;
     }
     refreshOutlineObjects();
 
-    // ── Game state & HUD ──────────────────────────────────────────────────────
-    let currentState = { round: null, bet: null, players: [] };
-    let selectedRoom = null;
-    let lastRoundId = null;
-    let lastStatus  = null;
+    // ── Game state ────────────────────────────────────────────────────────────
+    let currentState   = { round: null, bet: null, players: [] };
+    let selectedRoom   = null;
+    let lastRoundId    = null;
+    let lastStatus     = null;
     let lastPlayersJson = '';
+    let selectedBetAmount = 1000;
+    const BET_TIERS = [100, 200, 500, 1000, 5000];
 
+    // ── Bet chip UI ───────────────────────────────────────────────────────────
+    function updateBetChipStates() {
+      const off = !currentState.round || currentState.round.status !== 'active' || !!currentState.bet;
+      document.querySelectorAll('.bet-chip, .bet-adj').forEach(btn => {
+        btn.disabled = off;
+      });
+      document.querySelectorAll('.bet-chip').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.amount) === selectedBetAmount);
+      });
+    }
+
+    document.querySelectorAll('.bet-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedBetAmount = parseInt(btn.dataset.amount);
+        updateBetChipStates();
+        if (selectedRoom) showConfirmChip(selectedRoom);
+      });
+    });
+    document.getElementById('btn-decrement').addEventListener('click', () => {
+      const idx = BET_TIERS.indexOf(selectedBetAmount);
+      if (idx > 0) { selectedBetAmount = BET_TIERS[idx - 1]; updateBetChipStates(); }
+    });
+    document.getElementById('btn-increment').addEventListener('click', () => {
+      const idx = BET_TIERS.indexOf(selectedBetAmount);
+      if (idx < BET_TIERS.length - 1) { selectedBetAmount = BET_TIERS[idx + 1]; updateBetChipStates(); }
+    });
+
+    // ── Confirm chip ──────────────────────────────────────────────────────────
+    function showConfirmChip(room) {
+      selectedRoom = room;
+      document.getElementById('confirm-text').textContent =
+        `Bet ${selectedBetAmount} TKN on ${room.label}?`;
+      document.getElementById('confirm-chip').classList.add('visible');
+    }
+    function hideConfirmChip() {
+      document.getElementById('confirm-chip').classList.remove('visible');
+      selectedRoom = null;
+    }
+
+    document.getElementById('confirm-yes').addEventListener('click', async () => {
+      if (!selectedRoom) return;
+      const room = selectedRoom;
+      hideConfirmChip();
+      try {
+        const res = await fetch('/api/game/bet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ room_slug: room.slug, amount_tkn: selectedBetAmount }),
+        });
+        if (res.ok) await pollState();
+        else { const err = await res.json(); alert(err.error || 'Bet failed'); }
+      } catch (e) { console.error(e); }
+    });
+    document.getElementById('confirm-no').addEventListener('click', hideConfirmChip);
+
+    // ── HUD ───────────────────────────────────────────────────────────────────
     function updateHUD(state) {
       const { round, bet } = state;
       if (round) document.getElementById('status-round').textContent = `round: ${round.round_number}`;
+
+      const outcomeEl = document.getElementById('status-outcome');
+      outcomeEl.className = '';
+
       if (bet) {
         document.getElementById('status-bet').textContent = `bet: ${bet.amount_tkn} TKN`;
-        const outcomeEl = document.getElementById('status-outcome');
         if (bet.outcome === 'won') {
           outcomeEl.textContent = 'status: won 🎉';
+          outcomeEl.classList.add('outcome-won');
           const wEl = document.getElementById('tkn-winnings');
           wEl.style.display = 'block';
           wEl.textContent = `+${bet.amount_tkn} TKN`;
+          document.getElementById('win-calc').style.display = 'block';
         } else if (bet.outcome === 'lost') {
           outcomeEl.textContent = 'status: lost 💀';
+          outcomeEl.classList.add('outcome-lost');
+          document.getElementById('win-calc').style.display = 'none';
         } else {
           outcomeEl.textContent = 'status: bet placed';
+          document.getElementById('win-calc').style.display = 'none';
         }
       } else {
         document.getElementById('status-bet').textContent = 'bet: — TKN';
-        document.getElementById('status-outcome').textContent = 'status: watching';
+        outcomeEl.textContent = 'status: watching';
+        document.getElementById('win-calc').style.display = 'none';
       }
 
-      // Dev controls: show/hide new-round button
+      // Tutorial start label
+      const tutStart = document.getElementById('tutorial-start');
+      if (tutStart) tutStart.style.display = (bet || round?.status !== 'active') ? 'none' : 'block';
+
+      // Dev controls new-round button
       const devPanel = document.getElementById('dev-controls');
       if (devPanel.style.display !== 'none') {
-        const newRoundBtn = document.getElementById('btn-newround');
-        if (round?.status === 'completed') {
-          newRoundBtn.classList.remove('hidden');
-        } else {
-          newRoundBtn.classList.add('hidden');
-        }
+        document.getElementById('btn-newround').classList.toggle('hidden', round?.status !== 'completed');
       }
+
+      updateBetChipStates();
     }
 
     function applyWinState(state) {
       const { round, bet } = state;
       if (!round || round.status !== 'completed' || !round.winner_room) return;
 
+      // Blood splatter on winner room
+      const blood = roomBloods[round.winner_room];
+      if (blood) blood.material.opacity = 1.0;
       const overlay = roomOverlays[round.winner_room];
-      if (overlay) overlay.material.opacity = 0.45;
+      if (overlay) overlay.material.opacity = 0.28;
 
+      // Tint tokens
       for (const s of playerSprites) {
-        if (s.userData.slug === round.winner_room) s.material.color.set(0x444444);
+        s.material.color.set(s.userData.slug === round.winner_room ? 0x444444 : 0xddddaa);
       }
 
-      const banner = document.getElementById('win-banner');
+      // Move ghost to winner room
+      if (pocongSprite && roomCenters[round.winner_room]) {
+        const c = roomCenters[round.winner_room];
+        pocongSprite.position.set(c.x, 1.1, c.z);
+      }
+
+      const banner  = document.getElementById('win-banner');
       const winText = document.getElementById('win-text');
       const winSub  = document.getElementById('win-sub');
-      if (bet && bet.outcome === 'won') {
+
+      if (bet?.outcome === 'won') {
         winText.textContent = 'You Win! 🎉';
+        winText.style.color = '#ff2222';
         const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
         winSub.textContent = `The Pocong entered ${lbl}. You were safe!`;
         banner.style.display = 'block';
-      } else if (bet && bet.outcome === 'lost') {
+      } else if (bet?.outcome === 'lost') {
         winText.textContent = 'You Lose! 💀';
         winText.style.color = '#888';
         winSub.textContent = 'The Pocong found you...';
         banner.style.display = 'block';
+      } else {
+        const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
+        winText.textContent = '👻 Pocong!';
+        winText.style.color = '#888';
+        winSub.textContent = `Entered ${lbl}!`;
+        banner.style.display = 'block';
       }
 
-      if (pocongSprite && roomCenters[round.winner_room]) {
-        const c = roomCenters[round.winner_room];
-        pocongSprite.position.set(c.x, 0.9, c.z);
-      }
-
-      if (bet && bet.outcome === 'won' && bet.room_slug === 'library') {
-        for (const s of playerSprites) {
-          if (s.userData.slug === 'library') s.scale.setScalar(1.1);
-        }
-      }
+      document.body.classList.add('shaking');
+      setTimeout(() => document.body.classList.remove('shaking'), 600);
     }
 
     function clearWinState() {
       for (const slug of Object.keys(roomOverlays)) roomOverlays[slug].material.opacity = 0;
-      for (const s of playerSprites) { s.material.color.set(0xffffff); s.scale.set(0.38, 0.38, 1); }
-      const banner = document.getElementById('win-banner');
-      banner.style.display = 'none';
-      const winText = document.getElementById('win-text');
-      winText.style.color = '';
+      for (const slug of Object.keys(roomBloods))   roomBloods[slug].material.opacity   = 0;
+      for (const s of playerSprites) s.material.color.set(0xffffff);
+      document.getElementById('win-banner').style.display = 'none';
+      document.getElementById('win-calc').style.display   = 'none';
+      document.getElementById('tkn-winnings').style.display = 'none';
+      const wt = document.getElementById('win-text');
+      if (wt) { wt.style.color = ''; }
     }
 
+    // ── Poll ──────────────────────────────────────────────────────────────────
     async function pollState() {
       try {
         const res = await fetch('/api/game/state', { headers: authHeaders });
@@ -721,50 +1111,44 @@
 
         const roundChanged   = state.round?.id !== lastRoundId;
         const statusChanged  = state.round?.status !== lastStatus;
-        const playersJson    = JSON.stringify(state.players || []);
-        const playersChanged = playersJson !== lastPlayersJson;
+        const pJson          = JSON.stringify(state.players || []);
+        const playersChanged = pJson !== lastPlayersJson;
 
         if (roundChanged || statusChanged || playersChanged) {
           if (roundChanged || statusChanged) clearWinState();
           placePlayerTokens(state.players || []);
-
           if (state.round?.status === 'completed') applyWinState(state);
-
-          lastRoundId    = state.round?.id;
-          lastStatus     = state.round?.status;
-          lastPlayersJson = playersJson;
-
+          lastRoundId     = state.round?.id;
+          lastStatus      = state.round?.status;
+          lastPlayersJson = pJson;
           refreshOutlineObjects();
         }
-      } catch (e) {
-        console.warn('Poll error:', e.message);
-      }
+      } catch (e) { console.warn('Poll error:', e.message); }
     }
-
     pollState();
     setInterval(pollState, 3000);
 
-    // ── Camera input — pan, zoom, rotate ─────────────────────────────────────
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const xzPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    // ── Camera input ──────────────────────────────────────────────────────────
+    const raycaster   = new THREE.Raycaster();
+    const mouseNDC    = new THREE.Vector2();
+    const xzPlane     = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-    function getPlanePoint(screenX, screenY) {
-      mouse.x =  (screenX / window.innerWidth)  * 2 - 1;
-      mouse.y = -(screenY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
+    function getPlanePoint(sx, sy) {
+      mouseNDC.x =  (sx / window.innerWidth)  * 2 - 1;
+      mouseNDC.y = -(sy / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouseNDC, camera);
       const pt = new THREE.Vector3();
-      raycaster.ray.intersectPlane(xzPlane, pt);
-      return pt;
+      return raycaster.ray.intersectPlane(xzPlane, pt) ? pt : null;
     }
 
     let panActive = false, rotActive = false, didDrag = false;
     let panStartX = 0, panStartY = 0;
     let panWorldStart = null;
     const panTargetStart = new THREE.Vector3();
-    let rotStartX = 0, rotStartAzimuth = 0;
+    let rotStartX = 0, rotStartAz = 0;
+    const CLAMP_MIN = -3, CLAMP_MAX = 15;
 
-    const CLAMP_MIN = -4, CLAMP_MAX = 16;
+    function setCursor(c) { canvas.style.cursor = c; }
 
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -774,13 +1158,13 @@
         panStartX = e.clientX; panStartY = e.clientY;
         panWorldStart = getPlanePoint(e.clientX, e.clientY);
         panTargetStart.copy(camState.target);
-        canvas.classList.add('panning');
+        setCursor('grabbing');
       } else if (e.button === 2) {
         rotActive = true;
         rotStartX = e.clientX;
-        rotStartAzimuth = camState.liveAzimuth;
+        rotStartAz = camState.liveAzimuth;
         camState.isSnapping = false;
-        canvas.classList.add('rotating');
+        setCursor('ew-resize');
       }
     });
 
@@ -791,19 +1175,44 @@
         if (Math.hypot(dx, dy) > 4) didDrag = true;
         if (didDrag && panWorldStart) {
           const curr = getPlanePoint(e.clientX, e.clientY);
-          if (curr.length() > 0) {
-            const deltaX = panWorldStart.x - curr.x;
-            const deltaZ = panWorldStart.z - curr.z;
-            camState.target.x = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.x + deltaX));
-            camState.target.z = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.z + deltaZ));
+          if (curr) {
+            camState.target.x = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.x + panWorldStart.x - curr.x));
+            camState.target.z = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.z + panWorldStart.z - curr.z));
             updateCamera();
           }
         }
       }
       if (rotActive) {
-        const dx = e.clientX - rotStartX;
-        camState.liveAzimuth = rotStartAzimuth + dx * 0.35;
+        camState.liveAzimuth = rotStartAz + (e.clientX - rotStartX) * 0.35;
         updateCamera();
+      }
+
+      // Hover detection
+      if (!panActive && !rotActive) {
+        const canBet = currentState.round?.status === 'active' && !currentState.bet;
+        if (canBet) {
+          const pt = getPlanePoint(e.clientX, e.clientY);
+          const hit = pt ? ROOMS.find(r => {
+            if (!r.slug) return false;
+            const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
+            return Math.abs(pt.x - cx) < ROOM_W / 2 - 0.05 && Math.abs(pt.z - cz) < ROOM_D / 2 - 0.05;
+          }) : null;
+          if (hit && hit.slug) {
+            hoveredRoomSlug = hit.slug;
+            const c = roomCenters[hit.slug];
+            hoverOverlay.position.set(c.x, 0.07, c.z);
+            hoverOverlay.visible = true;
+            setCursor('pointer');
+          } else {
+            hoveredRoomSlug = null;
+            hoverOverlay.visible = false;
+            setCursor('grab');
+          }
+        } else {
+          hoveredRoomSlug = null;
+          hoverOverlay.visible = false;
+          setCursor('grab');
+        }
       }
     });
 
@@ -811,45 +1220,36 @@
       if (e.button === 0) {
         if (!didDrag) handleClick(e);
         panActive = false; panWorldStart = null; didDrag = false;
-        canvas.classList.remove('panning');
+        setCursor(hoveredRoomSlug ? 'pointer' : 'grab');
       }
       if (e.button === 2) {
         if (rotActive) snapAzimuth();
         rotActive = false;
-        canvas.classList.remove('rotating');
+        setCursor('grab');
       }
     });
 
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      camState.viewSize = Math.max(8, Math.min(40, camState.viewSize + e.deltaY * 0.05));
+      camState.viewSize = Math.max(10, Math.min(40, camState.viewSize + e.deltaY * 0.05));
       updateCamera();
     }, { passive: false });
 
-    // ── Touch controls ────────────────────────────────────────────────────────
+    // ── Touch ─────────────────────────────────────────────────────────────────
     let touchPanStart = null;
     const touchPanTargetStart = new THREE.Vector3();
-    let lastPinchDist = null;
-    let lastTouchAngle = null;
-    let touchRotStartAzimuth = 0;
+    let lastPinchDist = null, lastTouchAngle = null;
 
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
-      const tArr = Array.from(e.touches);
-      if (tArr.length === 1) {
-        touchPanStart = getPlanePoint(tArr[0].clientX, tArr[0].clientY);
+      const ta = Array.from(e.touches);
+      if (ta.length === 1) {
+        touchPanStart = getPlanePoint(ta[0].clientX, ta[0].clientY);
         touchPanTargetStart.copy(camState.target);
         lastPinchDist = null; lastTouchAngle = null;
-      } else if (tArr.length === 2) {
-        lastPinchDist = Math.hypot(
-          tArr[0].clientX - tArr[1].clientX,
-          tArr[0].clientY - tArr[1].clientY
-        );
-        lastTouchAngle = Math.atan2(
-          tArr[0].clientY - tArr[1].clientY,
-          tArr[0].clientX - tArr[1].clientX
-        );
-        touchRotStartAzimuth = camState.liveAzimuth;
+      } else if (ta.length === 2) {
+        lastPinchDist  = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
+        lastTouchAngle = Math.atan2(ta[0].clientY - ta[1].clientY, ta[0].clientX - ta[1].clientX);
         camState.isSnapping = false;
         touchPanStart = null;
       }
@@ -857,32 +1257,24 @@
 
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      const tArr = Array.from(e.touches);
-      if (tArr.length === 1 && touchPanStart) {
-        const curr = getPlanePoint(tArr[0].clientX, tArr[0].clientY);
-        if (curr.length() > 0) {
+      const ta = Array.from(e.touches);
+      if (ta.length === 1 && touchPanStart) {
+        const curr = getPlanePoint(ta[0].clientX, ta[0].clientY);
+        if (curr) {
           camState.target.x = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, touchPanTargetStart.x + touchPanStart.x - curr.x));
           camState.target.z = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, touchPanTargetStart.z + touchPanStart.z - curr.z));
           updateCamera();
         }
-      } else if (tArr.length === 2) {
-        const dist = Math.hypot(
-          tArr[0].clientX - tArr[1].clientX,
-          tArr[0].clientY - tArr[1].clientY
-        );
+      } else if (ta.length === 2) {
+        const dist = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
         if (lastPinchDist && dist > 0) {
-          camState.viewSize = Math.max(8, Math.min(40, camState.viewSize * (lastPinchDist / dist)));
+          camState.viewSize = Math.max(10, Math.min(40, camState.viewSize * (lastPinchDist / dist)));
           updateCamera();
         }
         lastPinchDist = dist;
-
-        const angle = Math.atan2(
-          tArr[0].clientY - tArr[1].clientY,
-          tArr[0].clientX - tArr[1].clientX
-        );
+        const angle = Math.atan2(ta[0].clientY - ta[1].clientY, ta[0].clientX - ta[1].clientX);
         if (lastTouchAngle !== null) {
-          const delta = (angle - lastTouchAngle) * (180 / Math.PI);
-          camState.liveAzimuth += delta * 0.5;
+          camState.liveAzimuth += (angle - lastTouchAngle) * (180 / Math.PI) * 0.5;
           updateCamera();
         }
         lastTouchAngle = angle;
@@ -898,78 +1290,40 @@
       if (Array.from(e.touches).length === 0) touchPanStart = null;
     }, { passive: false });
 
-    // ── Room click / bet modal ────────────────────────────────────────────────
+    // ── Room click ────────────────────────────────────────────────────────────
     function handleClick(e) {
       if (!currentState.round || currentState.round.status !== 'active') return;
       if (currentState.bet) return;
 
-      mouse.x =  (e.clientX / window.innerWidth)  * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
+      const pt = getPlanePoint(e.clientX, e.clientY);
+      if (!pt) return;
 
-      const intersects = raycaster.intersectObjects(scene.children, true);
-      if (!intersects.length) return;
-
-      const pos = intersects[0].point;
-      const hitRoom = ROOMS.find(r => {
+      const hit = ROOMS.find(r => {
         if (!r.slug) return false;
-        const cx = r.gridX * GRID_SPACING;
-        const cz = r.gridZ * GRID_SPACING;
-        return Math.abs(pos.x - cx) < ROOM_W / 2 + 0.1 && Math.abs(pos.z - cz) < ROOM_D / 2 + 0.1;
+        const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
+        return Math.abs(pt.x - cx) < ROOM_W / 2 && Math.abs(pt.z - cz) < ROOM_D / 2;
       });
-
-      if (hitRoom && hitRoom.slug) {
-        selectedRoom = hitRoom;
-        document.getElementById('modal-title').textContent = 'Place Your Bet';
-        document.getElementById('modal-room').textContent = `Room: ${hitRoom.label}`;
-        document.getElementById('bet-modal').style.display = 'block';
-      }
+      if (hit && hit.slug) showConfirmChip(hit);
     }
 
-    document.getElementById('modal-cancel').addEventListener('click', () => {
-      document.getElementById('bet-modal').style.display = 'none';
-      selectedRoom = null;
-    });
-
-    document.getElementById('modal-confirm').addEventListener('click', async () => {
-      if (!selectedRoom) return;
-      document.getElementById('bet-modal').style.display = 'none';
-      try {
-        const res = await fetch('/api/game/bet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ room_slug: selectedRoom.slug, amount_tkn: 1000 }),
-        });
-        if (res.ok) await pollState();
-        else { const err = await res.json(); alert(err.error || 'Bet failed'); }
-      } catch (e) { console.error(e); }
-      selectedRoom = null;
-    });
-
-    // ── Dev Controls (staging only) ───────────────────────────────────────────
+    // ── Dev controls ──────────────────────────────────────────────────────────
     async function callAdvance() {
       const res = await fetch('/api/game/advance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({}),
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'advance failed'); }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'advance failed'); }
       return res.json();
     }
 
     document.getElementById('btn-resolve').addEventListener('click', async () => {
-      try {
-        await callAdvance(); // active → resolving
-        await callAdvance(); // resolving → completed
-        await pollState();
-      } catch (e) { alert(e.message); }
+      try { await callAdvance(); await callAdvance(); await pollState(); }
+      catch (e) { alert(e.message); }
     });
-
     document.getElementById('btn-newround').addEventListener('click', async () => {
-      try {
-        await callAdvance(); // completed → new active round
-        await pollState();
-      } catch (e) { alert(e.message); }
+      try { await callAdvance(); await pollState(); }
+      catch (e) { alert(e.message); }
     });
 
     fetch('/api/game/env')
@@ -991,26 +1345,23 @@
       requestAnimationFrame(animate);
       t += 0.016;
 
-      // Azimuth snap animation
       if (camState.isSnapping) {
-        let target  = camState.snapTarget;
-        let current = ((camState.liveAzimuth % 360) + 360) % 360;
-        let diff = target - current;
+        let curr = ((camState.liveAzimuth % 360) + 360) % 360;
+        let diff = camState.snapTarget - curr;
         if (diff > 180) diff -= 360;
         if (diff < -180) diff += 360;
         if (Math.abs(diff) < 0.3) {
-          camState.liveAzimuth = target;
-          camState.isSnapping = false;
-          camState.azimuth = target;
-          updateWallsForAzimuth(target);
-          updateCompass(target);
+          camState.liveAzimuth = camState.snapTarget;
+          camState.isSnapping  = false;
+          camState.azimuth     = camState.snapTarget;
+          updateWallsForAzimuth(camState.snapTarget);
+          updateCompass(camState.snapTarget);
         } else {
-          camState.liveAzimuth = current + diff * 0.14;
+          camState.liveAzimuth = curr + diff * 0.14;
         }
         updateCamera();
       }
 
-      // Ghost patrol
       if (pocongSprite && currentState.round?.status !== 'completed') {
         const a = corridorPath[pathIdx];
         const b = corridorPath[(pathIdx + 1) % corridorPath.length];
@@ -1018,14 +1369,13 @@
         if (pathProgress >= 1) { pathProgress = 0; pathIdx = (pathIdx + 1) % corridorPath.length; }
         pocongSprite.position.x = a.x + (b.x - a.x) * pathProgress;
         pocongSprite.position.z = a.z + (b.z - a.z) * pathProgress;
-        pocongSprite.position.y = 0.9 + Math.sin(t * 2) * 0.08;
+        pocongSprite.position.y = 1.1 + Math.sin(t * 2) * 0.09;
       } else if (pocongSprite) {
-        pocongSprite.position.y = 0.9 + Math.sin(t * 2) * 0.08;
+        pocongSprite.position.y = 1.1 + Math.sin(t * 2) * 0.09;
       }
 
       composer.render();
     }
-
     animate();
 
     // ── Resize ────────────────────────────────────────────────────────────────
@@ -1034,6 +1384,94 @@
       composer.setSize(window.innerWidth, window.innerHeight);
       updateCamera();
     });
+
+    // ── Mascot drawing ────────────────────────────────────────────────────────
+    (function drawMascot() {
+      const mc = document.getElementById('mascot-canvas');
+      if (!mc) return;
+      const ctx = mc.getContext('2d');
+      const W = 130, H = 130, cx = 65, cy = 65;
+
+      // Background circle
+      ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2);
+      ctx.fillStyle = '#111'; ctx.fill();
+      ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.stroke();
+
+      // Body (burial cloth oval)
+      ctx.beginPath(); ctx.ellipse(cx, cy + 18, 28, 34, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0f0f0'; ctx.fill();
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+
+      // Cloth lines
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 26, cy + 4 + i * 10);
+        ctx.bezierCurveTo(cx - 8, cy + 2 + i * 10, cx + 8, cy + 6 + i * 10, cx + 26, cy + 4 + i * 10);
+        ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.stroke();
+      }
+
+      // Head
+      ctx.beginPath(); ctx.ellipse(cx, cy - 12, 20, 23, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0f0f0'; ctx.fill();
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+
+      // Hat body
+      ctx.beginPath();
+      ctx.rect(cx - 18, cy - 48, 36, 20);
+      ctx.fillStyle = '#1a1a1a'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+
+      // Hat brim
+      ctx.beginPath(); ctx.ellipse(cx, cy - 28, 26, 5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#1a1a1a'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+
+      // Hat band (red accent)
+      ctx.beginPath(); ctx.rect(cx - 18, cy - 30, 36, 4);
+      ctx.fillStyle = '#cc0000'; ctx.fill();
+
+      // Eyes
+      ctx.fillStyle = '#222';
+      ctx.beginPath(); ctx.arc(cx - 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
+
+      // Sly smile
+      ctx.beginPath(); ctx.arc(cx, cy - 8, 8, 0.1, Math.PI - 0.1);
+      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+    })();
+
+    // ── Tutorial illustration ─────────────────────────────────────────────────
+    (function drawTutorial() {
+      const tc = document.getElementById('tut-canvas');
+      if (!tc) return;
+      const ctx = tc.getContext('2d');
+
+      function pocong(x, y, s) {
+        s = s || 1;
+        ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+        ctx.beginPath(); ctx.ellipse(0, 8, 8, 12, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0f0f0'; ctx.fill();
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(0, -8, 7, 8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0f0f0'; ctx.fill();
+        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#333';
+        ctx.beginPath(); ctx.arc(-2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc( 2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+
+      pocong(22, 28);
+      pocong(150, 28);
+
+      // Arrow
+      ctx.beginPath(); ctx.moveTo(38, 28); ctx.lineTo(128, 28);
+      ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(122, 22); ctx.lineTo(134, 28); ctx.lineTo(122, 34);
+      ctx.closePath(); ctx.fillStyle = '#cc0000'; ctx.fill();
+    })();
+
   </script>
 </body>
 </html>
