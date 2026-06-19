@@ -28,12 +28,15 @@ tables you've marked private), etc.
 
 ## About Awas Ada Pocong
 
-A multiplayer survival hide-and-seek game in a 1930s rubber-hose cartoon aesthetic. Players stake play-money tokens, hide in mansion rooms, and try to survive the pocong (wrapped ghost) each round. Last survivors split the pot. Always 50 characters in-lobby via bot backfill for a populated feel.
+A multiplayer **room-betting** game in a 1930s rubber-hose cartoon aesthetic. During a betting window each player stakes play-money tokens on the mansion rooms they predict are *safe* (click a room to stake the current standard bet; multiple rooms allowed, clicks stack). The pocong (wrapped ghost) then haunts exactly ONE room, chosen server-side uniformly at random: bets on the haunted room are lost, bets on every safe room pay out 2×. The board is kept lively with bot bets via backfill.
 
 ## App-specific conventions
 
-- **Play-money only:** integer token values (cents equivalent internally), no on-chain currency. Bots' winnings are discarded; only real survivors get paid out.
-- **Round loop state machine:** phases are lobby → hiding → reveal → results, driven by a Postgres-guarded ticker (~750ms) with advisory locks to prevent overlaps.
+- **Play-money only:** integer token values, no on-chain currency. Bets are debited on placement and refunded on clear (betting phase only). Only **real** participants are credited at resolution; **bot winnings are discarded** to control the faucet (~7% house edge: 2× over 14 rooms).
+- **Round loop state machine:** phases are **betting (~20s) → reveal (~6s) → results (~8s)**, no sub-rounds, driven by a Postgres-guarded ticker (~750ms) with an advisory lock (`LOCK_ID 1001`). Payout resolution runs once inside the advisory-locked reveal transition, in a DB transaction.
+- **14 rooms:** the `ROOMS` array in `server.js` and `public/index.html` MUST stay identical (a mismatch makes `/api/round/bet` reject valid clicks).
 - **Real-time via polling:** client polls `/api/round/state` every ~1s; no WebSocket support on the platform.
-- **Bot roster is always seeded:** 60 bot names seeded on every boot in all environments (core gameplay, not staging-only). Real users are identified by non-null `user_id` in `round_participants`.
-- **All tables public:** no private tables (no DMs, no real financial data beyond play-money balances). Staging gets a copy of prod data plus seeded demo accounts/completed rounds for testing.
+- **Endpoints:** `GET /api/round/state`, `POST /api/round/bet {room,amount}`, `POST /api/round/clear {room?}`, `POST /api/round/join` (ensures account), `GET /api/leaderboard`. All auth-gated; `/health` is the only public route.
+- **Data model:** `room_bets` has a unique `(round_id, participant_id, room)` for upsert-increment; `round_participants` gained `total_staked`/`net` (survival columns `current_room`/`alive`/`eliminated_subround` are now vestigial); `round_reveals.pocong_room` = the haunted room.
+- **Bot roster is always seeded:** 60 bot names seeded on every boot in all environments (core gameplay, not staging-only). Real users are identified by non-null `user_id` in `round_participants`. Real players capped at 100/round.
+- **All tables public:** no private tables (no DMs, no real financial data beyond play-money balances). Staging gets a copy of prod data plus seeded demo accounts + a completed round with resolved `room_bets`. `?demo=win` is a cosmetic, client-only win-tableau preview (no server calls).

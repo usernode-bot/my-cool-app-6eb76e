@@ -3,10 +3,15 @@
   "secrets": [],
   "tests": [
     {
-      "name": "Game loads with mansion and HUD",
+      "name": "Game loads with mansion",
       "path": "/",
-      "expectSelector": ".mansion",
-      "expectText": "Hall of Survivors"
+      "expectSelector": ".mansion"
+    },
+    {
+      "name": "Room Bets board renders",
+      "path": "/",
+      "expectSelector": ".bet-board",
+      "expectText": "Room Bets"
     },
     {
       "name": "Win tableau renders",

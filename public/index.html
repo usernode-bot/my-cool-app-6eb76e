@@ -67,19 +67,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
   <style>
-    :root {
-      --ink: #0c0c0c;
-    }
+    :root { --ink: #0c0c0c; }
 
-    body {
-      background: #050505;
-      overflow: hidden;
-    }
+    body { background: #050505; overflow: hidden; }
 
-    /* ---- World layer: everything here reads as vintage black & white ----
-       Grayscale lives on this wrapper (NOT on <body>) so the HUD, the
-       reveal/win color washes, and the gold winnings text — all siblings
-       of .world — keep their real color. */
+    /* World layer carries the grayscale; HUD / overlays sit outside it. */
     .world {
       filter: grayscale(100%) contrast(1.12);
       position: relative;
@@ -89,28 +81,23 @@
     .mansion {
       position: relative;
       width: 100%;
-      height: 600px;
+      height: 560px;
       perspective: 1000px;
     }
 
     .room-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 22px;
-      padding: 48px 40px;
-      max-width: 920px;
+      gap: 18px;
+      padding: 24px 36px 24px 36px;
+      max-width: 880px;
       margin: 0 auto;
     }
 
-    /* Heavy, slightly irregular hand-inked tiles. The SVG #inkRoughen
-       displacement filter roughens the edges so they read as drawn, not
-       crisp vector. Applied to the 12 room tiles only (one reused filter
-       def) to keep the cost bounded — sprites wobble via cheap transforms. */
     .room {
       position: relative;
-      aspect-ratio: 1;
-      background:
-        linear-gradient(135deg, #d8d8d8 0%, #b4b4b4 55%, #9a9a9a 100%);
+      aspect-ratio: 1.25;
+      background: linear-gradient(135deg, #d8d8d8 0%, #b4b4b4 55%, #9a9a9a 100%);
       border: 4px solid var(--ink);
       border-radius: 6px;
       cursor: pointer;
@@ -120,7 +107,6 @@
       filter: url(#inkRoughen);
     }
 
-    /* Cross-hatch / stipple shading layer so walls aren't flat fills. */
     .room::after {
       content: '';
       position: absolute;
@@ -139,6 +125,8 @@
       box-shadow: inset 0 0 0 2px #000, 6px 7px 0 #000;
     }
 
+    .room.mine { box-shadow: inset 0 0 0 3px #1a1206, 0 0 16px rgba(245,197,66,.55), 4px 5px 0 #000; }
+
     .room.active {
       background: linear-gradient(135deg, #ffffff 0%, #cfcfcf 100%);
       box-shadow: inset 0 0 0 3px #000, 0 0 22px rgba(255,255,255,.7), 4px 5px 0 #000;
@@ -146,24 +134,25 @@
 
     .room-label {
       position: absolute;
-      top: 50%;
+      top: 8px;
       left: 50%;
-      transform: translate(-50%, -50%);
+      transform: translateX(-50%);
       text-align: center;
       color: #111;
       font-weight: 800;
-      font-size: 12px;
-      letter-spacing: .3px;
+      font-size: 11px;
+      letter-spacing: .2px;
       text-shadow: 1px 1px 0 rgba(255,255,255,.6);
       pointer-events: none;
-      width: 90%;
+      width: 92%;
       z-index: 3;
     }
 
-    .room-occupancy {
+    /* Aggregate stake badge (bottom-left) + your stake chip (bottom-right) */
+    .room-total {
       position: absolute;
       bottom: 5px;
-      right: 5px;
+      left: 5px;
       background: var(--ink);
       color: #fff;
       padding: 2px 6px;
@@ -172,11 +161,24 @@
       border-radius: 3px;
       z-index: 3;
     }
+    .room-mine-chip {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: #1a1206;
+      color: #ffe082;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-weight: 800;
+      border-radius: 10px;
+      z-index: 3;
+      display: none;
+    }
 
     .character {
       position: absolute;
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -184,9 +186,6 @@
       z-index: 2;
     }
 
-    /* Stronger "boil" — a hand-animated jitter (shift + tiny rotate).
-       Per-sprite animation-delay (set inline) keeps the scene from
-       pulsing in lockstep. */
     @keyframes boil {
       0%, 100% { transform: translate(0, 0) rotate(0deg); }
       25% { transform: translate(0.5px, -0.7px) rotate(-0.6deg); }
@@ -219,24 +218,13 @@
     }
 
     @keyframes pocongCorridorHop {
-      0% {
-        left: 5%;
-        top: 50%;
-        opacity: 1;
-      }
-      100% {
-        left: 95%;
-        top: 50%;
-        opacity: 1;
-      }
+      0% { left: 5%; top: 50%; opacity: 1; }
+      100% { left: 95%; top: 50%; opacity: 1; }
     }
 
-    .pocong.corridor {
-      animation: pocongCorridorHop 2.5s ease-in-out forwards !important;
-    }
+    .pocong.corridor { animation: pocongCorridorHop 2.5s ease-in-out forwards !important; }
 
-    .pocong::before,
-    .pocong::after {
+    .pocong::before, .pocong::after {
       content: '';
       position: absolute;
       width: 5px;
@@ -248,7 +236,6 @@
     .pocong::before { left: 7px; }
     .pocong::after { right: 7px; }
 
-    /* ---- Aged-film overlays (neutral, sit above the world) ---- */
     .film-grain {
       position: fixed;
       inset: 0;
@@ -281,21 +268,13 @@
       background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.78) 100%);
     }
 
-    /* ---- FX overlay: holds the colored reveal/win composition.
-       Outside .world, so red / silver / gold render in true color. ---- */
-    .fx-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 120;
-    }
+    .fx-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 120; }
 
     .room-wash {
       position: fixed;
       border-radius: 6px;
       background: radial-gradient(ellipse at 50% 40%, rgba(190,18,18,.55), rgba(120,0,0,.72));
       box-shadow: 0 0 40px 8px rgba(200,0,0,.5), inset 0 0 30px rgba(80,0,0,.6);
-      mix-blend-mode: normal;
       animation: washIn .5s ease-out;
       display: flex;
       align-items: center;
@@ -311,7 +290,6 @@
 
     .slumped { filter: drop-shadow(0 2px 1px rgba(0,0,0,.5)); }
 
-    /* Enlarged top-hat player peeking from behind a bookshelf in a safe room */
     .player-zoom {
       position: fixed;
       z-index: 121;
@@ -324,22 +302,53 @@
       100% { transform: translateY(0) scale(1); opacity: 1; }
     }
 
-    .bookshelf {
-      position: fixed;
-      z-index: 122;
-      filter: drop-shadow(0 4px 4px rgba(0,0,0,.5));
-    }
+    .bookshelf { position: fixed; z-index: 122; filter: drop-shadow(0 4px 4px rgba(0,0,0,.5)); }
 
-    /* ---- HUD (true color, metallic) ---- */
     .metal {
       background: linear-gradient(160deg, #fafafa 0%, #cfcfcf 16%, #9a9a9a 50%, #c4c4c4 74%, #efefef 100%);
       border: 2px solid #5f5f5f;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,.85),
-        inset 0 -3px 5px rgba(0,0,0,.32),
-        0 4px 12px rgba(0,0,0,.55);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -3px 5px rgba(0,0,0,.32), 0 4px 12px rgba(0,0,0,.55);
       color: #161616;
     }
+
+    /* ---- Title banner ---- */
+    .title-banner {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 18px;
+      border-radius: 12px;
+    }
+    .title-name {
+      font-weight: 900;
+      font-size: 20px;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: #1a1206;
+      text-shadow: 1px 1px 0 rgba(255,255,255,.5);
+      white-space: nowrap;
+    }
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 2px solid #1a1206;
+      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 0 #1a1206;
+    }
+    .icon-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1a1206; }
 
     .hud-coin {
       position: fixed;
@@ -354,7 +363,6 @@
       z-index: 50;
       min-width: 130px;
     }
-
     .hud-coin-text { display: flex; flex-direction: column; line-height: 1.1; }
     #balance { font-size: 20px; }
 
@@ -370,7 +378,6 @@
       filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
       animation: winningsPop .5s ease-out;
     }
-
     @keyframes winningsPop {
       0% { transform: scale(0.6); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
@@ -386,7 +393,6 @@
       flex-shrink: 0;
       box-shadow: 0 0 8px rgba(245,197,66,.5);
     }
-
     @keyframes spinCoin {
       0% { transform: rotateY(0deg); }
       100% { transform: rotateY(360deg); }
@@ -402,18 +408,9 @@
       z-index: 50;
       min-width: 190px;
     }
-
-    .hud-panel-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 6px 0;
-      font-weight: 700;
-    }
-
+    .hud-panel-row { display: flex; justify-content: space-between; margin: 6px 0; font-weight: 700; }
     .hud-panel-label { color: #4a4a4a; }
-
     .hud-timer { font-weight: 900; color: #7a1010; }
-
     .hud-status {
       margin-top: 10px;
       padding-top: 10px;
@@ -424,6 +421,113 @@
       text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
 
+    /* ---- Bet chips bar (bottom-center) ---- */
+    .chips-bar {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 14px;
+    }
+    .chip {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 3px dashed #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+    }
+    .chip.selected { outline: 3px solid #1a1206; transform: translateY(-3px); }
+    .adjust-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 2px solid #1a1206;
+      background: #e8e8e8;
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .standard-readout {
+      font-weight: 900;
+      color: #1a1206;
+      min-width: 92px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .standard-readout small { display: block; font-size: 10px; color: #4a4a4a; font-weight: 700; }
+
+    /* ---- Room Bets board (right side) ---- */
+    .bet-board {
+      position: fixed;
+      top: 84px;
+      right: 20px;
+      width: 220px;
+      max-height: 52vh;
+      overflow-y: auto;
+      padding: 14px;
+      border-radius: 12px;
+      z-index: 55;
+      font-size: 13px;
+    }
+    .bet-board-title {
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #1a1206;
+      text-align: center;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 0 rgba(255,255,255,.5);
+    }
+    .bet-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(0,0,0,.2);
+    }
+    .bet-row:last-child { border-bottom: none; }
+    .bet-room-name { flex: 1; font-weight: 800; color: #1c1c1c; font-size: 12px; }
+    .bet-room-amt { font-weight: 900; color: #7a5a00; }
+    .bet-refund {
+      border: 2px solid #1a1206;
+      background: #e8caca;
+      color: #7a1010;
+      border-radius: 6px;
+      font-weight: 900;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 1px 6px;
+    }
+    .bet-empty { text-align: center; color: #5a5a5a; font-weight: 700; padding: 8px 0; }
+    .clear-all-btn {
+      margin-top: 10px;
+      width: 100%;
+      border: 2px solid #1a1206;
+      background: linear-gradient(180deg, #f0cfcf, #d89a9a);
+      color: #5a1010;
+      border-radius: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      font-size: 12px;
+      padding: 6px;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+    }
+    .clear-all-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: 0 3px 0 #555; }
+
     .banner-container {
       position: fixed;
       top: 42%;
@@ -433,19 +537,18 @@
       pointer-events: none;
     }
 
-    /* Hand-inked "You Win" title card */
     .win-banner {
       position: relative;
       background:
         repeating-linear-gradient(48deg, rgba(0,0,0,.06) 0 2px, transparent 2px 7px),
         linear-gradient(45deg, #fff4b0, #f5c542 45%, #e0a81e 70%, #fff4b0);
       color: #1a1206;
-      padding: 36px 56px;
+      padding: 32px 52px;
       border: 6px solid #1a1206;
       border-radius: 18px;
       text-align: center;
       font-weight: 900;
-      font-size: 52px;
+      font-size: 48px;
       letter-spacing: 1px;
       line-height: 1;
       text-transform: uppercase;
@@ -453,19 +556,12 @@
       box-shadow: 0 12px 0 #1a1206, 0 14px 36px rgba(0,0,0,.6);
       text-shadow: 3px 3px 0 rgba(255,255,255,.5);
     }
-
     @keyframes dropBanner {
       0% { transform: translateY(-150%) rotate(-6deg); opacity: 0; }
       70% { transform: translateY(8%) rotate(2deg); opacity: 1; }
       100% { transform: translateY(0) rotate(-1.5deg); opacity: 1; }
     }
-
-    .win-amount {
-      font-size: 30px;
-      margin-top: 12px;
-      color: #5a3a00;
-      text-shadow: 1px 1px 0 rgba(255,255,255,.5);
-    }
+    .win-amount { font-size: 28px; margin-top: 12px; color: #5a3a00; text-shadow: 1px 1px 0 rgba(255,255,255,.5); }
 
     .hall-of-survivors {
       position: fixed;
@@ -475,11 +571,10 @@
       border-radius: 10px;
       font-size: 12px;
       z-index: 50;
-      min-width: 210px;
-      max-height: 300px;
+      min-width: 200px;
+      max-height: 280px;
       overflow-y: auto;
     }
-
     .hall-title {
       font-weight: 900;
       margin-bottom: 10px;
@@ -489,7 +584,6 @@
       letter-spacing: .5px;
       text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
-
     .survivor-row {
       display: flex;
       justify-content: space-between;
@@ -503,69 +597,65 @@
     .survivor-name { flex: 1; margin-left: 10px; }
     .survivor-score { color: #7a5a00; font-weight: 900; min-width: 36px; text-align: right; }
 
-    .join-button {
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: linear-gradient(180deg, #fff4b0, #f5c542 50%, #c98f0e);
-      color: #1a1206;
-      border: 4px solid #1a1206;
-      padding: 14px 44px;
-      font-size: 17px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      border-radius: 12px;
-      cursor: pointer;
-      z-index: 60;
-      transition: transform 0.15s;
-      box-shadow: 0 6px 0 #1a1206;
-    }
-
-    .join-button:hover:not(:disabled) {
-      transform: translateX(-50%) translateY(-2px);
-      box-shadow: 0 8px 0 #1a1206;
-    }
-
-    .join-button:disabled {
-      background: linear-gradient(180deg, #cfcfcf, #9a9a9a);
-      color: #5a5a5a;
-      cursor: not-allowed;
-      box-shadow: 0 6px 0 #444;
-    }
-
-    .lobby-timer {
-      position: fixed;
-      top: 20px;
-      left: 20px;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-weight: 800;
-      color: #161616;
-      z-index: 50;
-    }
-
     .staging-badge {
       position: fixed;
-      top: 20px;
+      top: 60px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(170, 12, 12, 0.85);
       border: 2px solid #ff5252;
       color: #fff;
-      padding: 6px 14px;
+      padding: 5px 12px;
       border-radius: 6px;
       font-size: 12px;
       z-index: 70;
       font-weight: 800;
       letter-spacing: .5px;
     }
+
+    /* ---- How-to-play modal ---- */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.7);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      max-width: 440px;
+      margin: 20px;
+      padding: 26px 30px;
+      border-radius: 16px;
+      color: #1a1206;
+    }
+    .modal-card h2 {
+      font-weight: 900;
+      font-size: 24px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .modal-card ol { margin: 0 0 16px 18px; }
+    .modal-card li { margin: 7px 0; font-weight: 600; line-height: 1.35; }
+    .modal-close {
+      width: 100%;
+      border: 3px solid #1a1206;
+      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      border-radius: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+      padding: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #1a1206;
+    }
   </style>
 </head>
 <body class="bg-stone-950 text-stone-100 min-h-screen">
 
-  <!-- Shared SVG filter defs (hand-drawn edge roughening), zero footprint -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <filter id="inkRoughen">
@@ -575,12 +665,18 @@
     </defs>
   </svg>
 
+  <!-- Title banner -->
+  <div class="title-banner metal">
+    <button id="mute-btn" class="icon-btn" title="Mute / unmute">♪</button>
+    <span class="title-name">Awas Ada Pocong</span>
+    <button id="help-btn" class="icon-btn" title="How to play">?</button>
+  </div>
+
   <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
 
   <!-- World (grayscale) -->
   <div class="world" id="world">
-    <div class="mansion flex-1">
-      <div id="lobby-timer" class="lobby-timer metal" style="display: none;"></div>
+    <div class="mansion">
       <div class="room-grid" id="room-grid"></div>
       <div id="pocong-container" style="position: absolute; width: 100%; height: 100%; pointer-events: none;"></div>
     </div>
@@ -590,10 +686,10 @@
   <div class="film-grain"></div>
   <div class="vignette"></div>
 
-  <!-- Colored reveal/win composition (true color) -->
+  <!-- Colored reveal/win composition -->
   <div class="fx-overlay" id="fx-overlay"></div>
 
-  <!-- HUD (true color, metallic) -->
+  <!-- Coin HUD -->
   <div class="hud-coin metal">
     <div class="coin-icon"></div>
     <div class="hud-coin-text">
@@ -602,166 +698,225 @@
     </div>
   </div>
 
+  <!-- Status panel -->
   <div class="hud-panel metal">
     <div class="hud-panel-row">
-      <span class="hud-panel-label">Stake</span>
+      <span class="hud-panel-label">Bet</span>
       <span id="stake">100</span>
     </div>
     <div class="hud-panel-row">
       <span class="hud-panel-label">Round</span>
-      <span id="round-display">1.1</span>
+      <span id="round-display">1</span>
     </div>
     <div class="hud-panel-row">
       <span class="hud-panel-label">Time</span>
       <span class="hud-timer" id="timer">20s</span>
     </div>
-    <div class="hud-status" id="status">Joining...</div>
+    <div class="hud-status" id="status">Place your bets!</div>
   </div>
 
+  <!-- Room Bets board -->
+  <div class="bet-board metal">
+    <div class="bet-board-title">Room Bets</div>
+    <div id="bet-list"><div class="bet-empty">No bets yet</div></div>
+    <button id="clear-all" class="clear-all-btn" disabled>Clear all</button>
+  </div>
+
+  <!-- Hall of Survivors -->
   <div class="hall-of-survivors metal">
     <div class="hall-title">Hall of Survivors</div>
     <div id="leaderboard"></div>
   </div>
 
-  <button id="join-button" class="join-button" disabled>Joining...</button>
+  <!-- Bet chips bar -->
+  <div class="chips-bar metal">
+    <button class="adjust-btn" id="bet-minus">−</button>
+    <button class="chip" data-chip="100">100</button>
+    <button class="chip" data-chip="200">200</button>
+    <button class="chip" data-chip="500">500</button>
+    <button class="chip" data-chip="1000">1000</button>
+    <button class="adjust-btn" id="bet-plus">+</button>
+    <div class="standard-readout"><span id="standard-bet">100</span><small>STANDARD BET</small></div>
+  </div>
 
   <div class="banner-container" id="banner-container"></div>
+
+  <!-- How-to-play modal -->
+  <div class="modal-backdrop" id="help-modal">
+    <div class="modal-card metal">
+      <h2>How to Play</h2>
+      <ol>
+        <li>Pick your <b>standard bet</b> with the chips (100 / 200 / 500 / 1000), or nudge it with + / −.</li>
+        <li>During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
+        <li>Refund any room or <b>Clear all</b> while betting is open.</li>
+        <li>The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
+        <li>Every <b>safe</b> room pays out <b>2×</b> your stake. Come out ahead and the win fanfare plays!</li>
+      </ol>
+      <button class="modal-close" id="help-close">Got it!</button>
+    </div>
+  </div>
 
   <script>
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
 
-    // Staging-gated cosmetic preview of the win tableau. ?demo=win forces
-    // the win composition deterministically (blood-red wash, slumped losers,
-    // enlarged top-hat player behind a bookshelf, silver HUD + gold +TKN).
-    // Pure client-side presentation — no server calls, no data mutation, no
-    // payout — so it is harmless if it ever appears outside staging.
+    // ?demo=win forces the win tableau deterministically (cosmetic only).
     const DEMO_WIN = params.get('demo') === 'win';
     const DEMO_POCONG_ROOM = 'Kitchen';
     const DEMO_SAFE_ROOM = 'Library';
-    const DEMO_PAYOUT = 500;
+    const DEMO_PAYOUT = 800;
+
+    // 14 rooms — MUST stay in sync with server.js ROOMS
+    const ROOMS = [
+      'Master Bedroom', 'Library', 'Kitchen', 'Dining Room',
+      'Laundry Room', 'Kids Bedroom', 'Playing Room', 'Living Room',
+      'Bathroom', 'Powder Room', 'Backyard', 'Warehouse',
+      'Reading Room', 'Theater Room'
+    ];
+
+    const CHIPS = [100, 200, 500, 1000];
 
     let state = {
       round: {},
       participant: null,
-      roomOccupancy: {},
-      latestReveal: null,
+      bets: {},
+      roomTotals: {},
       balance: 0,
-      lastPayout: 0,
-      bannerShown: false
+      hauntedRoom: null,
+      bannerShown: false,
+      revealStarted: false
     };
 
-    const ROOMS = [
-      'Master Bedroom',
-      'Library',
-      'Kitchen',
-      'Laundry Room',
-      'Kids Bedroom',
-      'Playing Room',
-      'Living Room',
-      'Bathroom',
-      'Powder Room',
-      'Backyard',
-      'Warehouse',
-      'Reading Room'
-    ];
+    let standardBet = parseInt(localStorage.getItem('aap_standard_bet') || '100', 10);
+    if (!CHIPS.includes(standardBet) && standardBet <= 0) standardBet = 100;
 
-    // ---- Sprites (thick-ink rubber-hose SVG) ----
+    // ---------- Audio (procedural Web Audio SFX) ----------
+    let muted = localStorage.getItem('aap_muted') === '1';
+    let audioCtx = null;
+    function ac() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function blip(freq, start, dur, type, gain) {
+      const ctx = ac(); if (!ctx) return;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
+      g.gain.exponentialRampToValueAtTime(gain || 0.18, ctx.currentTime + start + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + start);
+      o.stop(ctx.currentTime + start + dur + 0.02);
+    }
+    function sfxHop() { if (muted) return; blip(520, 0, 0.12, 'square', 0.14); blip(660, 0.04, 0.1, 'square', 0.10); }
+    function sfxScream() {
+      if (muted) return;
+      const ctx = ac(); if (!ctx) return;
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(880, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.7);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.75);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.8);
+    }
+    function sfxFanfare() {
+      if (muted) return;
+      [523, 659, 784, 1047].forEach((f, i) => blip(f, i * 0.12, 0.2, 'triangle', 0.2));
+    }
+    function updateMuteBtn() { document.getElementById('mute-btn').textContent = muted ? '✕' : '♪'; }
+
+    // ---------- Sprites ----------
     function characterSVG(opts) {
       opts = opts || {};
       const slump = opts.slump;
       const eyes = slump
-        ? `<path d="M5 5 L9 9 M9 5 L5 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
-           <path d="M13 5 L17 9 M17 5 L13 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>`
-        : `<circle cx="7" cy="7" r="1.7" fill="#000"/><circle cx="13" cy="7" r="1.7" fill="#000"/>`;
+        ? '<path d="M5 5 L9 9 M9 5 L5 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>' +
+          '<path d="M13 5 L17 9 M17 5 L13 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>'
+        : '<circle cx="7" cy="7" r="1.7" fill="#000"/><circle cx="13" cy="7" r="1.7" fill="#000"/>';
       const mouth = slump
-        ? `<path d="M7 13 Q10 10 13 13" stroke="#000" stroke-width="1.5" fill="none" stroke-linecap="round"/>`
-        : `<path d="M7 12 Q10 15 13 12" stroke="#000" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
+        ? '<path d="M7 13 Q10 10 13 13" stroke="#000" stroke-width="1.5" fill="none" stroke-linecap="round"/>'
+        : '<path d="M7 12 Q10 15 13 12" stroke="#000" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
       const rot = slump ? 'transform="rotate(18 11 11)"' : '';
-      return `
-        <svg class="char-svg" viewBox="0 0 22 22" width="${opts.size || 22}" height="${opts.size || 22}" ${rot}>
-          <circle cx="11" cy="9" r="6.5" fill="#fff" stroke="#000" stroke-width="2.2"/>
-          ${eyes}
-          ${mouth}
-          <rect x="2.5" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>
-          <rect x="15" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>
-        </svg>`;
+      return '<svg class="char-svg" viewBox="0 0 22 22" width="' + (opts.size || 20) + '" height="' + (opts.size || 20) + '" ' + rot + '>' +
+        '<circle cx="11" cy="9" r="6.5" fill="#fff" stroke="#000" stroke-width="2.2"/>' + eyes + mouth +
+        '<rect x="2.5" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>' +
+        '<rect x="15" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/></svg>';
     }
-
-    // Enlarged player wearing a top hat, one glove raised — peeking
     function playerTopHatSVG(size) {
       const s = size || 130;
-      return `
-        <svg viewBox="0 0 120 140" width="${s}" height="${s * 140 / 120}">
-          <rect x="30" y="4" width="60" height="30" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>
-          <rect x="33" y="9" width="54" height="6" fill="#3a3a3a"/>
-          <rect x="16" y="32" width="88" height="10" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>
-          <circle cx="60" cy="78" r="34" fill="#fff" stroke="#000" stroke-width="4.5"/>
-          <circle cx="48" cy="72" r="5.5" fill="#000"/>
-          <circle cx="72" cy="72" r="5.5" fill="#000"/>
-          <path d="M46 92 Q60 106 74 92" stroke="#000" stroke-width="4" fill="none" stroke-linecap="round"/>
-          <rect x="14" y="96" width="14" height="20" rx="7" fill="#fff" stroke="#000" stroke-width="4"/>
-        </svg>`;
+      return '<svg viewBox="0 0 120 140" width="' + s + '" height="' + (s * 140 / 120) + '">' +
+        '<rect x="30" y="4" width="60" height="30" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>' +
+        '<rect x="33" y="9" width="54" height="6" fill="#3a3a3a"/>' +
+        '<rect x="16" y="32" width="88" height="10" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>' +
+        '<circle cx="60" cy="78" r="34" fill="#fff" stroke="#000" stroke-width="4.5"/>' +
+        '<circle cx="48" cy="72" r="5.5" fill="#000"/><circle cx="72" cy="72" r="5.5" fill="#000"/>' +
+        '<path d="M46 92 Q60 106 74 92" stroke="#000" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<rect x="14" y="96" width="14" height="20" rx="7" fill="#fff" stroke="#000" stroke-width="4"/></svg>';
     }
-
     function bookshelfSVG(w, h) {
-      return `
-        <svg viewBox="0 0 120 150" width="${w}" height="${h}">
-          <rect x="5" y="5" width="110" height="140" rx="4" fill="#7a7a7a" stroke="#000" stroke-width="6"/>
-          <line x1="8" y1="42" x2="112" y2="42" stroke="#000" stroke-width="5"/>
-          <line x1="8" y1="80" x2="112" y2="80" stroke="#000" stroke-width="5"/>
-          <line x1="8" y1="118" x2="112" y2="118" stroke="#000" stroke-width="5"/>
-          <g stroke="#000" stroke-width="2.5">
-            <rect x="14" y="14" width="11" height="26" fill="#cfcfcf"/>
-            <rect x="27" y="12" width="11" height="28" fill="#9a9a9a"/>
-            <rect x="40" y="16" width="11" height="24" fill="#e4e4e4"/>
-            <rect x="70" y="14" width="11" height="26" fill="#b4b4b4"/>
-            <rect x="84" y="12" width="11" height="28" fill="#cfcfcf"/>
-            <rect x="16" y="52" width="11" height="26" fill="#b4b4b4"/>
-            <rect x="29" y="50" width="11" height="28" fill="#e4e4e4"/>
-            <rect x="78" y="52" width="11" height="26" fill="#9a9a9a"/>
-            <rect x="91" y="50" width="11" height="28" fill="#cfcfcf"/>
-            <rect x="18" y="90" width="11" height="26" fill="#cfcfcf"/>
-            <rect x="84" y="90" width="11" height="26" fill="#b4b4b4"/>
-          </g>
-        </svg>`;
+      return '<svg viewBox="0 0 120 150" width="' + w + '" height="' + h + '">' +
+        '<rect x="5" y="5" width="110" height="140" rx="4" fill="#7a7a7a" stroke="#000" stroke-width="6"/>' +
+        '<line x1="8" y1="42" x2="112" y2="42" stroke="#000" stroke-width="5"/>' +
+        '<line x1="8" y1="80" x2="112" y2="80" stroke="#000" stroke-width="5"/>' +
+        '<line x1="8" y1="118" x2="112" y2="118" stroke="#000" stroke-width="5"/>' +
+        '<g stroke="#000" stroke-width="2.5">' +
+        '<rect x="14" y="14" width="11" height="26" fill="#cfcfcf"/><rect x="27" y="12" width="11" height="28" fill="#9a9a9a"/>' +
+        '<rect x="40" y="16" width="11" height="24" fill="#e4e4e4"/><rect x="70" y="14" width="11" height="26" fill="#b4b4b4"/>' +
+        '<rect x="84" y="12" width="11" height="28" fill="#cfcfcf"/><rect x="16" y="52" width="11" height="26" fill="#b4b4b4"/>' +
+        '<rect x="29" y="50" width="11" height="28" fill="#e4e4e4"/><rect x="78" y="52" width="11" height="26" fill="#9a9a9a"/>' +
+        '<rect x="91" y="50" width="11" height="28" fill="#cfcfcf"/><rect x="18" y="90" width="11" height="26" fill="#cfcfcf"/>' +
+        '<rect x="84" y="90" width="11" height="26" fill="#b4b4b4"/></g></svg>';
     }
 
-    function renderRoom(roomName, occupancy) {
-      const roomEl = document.createElement('div');
-      roomEl.className = 'room';
-      roomEl.dataset.room = roomName;
-
-      const label = document.createElement('div');
-      label.className = 'room-label';
-      label.textContent = roomName;
-      roomEl.appendChild(label);
-
-      const occupancyDiv = document.createElement('div');
-      occupancyDiv.className = 'room-occupancy';
-      occupancyDiv.textContent = occupancy + ' people';
-      roomEl.appendChild(occupancyDiv);
-
-      for (let i = 0; i < Math.min(occupancy, 5); i++) {
-        const char = document.createElement('div');
-        char.className = 'character';
-        char.style.top = Math.random() * 55 + 'px';
-        char.style.left = Math.random() * 55 + 'px';
-        char.style.animationDelay = (Math.random() * -1.6) + 's';
-        char.innerHTML = characterSVG({});
-        roomEl.appendChild(char);
-      }
-
-      roomEl.addEventListener('click', () => hideInRoom(roomName));
-      return roomEl;
-    }
-
-    function renderGrid(occupancy) {
+    // ---------- Room grid ----------
+    function renderGrid() {
       const gridEl = document.getElementById('room-grid');
       gridEl.innerHTML = '';
       ROOMS.forEach(room => {
-        gridEl.appendChild(renderRoom(room, occupancy[room] || 0));
+        const total = state.roomTotals[room] || 0;
+        const mine = state.bets[room] || 0;
+        const roomEl = document.createElement('div');
+        roomEl.className = 'room' + (mine > 0 ? ' mine' : '');
+        roomEl.dataset.room = room;
+
+        const label = document.createElement('div');
+        label.className = 'room-label';
+        label.textContent = room;
+        roomEl.appendChild(label);
+
+        const totalEl = document.createElement('div');
+        totalEl.className = 'room-total';
+        totalEl.textContent = total > 0 ? ('Σ ' + total) : 'Σ 0';
+        roomEl.appendChild(totalEl);
+
+        const mineEl = document.createElement('div');
+        mineEl.className = 'room-mine-chip';
+        if (mine > 0) { mineEl.style.display = 'block'; mineEl.textContent = 'you ' + mine; }
+        roomEl.appendChild(mineEl);
+
+        // a couple of milling cartoon characters
+        const crowd = Math.min(4, Math.max(0, Math.round(total / 200)));
+        for (let i = 0; i < crowd; i++) {
+          const char = document.createElement('div');
+          char.className = 'character';
+          char.style.top = (28 + Math.random() * 40) + 'px';
+          char.style.left = (Math.random() * 70) + 'px';
+          char.style.animationDelay = (Math.random() * -1.6) + 's';
+          char.innerHTML = characterSVG({});
+          roomEl.appendChild(char);
+        }
+
+        roomEl.addEventListener('click', () => placeBet(room));
+        gridEl.appendChild(roomEl);
       });
     }
 
@@ -770,19 +925,91 @@
       return el ? el.getBoundingClientRect() : null;
     }
 
-    // ---- Reveal: colored red wash over the doomed room (in fx-overlay) ----
+    // ---------- Betting actions ----------
+    async function placeBet(room) {
+      if (state.round.phase !== 'betting') return;
+      ac(); // unlock audio on user gesture
+      // optimistic
+      state.bets[room] = (state.bets[room] || 0) + standardBet;
+      state.roomTotals[room] = (state.roomTotals[room] || 0) + standardBet;
+      state.balance = Math.max(0, state.balance - standardBet);
+      renderGrid(); renderBetBoard(); renderHud();
+      try {
+        const res = await fetch('/api/round/bet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ room: room, amount: standardBet })
+        });
+        if (!res.ok) await updateState(); // reconcile on rejection
+      } catch (err) { console.error(err); }
+    }
+
+    async function clearRoom(room) {
+      if (state.round.phase !== 'betting') return;
+      try {
+        await fetch('/api/round/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ room: room })
+        });
+        await updateState();
+      } catch (err) { console.error(err); }
+    }
+
+    async function clearAll() {
+      if (state.round.phase !== 'betting') return;
+      try {
+        await fetch('/api/round/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({})
+        });
+        await updateState();
+      } catch (err) { console.error(err); }
+    }
+
+    // ---------- Renders ----------
+    function renderHud() {
+      document.getElementById('balance').textContent = state.balance;
+      document.getElementById('stake').textContent = standardBet;
+      document.getElementById('round-display').textContent = state.round.id || '–';
+      document.getElementById('timer').textContent = (state.round.secondsRemaining || 0) + 's';
+      document.getElementById('standard-bet').textContent = standardBet;
+    }
+
+    function renderBetBoard() {
+      const list = document.getElementById('bet-list');
+      const entries = Object.keys(state.bets).filter(r => state.bets[r] > 0);
+      const betting = state.round.phase === 'betting';
+      if (entries.length === 0) {
+        list.innerHTML = '<div class="bet-empty">No bets yet</div>';
+        document.getElementById('clear-all').disabled = true;
+        return;
+      }
+      list.innerHTML = entries.map(r =>
+        '<div class="bet-row"><span class="bet-room-name">' + r + '</span>' +
+        '<span class="bet-room-amt">' + state.bets[r] + '</span>' +
+        (betting ? '<button class="bet-refund" data-room="' + r + '">✕</button>' : '') +
+        '</div>'
+      ).join('');
+      list.querySelectorAll('.bet-refund').forEach(b =>
+        b.addEventListener('click', () => clearRoom(b.dataset.room)));
+      document.getElementById('clear-all').disabled = !betting;
+    }
+
+    function clearFx() { document.getElementById('fx-overlay').innerHTML = ''; }
+
     function showRevealWash(roomName) {
       const fx = document.getElementById('fx-overlay');
-      let wash = fx.querySelector('.room-wash[data-for="' + roomName + '"]');
       const r = roomRect(roomName);
       if (!r) return;
+      let wash = fx.querySelector('.room-wash[data-for="' + roomName + '"]');
       if (!wash) {
         wash = document.createElement('div');
         wash.className = 'room-wash';
         wash.dataset.for = roomName;
-        // a couple of slumped silhouettes inside the wash
-        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 24 }) +
-                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 24 }) + '</div>';
+        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 22 }) +
+                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 22 }) + '</div>';
         fx.appendChild(wash);
       }
       wash.style.left = r.left + 'px';
@@ -791,16 +1018,9 @@
       wash.style.height = r.height + 'px';
     }
 
-    function clearFx() {
-      document.getElementById('fx-overlay').innerHTML = '';
-    }
-
-    // ---- Win tableau ----
-    function composeWinTableau(pocongRoom, safeRoom, payout) {
+    function composeWinTableau(pocongRoom, safeRoom, net) {
       const fx = document.getElementById('fx-overlay');
       fx.innerHTML = '';
-
-      // Blood-red wash over the doomed room with slumped losers
       const dr = roomRect(pocongRoom);
       if (dr) {
         const wash = document.createElement('div');
@@ -809,21 +1029,18 @@
         wash.style.top = dr.top + 'px';
         wash.style.width = dr.width + 'px';
         wash.style.height = dr.height + 'px';
-        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 26 }) +
-                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 26 }) +
-                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 26 }) + '</div>';
+        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 24 }) +
+                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 24 }) + '</div>';
         fx.appendChild(wash);
       }
-
-      // Enlarged top-hat player peeking from behind a bookshelf in a safe room
       const sr = roomRect(safeRoom) || dr;
       if (sr) {
         const cx = sr.left + sr.width / 2;
         const player = document.createElement('div');
         player.className = 'player-zoom';
         player.style.left = (cx - 65) + 'px';
-        player.style.top = Math.max(4, sr.top - 26) + 'px';
-        player.innerHTML = playerTopHatSVG(130);
+        player.style.top = Math.max(60, sr.top - 26) + 'px';
+        player.innerHTML = playerTopHatSVG(120);
         fx.appendChild(player);
 
         const shelf = document.createElement('div');
@@ -833,60 +1050,31 @@
         shelf.innerHTML = bookshelfSVG(92, 115);
         fx.appendChild(shelf);
       }
-
-      // Gold winnings subtext in the HUD
       const w = document.getElementById('hud-winnings');
       w.style.display = 'block';
-      w.textContent = '+' + payout + ' TKN';
-
-      // "You Win" hand-inked banner (once)
+      w.textContent = '+' + net + ' TKN';
       if (!state.bannerShown) {
-        showWinBanner(payout);
+        showWinBanner(net);
         state.bannerShown = true;
+        sfxFanfare();
       }
     }
 
-    function showWinBanner(payout) {
+    function showWinBanner(net) {
       const c = document.getElementById('banner-container');
       c.innerHTML = '';
       const banner = document.createElement('div');
       banner.className = 'win-banner';
-      banner.innerHTML = 'You Win!<div class="win-amount">+' + payout + ' tokens</div>';
+      banner.innerHTML = 'You Win!<div class="win-amount">+' + net + ' tokens</div>';
       c.appendChild(banner);
     }
 
     function resetWinFx() {
-      if (state.bannerShown || DEMO_WIN) {
-        document.getElementById('banner-container').innerHTML = '';
-        document.getElementById('hud-winnings').style.display = 'none';
-        clearFx();
-      }
+      document.getElementById('banner-container').innerHTML = '';
+      document.getElementById('hud-winnings').style.display = 'none';
+      clearFx();
       state.bannerShown = false;
-    }
-
-    async function hideInRoom(roomName) {
-      if (state.round.phase !== 'hiding' || !state.participant || !state.participant.alive) return;
-      try {
-        const res = await fetch('/api/round/hide', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ room: roomName })
-        });
-        if (res.ok) {
-          const room = document.querySelector('[data-room="' + roomName + '"]');
-          if (room) room.classList.add('active');
-        }
-      } catch (err) { console.error(err); }
-    }
-
-    async function joinRound() {
-      try {
-        const res = await fetch('/api/round/join', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers }
-        });
-        if (res.ok) await updateState();
-      } catch (err) { console.error(err); }
+      state.revealStarted = false;
     }
 
     async function loadLeaderboard() {
@@ -894,14 +1082,9 @@
         const res = await fetch('/api/leaderboard', { headers });
         if (!res.ok) return;
         const { leaderboard } = await res.json();
-
-        // Staging detection (no server change): the boot seed only creates
-        // staging-demo-survivor-* rows in staging, so their presence is a
-        // reliable signal to show the badge.
         if (leaderboard.some(r => (r.username || '').startsWith('staging-demo'))) {
           document.getElementById('staging-badge').style.display = 'block';
         }
-
         const el = document.getElementById('leaderboard');
         if (!leaderboard.length) {
           el.innerHTML = '<p style="text-align:center;color:#5a5a5a">No survivors yet</p>';
@@ -920,98 +1103,126 @@
         const res = await fetch('/api/round/state', { headers });
         if (!res.ok) return;
         const data = await res.json();
-        state = { ...state, ...data };
+        state.round = data.round || {};
+        state.participant = data.participant || null;
+        state.bets = data.bets || {};
+        state.roomTotals = data.roomTotals || {};
+        state.balance = (typeof data.balance === 'number') ? data.balance : state.balance;
+        state.hauntedRoom = data.hauntedRoom || null;
 
-        document.getElementById('balance').textContent = state.balance;
-        document.getElementById('stake').textContent = state.round.entry_stake;
-        document.getElementById('round-display').textContent = state.round.id + '.' + state.round.subround;
-        document.getElementById('timer').textContent = state.round.secondsRemaining + 's';
-
-        // Room grid
-        renderGrid(state.roomOccupancy || {});
+        renderGrid();
+        renderHud();
+        renderBetBoard();
 
         const statusEl = document.getElementById('status');
-        const joinBtn = document.getElementById('join-button');
-        const lobbyTimer = document.getElementById('lobby-timer');
+        const phase = state.round.phase;
 
-        if (state.round.phase === 'lobby') {
+        if (phase === 'betting') {
           resetWinFx();
           document.getElementById('pocong-container').innerHTML = '';
-          statusEl.textContent = 'Joining...';
-          joinBtn.style.display = 'block';
-          joinBtn.disabled = !!state.participant;
-          joinBtn.textContent = state.participant ? 'Joined' : 'Join';
-          lobbyTimer.style.display = 'block';
-          lobbyTimer.textContent = 'Lobby: ' + state.round.secondsRemaining + 's';
-        } else if (state.round.phase === 'hiding') {
-          resetWinFx();
-          document.getElementById('pocong-container').innerHTML = '';
-          statusEl.textContent = state.participant && state.participant.alive ? 'Hide now!' : 'Eliminated';
-          joinBtn.style.display = 'none';
-          lobbyTimer.style.display = 'none';
-        } else if (state.round.phase === 'reveal') {
+          statusEl.textContent = 'Place your bets!';
+        } else if (phase === 'reveal') {
           statusEl.textContent = 'The pocong is coming...';
-          joinBtn.style.display = 'none';
-          lobbyTimer.style.display = 'none';
-          if (state.latestReveal) {
-            const pocongContainer = document.getElementById('pocong-container');
-            pocongContainer.innerHTML = '';
+          if (!state.revealStarted) {
+            state.revealStarted = true;
+            const pc = document.getElementById('pocong-container');
+            pc.innerHTML = '';
             const pocong = document.createElement('div');
             pocong.className = 'pocong corridor';
-            pocongContainer.appendChild(pocong);
-
-            // After corridor animation, move to room and remove corridor class
+            pc.appendChild(pocong);
+            sfxHop();
+            const hopTimer = setInterval(sfxHop, 500);
             setTimeout(() => {
+              clearInterval(hopTimer);
               pocong.classList.remove('corridor');
               pocong.style.left = '50%';
               pocong.style.top = '50%';
-              const room = document.querySelector('[data-room="' + state.latestReveal.pocong_room + '"]');
-              if (room) room.classList.add('active');
-              showRevealWash(state.latestReveal.pocong_room);
+              if (state.hauntedRoom) {
+                const room = document.querySelector('[data-room="' + state.hauntedRoom + '"]');
+                if (room) room.classList.add('active');
+                showRevealWash(state.hauntedRoom);
+                sfxScream();
+              }
             }, 2500);
           }
-        } else if (state.round.phase === 'results') {
-          joinBtn.style.display = 'none';
-          lobbyTimer.style.display = 'none';
+        } else if (phase === 'results') {
           document.getElementById('pocong-container').innerHTML = '';
-          const won = state.participant && state.participant.alive && state.participant.payout > 0;
-          if (won) {
-            const pocongRoom = (state.latestReveal && state.latestReveal.pocong_room) || ROOMS[2];
-            const safeRoom = state.participant.current_room ||
+          const net = state.participant ? (state.participant.net || 0) : 0;
+          if (net > 0) {
+            const pocongRoom = state.hauntedRoom || ROOMS[2];
+            const safeRoom = Object.keys(state.bets).find(r => r !== pocongRoom) ||
               ROOMS.find(r => r !== pocongRoom) || ROOMS[1];
-            composeWinTableau(pocongRoom, safeRoom, state.participant.payout);
-            statusEl.textContent = 'You survived!';
-          } else {
-            statusEl.textContent = state.participant && state.participant.alive ? 'You survived!' : 'Game ended';
+            composeWinTableau(pocongRoom, safeRoom, net);
+            statusEl.textContent = 'You won! +' + net;
+          } else if (state.hauntedRoom) {
+            showRevealWash(state.hauntedRoom);
+            statusEl.textContent = (state.participant && state.participant.total_staked > 0)
+              ? 'Haunted — bets lost' : 'The pocong struck!';
           }
         }
 
         await loadLeaderboard();
 
-        // Deterministic win-tableau preview (?demo=win). Re-composed each
-        // poll so the washes stay aligned as the grid re-renders.
         if (DEMO_WIN) {
           document.getElementById('staging-badge').style.display = 'block';
           composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
-          statusEl.textContent = 'You survived!';
+          statusEl.textContent = 'You won! +' + DEMO_PAYOUT;
         }
       } catch (err) { console.error(err); }
     }
 
-    document.getElementById('join-button').addEventListener('click', joinRound);
+    // ---------- Chip / control wiring ----------
+    function selectChip(val) {
+      standardBet = val;
+      localStorage.setItem('aap_standard_bet', String(val));
+      document.querySelectorAll('.chip').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === val));
+      renderHud();
+    }
+    document.querySelectorAll('.chip').forEach(c =>
+      c.addEventListener('click', () => { ac(); selectChip(parseInt(c.dataset.chip, 10)); }));
+    document.getElementById('bet-plus').addEventListener('click', () => {
+      standardBet = Math.min(100000, standardBet + 100);
+      localStorage.setItem('aap_standard_bet', String(standardBet));
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === standardBet));
+      renderHud();
+    });
+    document.getElementById('bet-minus').addEventListener('click', () => {
+      standardBet = Math.max(100, standardBet - 100);
+      localStorage.setItem('aap_standard_bet', String(standardBet));
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === standardBet));
+      renderHud();
+    });
+    document.getElementById('clear-all').addEventListener('click', clearAll);
+    document.getElementById('mute-btn').addEventListener('click', () => {
+      muted = !muted;
+      localStorage.setItem('aap_muted', muted ? '1' : '0');
+      updateMuteBtn();
+      if (!muted) { ac(); blip(660, 0, 0.1, 'triangle', 0.15); }
+    });
+    document.getElementById('help-btn').addEventListener('click', () => document.getElementById('help-modal').classList.add('open'));
+    document.getElementById('help-close').addEventListener('click', () => document.getElementById('help-modal').classList.remove('open'));
+    document.getElementById('help-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'help-modal') e.target.classList.remove('open');
+    });
+
     window.addEventListener('resize', () => {
       if (DEMO_WIN) composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
     });
 
-    // ?demo=win: render a self-sufficient win tableau immediately, without
-    // depending on the API poll — so the composition is deterministic even
-    // before (or regardless of) the first /api/round/state response.
+    // Init
+    selectChip(CHIPS.includes(standardBet) ? standardBet : 100);
+    updateMuteBtn();
+
     if (DEMO_WIN) {
       document.getElementById('staging-badge').style.display = 'block';
-      const occ = {};
-      ROOMS.forEach((r, i) => { occ[r] = (i % 3) + 1; });
-      renderGrid(occ);
+      state.roomTotals = {}; state.bets = {};
+      ROOMS.forEach((r, i) => { state.roomTotals[r] = (i % 4) * 100; });
+      state.bets[DEMO_SAFE_ROOM] = 400;
+      renderGrid(); renderBetBoard();
       composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+    } else {
+      renderGrid();
     }
 
     updateState();
