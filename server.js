@@ -9,7 +9,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const JWT_SECRET = process.env.JWT_SECRET;
 const IS_STAGING = process.env.USERNODE_ENV === 'staging';
 
-const PUBLIC_API_PATHS = new Set(['/health', '/api/game/state']);
+const PUBLIC_API_PATHS = new Set(['/health', '/api/game/state', '/api/game/env']);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
 
 app.use(express.json());
@@ -28,6 +28,8 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+app.get('/api/game/env', (_req, res) => res.json({ isStaging: IS_STAGING }));
 
 // ── Game state (public) ──────────────────────────────────────────────────────
 
@@ -111,7 +113,7 @@ app.post('/api/game/bet', async (req, res) => {
 // ── Advance round (admin only) ───────────────────────────────────────────────
 
 app.post('/api/game/advance', async (req, res) => {
-  if (req.user.username !== 'admin' && !req.user.is_admin) {
+  if (!IS_STAGING && req.user.username !== 'admin' && !req.user.is_admin) {
     return res.status(403).json({ error: 'Admin only' });
   }
   const { winner_room } = req.body;
