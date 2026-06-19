@@ -1,3 +1,16 @@
 {
-  "secrets": []
+  "name": "Awas Ada Pocong",
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Game loads with no errors",
+      "path": "/",
+      "expectSelector": "#title"
+    },
+    {
+      "name": "Game state API returns round data",
+      "path": "/api/game/state",
+      "expectText": "round"
+    }
+  ]
 }
