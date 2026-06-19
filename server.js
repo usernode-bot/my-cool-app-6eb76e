@@ -695,6 +695,60 @@ app.post('/api/wallet/withdrawal-confirm', async (req, res) => {
   }
 });
 
+// API: transaction history (deposits, withdrawals, round results)
+app.get('/api/transactions/history', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+    const offset = Math.max(parseInt(req.query.offset || '0', 10), 0);
+
+    const transactions = [];
+
+    // Get completed rounds for this user (won/lost bets)
+    const { rows: rounds } = await pool.query(`
+      SELECT
+        rp.id as round_id,
+        r.id as round_num,
+        rp.total_staked,
+        rp.net,
+        r.ended_at
+      FROM round_participants rp
+      JOIN rounds r ON rp.round_id = r.id
+      WHERE rp.user_id = $1 AND r.status = 'closed'
+      ORDER BY r.ended_at DESC
+      LIMIT 50
+    `, [req.user.id]);
+
+    rounds.forEach(row => {
+      if (row.total_staked > 0) {
+        transactions.push({
+          type: 'round_result',
+          round_id: row.round_num,
+          total_staked: row.total_staked,
+          net: row.net,
+          status: row.net > 0 ? 'won' : (row.net < 0 ? 'lost' : 'draw'),
+          timestamp: row.ended_at || new Date().toISOString()
+        });
+      }
+    });
+
+    // Simulate deposit/withdrawal history from balance changes
+    // In a real system, these would be in a transaction_log table
+    // For now, return a sample of round results
+    transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    transactions.splice(limit);
+
+    res.json({
+      transactions: transactions,
+      count: transactions.length,
+      limit,
+      offset
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('*', (req, res) => {

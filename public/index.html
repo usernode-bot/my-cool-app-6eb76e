@@ -76,13 +76,15 @@
     .world {
       filter: grayscale(100%) contrast(1.12);
       position: relative;
-      min-height: 100vh;
+      min-height: calc(100vh - 80px);
+      margin-top: 80px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 20px;
       box-sizing: border-box;
+      overflow-y: auto;
     }
 
     .mansion {
@@ -224,279 +226,191 @@
 
     .char-svg { display: block; }
 
-    .pocong {
-      position: absolute;
-      width: 34px;
-      height: 46px;
-      background: radial-gradient(ellipse at 50% 30%, #f0f0f0 0%, #9a9a9a 100%);
-      border: 3px solid var(--ink);
-      border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+    svg#inkRoughen { display: none; }
+
+    /* Header Bar */
+    .header-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
       z-index: 100;
-      box-shadow: 0 0 12px rgba(255,255,255,.4), inset 0 -4px 6px rgba(0,0,0,.25);
-      animation: pocongHop 0.6s ease-in-out infinite;
-    }
-
-    @keyframes pocongHop {
-      0%, 100% { transform: translate(-50%, -50%); }
-      25% { transform: translate(-50%, -58%); }
-      50% { transform: translate(-50%, -50%); }
-      75% { transform: translate(-50%, -62%); }
-    }
-
-    @keyframes pocongCorridorHop {
-      0% { left: 5%; top: 50%; opacity: 1; }
-      100% { left: 95%; top: 50%; opacity: 1; }
-    }
-
-    .pocong.corridor { animation: pocongCorridorHop 2.5s ease-in-out forwards !important; }
-
-    .pocong::before, .pocong::after {
-      content: '';
-      position: absolute;
-      width: 5px;
-      height: 5px;
-      background: #111;
-      border-radius: 50%;
-      top: 13px;
-    }
-    .pocong::before { left: 7px; }
-    .pocong::after { right: 7px; }
-
-    .film-grain {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 5;
-      opacity: .16;
-      mix-blend-mode: overlay;
-      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/></filter><rect width="120" height="120" filter="url(%23n)"/></svg>');
-      animation: grainShift .35s steps(2) infinite, flicker 4.5s ease-in-out infinite;
-    }
-
-    @keyframes grainShift {
-      0% { transform: translate(0, 0); }
-      50% { transform: translate(-4px, 3px); }
-      100% { transform: translate(3px, -2px); }
-    }
-
-    @keyframes flicker {
-      0%, 100% { opacity: .16; }
-      48% { opacity: .13; }
-      50% { opacity: .22; }
-      52% { opacity: .14; }
-    }
-
-    .vignette {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 6;
-      background: radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.78) 100%);
-    }
-
-    .fx-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 120; }
-
-    .room-wash {
-      position: fixed;
-      border-radius: 6px;
-      background: radial-gradient(ellipse at 50% 40%, rgba(190,18,18,.55), rgba(120,0,0,.72));
-      box-shadow: 0 0 40px 8px rgba(200,0,0,.5), inset 0 0 30px rgba(80,0,0,.6);
-      animation: washIn .5s ease-out;
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
-      gap: 4px;
-      overflow: hidden;
+      padding: 0 20px;
+      box-sizing: border-box;
+      gap: 20px;
+      border-bottom: 3px solid #1a1206;
     }
-
-    @keyframes washIn {
-      0% { opacity: 0; transform: scale(0.85); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-
-    .slumped { filter: drop-shadow(0 2px 1px rgba(0,0,0,.5)); }
-
-    .player-zoom {
-      position: fixed;
-      z-index: 121;
-      animation: peekIn .6s cubic-bezier(0.34, 1.56, 0.64, 1);
-      filter: drop-shadow(0 6px 6px rgba(0,0,0,.5));
-    }
-
-    @keyframes peekIn {
-      0% { transform: translateY(40px) scale(0.6); opacity: 0; }
-      100% { transform: translateY(0) scale(1); opacity: 1; }
-    }
-
-    .bookshelf { position: fixed; z-index: 122; filter: drop-shadow(0 4px 4px rgba(0,0,0,.5)); }
 
     .metal {
-      background: linear-gradient(160deg, #fafafa 0%, #cfcfcf 16%, #9a9a9a 50%, #c4c4c4 74%, #efefef 100%);
-      border: 2px solid #5f5f5f;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -3px 5px rgba(0,0,0,.32), 0 4px 12px rgba(0,0,0,.55);
-      color: #161616;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 50%, #d4d4d4 100%);
+      border: 3px solid #1a1206;
+      color: #1a1206;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    .title-banner {
-      position: fixed;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 80;
+    .header-left, .header-right {
       display: flex;
       align-items: center;
-      gap: 14px;
-      padding: 8px 18px;
-      border-radius: 12px;
+      gap: 12px;
+      flex: 0 0 auto;
     }
-    .title-name {
+
+    .header-center {
+      flex: 1;
+      text-align: center;
+      font-size: 28px;
       font-weight: 900;
-      font-size: 20px;
-      letter-spacing: .5px;
+      letter-spacing: 1px;
       text-transform: uppercase;
       color: #1a1206;
-      text-shadow: 1px 1px 0 rgba(255,255,255,.5);
-      white-space: nowrap;
+      text-shadow: 2px 2px 0 rgba(255,255,255,.6);
     }
-    .icon-btn {
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
-      border: 2px solid #1a1206;
-      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+
+    .popover-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 3px solid #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
       color: #1a1206;
+      font-size: 24px;
       font-weight: 900;
-      font-size: 16px;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s, box-shadow 0.1s;
+      z-index: 101;
     }
-    .icon-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #1a1206; }
 
-    .hud-coin {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-weight: 800;
+    .popover-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1a1206;
+    }
+
+    .popover-btn.open {
+      outline: 3px solid #1a1206;
+      transform: scale(1.05);
+    }
+
+    .balance-display {
+      font-size: 18px;
+      font-weight: 900;
+      color: #7a5a00;
       display: flex;
       align-items: center;
-      gap: 12px;
-      z-index: 50;
-      min-width: 130px;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
     }
 
-    @media (max-width: 480px) {
-      .hud-coin {
-        top: 10px;
-        right: 10px;
-        padding: 8px 12px;
-        min-width: auto;
-      }
-      #balance { font-size: 16px; }
+    /* Popover Panels */
+    .popover-panel {
+      position: fixed;
+      z-index: 90;
+      display: none;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 50%, #d4d4d4 100%);
+      border: 3px solid #1a1206;
+      color: #1a1206;
+      border-radius: 12px;
+      overflow-y: auto;
+      max-height: calc(100vh - 100px);
+      transition: transform 0.3s ease, opacity 0.3s ease;
     }
-    .hud-coin-text { display: flex; flex-direction: column; line-height: 1.1; }
-    #balance { font-size: 20px; }
 
-    .hud-winnings {
-      font-size: 13px;
+    .popover-panel.open {
+      display: block;
+    }
+
+    .popover-panel.left {
+      left: 20px;
+      top: 90px;
+      width: 280px;
+      max-width: calc(100vw - 40px);
+      transform: translateX(0);
+    }
+
+    .popover-panel.left:not(.open) {
+      transform: translateX(-320px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .popover-panel.right {
+      right: 20px;
+      top: 90px;
+      width: 280px;
+      max-width: calc(100vw - 40px);
+      transform: translateX(0);
+    }
+
+    .popover-panel.right:not(.open) {
+      transform: translateX(320px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .popover-title {
       font-weight: 900;
+      text-transform: uppercase;
       letter-spacing: .5px;
-      margin-top: 2px;
-      background: linear-gradient(180deg, #fff4b0 0%, #f5c542 45%, #b8860b 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
-      animation: winningsPop .5s ease-out;
-    }
-    @keyframes winningsPop {
-      0% { transform: scale(0.6); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .coin-icon {
-      width: 26px;
-      height: 26px;
-      background: radial-gradient(ellipse at 30% 30%, #fff3b0, #f5c542 45%, #b8860b 100%);
-      border: 2px solid #7a5a00;
-      border-radius: 50%;
-      animation: spinCoin 1.1s linear infinite;
-      flex-shrink: 0;
-      box-shadow: 0 0 8px rgba(245,197,66,.5);
-    }
-    @keyframes spinCoin {
-      0% { transform: rotateY(0deg); }
-      100% { transform: rotateY(360deg); }
-    }
-
-    .hud-panel {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 14px 18px;
-      border-radius: 10px;
-      font-size: 13px;
-      z-index: 50;
-      min-width: 190px;
-    }
-
-    @media (max-width: 768px) {
-      .hud-panel {
-        bottom: 16px;
-        right: 12px;
-        padding: 12px 14px;
-        font-size: 12px;
-        min-width: 160px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .hud-panel {
-        bottom: 12px;
-        right: 8px;
-        padding: 10px 12px;
-        font-size: 11px;
-        min-width: 140px;
-      }
-    }
-    .hud-panel-row { display: flex; justify-content: space-between; margin: 6px 0; font-weight: 700; }
-    .hud-panel-label { color: #4a4a4a; }
-    .hud-timer { font-weight: 900; color: #7a1010; }
-    .hud-status {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 2px solid rgba(0,0,0,.35);
-      color: #111;
-      font-weight: 900;
+      color: #1a1206;
       text-align: center;
+      margin-bottom: 12px;
       text-shadow: 0 1px 0 rgba(255,255,255,.5);
+      padding: 14px;
+      border-bottom: 2px solid rgba(0,0,0,.2);
     }
 
-    .chips-bar {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 60;
+    .popover-content {
+      padding: 14px;
+    }
+
+    .bet-entry {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      border-radius: 14px;
-      flex-wrap: wrap;
-      justify-content: center;
-      max-width: 90vw;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-size: 13px;
     }
-    .chip {
-      width: 48px;
-      height: 48px;
+
+    .bet-entry:last-child { border-bottom: none; }
+    .bet-room { flex: 1; font-weight: 800; color: #1c1c1c; }
+    .bet-amount { font-weight: 900; color: #7a5a00; }
+    .bet-refund {
+      border: 2px solid #1a1206;
+      background: #e8caca;
+      color: #7a1010;
+      border-radius: 6px;
+      font-weight: 900;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+
+    .history-entry {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-size: 12px;
+      font-weight: 600;
+      color: #1c1c1c;
+      line-height: 1.4;
+    }
+
+    .history-entry:last-child { border-bottom: none; }
+    .history-type { color: #7a5a00; font-weight: 900; }
+
+    .chip-button {
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
       border: 3px dashed #1a1206;
       background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
@@ -505,157 +419,182 @@
       font-size: 13px;
       cursor: pointer;
       box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s;
     }
-    .chip.selected { outline: 3px solid #1a1206; transform: translateY(-3px); }
+
+    .chip-button.selected {
+      outline: 3px solid #1a1206;
+      transform: translateY(-3px);
+    }
+
+    .chip-button:active { transform: translateY(-1px); }
+
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .adjust-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
     .adjust-btn {
-      width: 34px;
-      height: 34px;
+      width: 40px;
+      height: 40px;
       border-radius: 8px;
       border: 2px solid #1a1206;
       background: #e8e8e8;
       color: #1a1206;
       font-weight: 900;
-      font-size: 18px;
+      font-size: 16px;
       cursor: pointer;
     }
-    .standard-readout {
-      font-weight: 900;
-      color: #1a1206;
-      min-width: 92px;
+
+    .amount-readout {
       text-align: center;
-      font-size: 14px;
-    }
-    .standard-readout small { display: block; font-size: 10px; color: #4a4a4a; font-weight: 700; }
-
-    @media (max-width: 768px) {
-      .chips-bar {
-        bottom: 20px;
-        padding: 8px 12px;
-        gap: 8px;
-      }
-      .chip {
-        width: 42px;
-        height: 42px;
-        font-size: 12px;
-        border-width: 2px;
-      }
-      .adjust-btn {
-        width: 30px;
-        height: 30px;
-        font-size: 16px;
-      }
-      .standard-readout {
-        min-width: 80px;
-        font-size: 12px;
-      }
-      .standard-readout small { font-size: 9px; }
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 12px;
+      font-size: 16px;
     }
 
-    @media (max-width: 480px) {
-      .chips-bar {
-        bottom: 16px;
-        padding: 6px 10px;
-        gap: 6px;
-      }
-      .chip {
-        width: 36px;
-        height: 36px;
-        font-size: 11px;
-        border-width: 2px;
-      }
-      .adjust-btn {
-        width: 28px;
-        height: 28px;
-        font-size: 14px;
-      }
-      .standard-readout {
-        min-width: 70px;
-        font-size: 11px;
-      }
-      .standard-readout small { font-size: 8px; }
+    .leaderboard-entry {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-weight: 700;
+      color: #1c1c1c;
+      font-size: 12px;
     }
 
-    .bet-board {
+    .leaderboard-entry:last-child { border-bottom: none; }
+    .leader-rank { color: #5a5a5a; min-width: 20px; }
+    .leader-name { flex: 1; margin-left: 10px; }
+    .leader-score { color: #7a5a00; font-weight: 900; min-width: 36px; text-align: right; }
+
+    .staging-badge {
       position: fixed;
-      top: 84px;
-      right: 20px;
-      width: 220px;
-      max-height: 52vh;
-      overflow-y: auto;
-      padding: 14px;
-      border-radius: 12px;
-      z-index: 55;
-      font-size: 13px;
-    }
-
-    @media (max-width: 768px) {
-      .bet-board {
-        width: 180px;
-        top: 80px;
-        right: 12px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .bet-board {
-        width: 140px;
-        top: 70px;
-        right: 8px;
-        font-size: 12px;
-        padding: 10px;
-      }
-    }
-    .bet-board-title {
-      font-weight: 900;
-      text-transform: uppercase;
+      top: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(170, 12, 12, 0.85);
+      border: 2px solid #ff5252;
+      color: #fff;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 70;
+      font-weight: 800;
       letter-spacing: .5px;
-      color: #1a1206;
-      text-align: center;
-      margin-bottom: 8px;
-      text-shadow: 0 1px 0 rgba(255,255,255,.5);
     }
-    .bet-row {
+
+    .film-grain {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0, rgba(0,0,0,.03) 1px, transparent 1px, transparent 2px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,.03) 0, rgba(0,0,0,.03) 1px, transparent 1px, transparent 2px);
+      animation: flicker 0.15s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes flicker {
+      0% { opacity: 0.97; }
+      50% { opacity: 0.99; }
+      100% { opacity: 0.97; }
+    }
+
+    .vignette {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,.4) 100%);
+      pointer-events: none;
+    }
+
+    .fx-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      pointer-events: none;
+      display: none;
+    }
+
+    .fx-overlay.active {
+      display: block;
+      animation: haunt 0.3s ease-out;
+    }
+
+    @keyframes haunt {
+      0% { background: transparent; }
+      50% { background: rgba(139, 0, 0, 0.3); }
+      100% { background: transparent; }
+    }
+
+    .pocong-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .pocong {
+      position: absolute;
+      width: 60px;
+      height: 100px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.9;
+    }
+
+    .pocong.corridor {
+      animation: hop 0.4s ease-in-out;
+    }
+
+    @keyframes hop {
+      0%, 100% { transform: translate(-50%, -50%) translateX(0); }
+      50% { transform: translate(-50%, -50%) translateX(80px); }
+    }
+
+    .pocong-wrap {
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+      border: 3px solid #1a1206;
+      border-radius: 8px;
+      position: relative;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      padding: 5px 0;
-      border-bottom: 1px solid rgba(0,0,0,.2);
-    }
-    .bet-row:last-child { border-bottom: none; }
-    .bet-room-name { flex: 1; font-weight: 800; color: #1c1c1c; font-size: 12px; }
-    .bet-room-amt { font-weight: 900; color: #7a5a00; }
-    .bet-refund {
-      border: 2px solid #1a1206;
-      background: #e8caca;
-      color: #7a1010;
-      border-radius: 6px;
+      justify-content: center;
+      font-size: 60px;
       font-weight: 900;
-      font-size: 11px;
-      cursor: pointer;
-      padding: 1px 6px;
     }
-    .bet-empty { text-align: center; color: #5a5a5a; font-weight: 700; padding: 8px 0; }
-    .clear-all-btn {
-      margin-top: 10px;
-      width: 100%;
-      border: 2px solid #1a1206;
-      background: linear-gradient(180deg, #f0cfcf, #d89a9a);
-      color: #5a1010;
-      border-radius: 8px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      font-size: 12px;
-      padding: 6px;
-      cursor: pointer;
-      box-shadow: 0 3px 0 #1a1206;
-    }
-    .clear-all-btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: 0 3px 0 #555; }
+
+    .pocong-eye { position: absolute; width: 14px; height: 14px; background: #1a1206; border-radius: 50%; }
+    .pocong-eye-l { top: 20px; left: 12px; }
+    .pocong-eye-r { top: 20px; right: 12px; }
 
     .banner-container {
       position: fixed;
-      top: 42%;
+      top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       z-index: 200;
@@ -681,96 +620,40 @@
       box-shadow: 0 12px 0 #1a1206, 0 14px 36px rgba(0,0,0,.6);
       text-shadow: 3px 3px 0 rgba(255,255,255,.5);
     }
+
     @keyframes dropBanner {
       0% { transform: translateY(-150%) rotate(-6deg); opacity: 0; }
-      70% { transform: translateY(8%) rotate(2deg); opacity: 1; }
-      100% { transform: translateY(0) rotate(-1.5deg); opacity: 1; }
-    }
-    .win-amount { font-size: 28px; margin-top: 12px; color: #5a3a00; text-shadow: 1px 1px 0 rgba(255,255,255,.5); }
-
-    .hall-of-survivors {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      padding: 14px;
-      border-radius: 10px;
-      font-size: 12px;
-      z-index: 50;
-      min-width: 200px;
-      max-height: 280px;
-      overflow-y: auto;
+      100% { transform: translateY(0) rotate(0deg); opacity: 1; }
     }
 
-    @media (max-width: 768px) {
-      .hall-of-survivors {
-        min-width: 160px;
-        bottom: 16px;
-        left: 12px;
-        font-size: 11px;
-        padding: 12px;
-        max-height: 250px;
-      }
+    .reveal-wash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 300px 200px at 50% 50%, rgba(200,0,0,0.4), transparent);
+      pointer-events: none;
+      z-index: 25;
+      border-radius: 8px;
     }
 
-    @media (max-width: 480px) {
-      .hall-of-survivors {
-        min-width: 140px;
-        bottom: 12px;
-        left: 8px;
-        font-size: 10px;
-        padding: 10px;
-        max-height: 200px;
-      }
-    }
-    .hall-title {
-      font-weight: 900;
-      margin-bottom: 10px;
-      text-align: center;
-      color: #1a1206;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      text-shadow: 0 1px 0 rgba(255,255,255,.5);
-    }
-    .survivor-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(0,0,0,.25);
-      font-weight: 700;
-      color: #1c1c1c;
-    }
-    .survivor-row:last-child { border-bottom: none; }
-    .survivor-rank { color: #5a5a5a; min-width: 20px; }
-    .survivor-name { flex: 1; margin-left: 10px; }
-    .survivor-score { color: #7a5a00; font-weight: 900; min-width: 36px; text-align: right; }
-
-    .staging-badge {
-      position: fixed;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(170, 12, 12, 0.85);
-      border: 2px solid #ff5252;
-      color: #fff;
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      z-index: 70;
-      font-weight: 800;
-      letter-spacing: .5px;
-    }
-
+    /* Modal Styles */
     .modal-backdrop {
       position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.7);
-      z-index: 300;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
       display: none;
       align-items: center;
       justify-content: center;
+      z-index: 150;
       overflow-y: auto;
     }
-    .modal-backdrop.open { display: flex; }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
     .modal-card {
       max-width: 480px;
       margin: 20px;
@@ -778,6 +661,7 @@
       border-radius: 16px;
       color: #1a1206;
     }
+
     .modal-card h2 {
       font-weight: 900;
       font-size: 24px;
@@ -785,6 +669,7 @@
       margin-bottom: 16px;
       text-align: center;
     }
+
     .modal-close-btn {
       position: absolute;
       top: 16px;
@@ -803,27 +688,30 @@
       justify-content: center;
     }
 
-    /* Wallet page styles */
     .wallet-page {
       position: relative;
       padding-top: 40px;
     }
+
     .wallet-header {
       text-align: center;
       margin-bottom: 24px;
     }
+
     .wallet-header h2 {
       font-size: 28px;
       font-weight: 900;
       text-transform: uppercase;
       margin-bottom: 8px;
     }
-    .balance-display {
+
+    .wallet-display {
       font-size: 24px;
       font-weight: 900;
       color: #7a5a00;
       margin-bottom: 20px;
     }
+
     .section-title {
       font-size: 16px;
       font-weight: 900;
@@ -832,12 +720,14 @@
       margin-bottom: 12px;
       color: #1a1206;
     }
+
     .chips-row {
       display: flex;
       gap: 8px;
       justify-content: center;
       margin-bottom: 12px;
     }
+
     .chip-sm {
       width: 56px;
       height: 56px;
@@ -850,14 +740,21 @@
       cursor: pointer;
       box-shadow: 0 3px 0 #1a1206;
     }
-    .chip-sm.selected { outline: 3px solid #1a1206; transform: translateY(-3px); }
+
+    .chip-sm.selected {
+      outline: 3px solid #1a1206;
+      transform: translateY(-3px);
+    }
+
     .chip-sm:active { transform: translateY(-1px); }
+
     .adjust-row {
       display: flex;
       justify-content: center;
       gap: 10px;
       margin-bottom: 10px;
     }
+
     .adjust-sm {
       width: 40px;
       height: 40px;
@@ -869,68 +766,201 @@
       font-size: 18px;
       cursor: pointer;
     }
+
     .amount-display {
       text-align: center;
       font-size: 16px;
       font-weight: 900;
       color: #7a5a00;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
+
     .deposit-btn, .withdraw-btn {
-      display: block;
-      margin: 12px auto;
+      width: 100%;
+      padding: 12px;
       border: 3px solid #1a1206;
-      background: linear-gradient(180deg, #fff4b0, #f5c542 50%, #c98f0e);
-      color: #1a1206;
       border-radius: 10px;
       font-weight: 900;
-      text-transform: uppercase;
-      padding: 10px 24px;
-      cursor: pointer;
-      box-shadow: 0 4px 0 #1a1206;
       font-size: 14px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s, box-shadow 0.1s;
     }
-    .deposit-btn:active, .withdraw-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #1a1206; }
-    .withdraw-note {
-      font-size: 11px;
-      color: #5a5a5a;
-      text-align: center;
-      margin-top: 8px;
+
+    .deposit-btn {
+      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      margin-bottom: 14px;
     }
+
+    .withdraw-btn {
+      background: linear-gradient(180deg, #e8caca, #d89a9a);
+      color: #5a1010;
+    }
+
+    .deposit-btn:active, .withdraw-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1a1206;
+    }
+
     .withdrawal-disabled {
       text-align: center;
       color: #5a5a5a;
+      font-size: 12px;
       font-weight: 700;
-      padding: 12px 0;
+      padding: 12px;
+    }
+
+    .withdraw-note {
+      text-align: center;
+      color: #5a5a5a;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .help-modal ol {
+      margin: 0 0 16px 18px;
+    }
+
+    .help-modal li {
+      margin: 7px 0;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 768px) {
+      .header-bar {
+        height: 100px;
+        padding: 10px 12px;
+        flex-wrap: wrap;
+      }
+
+      .header-center {
+        font-size: 20px;
+        width: 100%;
+        order: -1;
+        margin-bottom: 8px;
+      }
+
+      .header-left, .header-right {
+        gap: 8px;
+      }
+
+      .popover-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 20px;
+      }
+
+      .balance-display {
+        font-size: 14px;
+        padding: 6px 10px;
+      }
+
+      .popover-panel.left {
+        width: 240px;
+      }
+
+      .popover-panel.right {
+        width: 240px;
+      }
+
+      .world {
+        margin-top: 100px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-bar {
+        height: 120px;
+      }
+
+      .header-center {
+        font-size: 16px;
+      }
+
+      .popover-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 18px;
+        box-shadow: 0 2px 0 #1a1206;
+      }
+
+      .balance-display {
+        font-size: 12px;
+        padding: 5px 8px;
+      }
+
+      .popover-panel.left {
+        width: calc(100vw - 40px);
+        max-width: 280px;
+      }
+
+      .popover-panel.right {
+        width: calc(100vw - 40px);
+        max-width: 280px;
+      }
+
+      .world {
+        margin-top: 120px;
+        padding: 12px;
+      }
     }
   </style>
 </head>
-<body class="bg-stone-950 text-stone-100 min-h-screen">
-
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <filter id="inkRoughen">
-        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="2" seed="7" result="noise"/>
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-    </defs>
-  </svg>
-
-  <!-- Title banner -->
-  <div class="title-banner metal">
-    <button id="mute-btn" class="icon-btn" title="Mute / unmute">♪</button>
-    <span class="title-name">Awas Ada Pocong</span>
-    <button id="help-btn" class="icon-btn" title="How to play">?</button>
+<body>
+  <!-- Header Bar -->
+  <div class="header-bar metal">
+    <div class="header-left">
+      <button class="popover-btn" id="room-bets-btn" title="Room Bets">💸</button>
+      <button class="popover-btn" id="history-btn" title="History">📔</button>
+    </div>
+    <div class="header-center">Awas Ada Pocong</div>
+    <div class="header-right">
+      <button class="popover-btn" id="bet-chips-btn" title="Bet Size">🪙</button>
+      <button class="popover-btn" id="hall-btn" title="Hall of Survivors">🏆</button>
+      <div class="balance-display"><span id="balance">0</span> TKN</div>
+    </div>
   </div>
 
-  <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
-
-  <!-- World (grayscale) -->
-  <div class="world" id="world">
-    <div class="mansion">
-      <div class="room-grid" id="room-grid"></div>
-      <div id="pocong-container" style="position: absolute; width: 100%; height: 100%; pointer-events: none;"></div>
+  <!-- Popover Panels -->
+  <div class="popover-panel left" data-popover="roomBets">
+    <div class="popover-title">Room Bets</div>
+    <div class="popover-content">
+      <div id="bet-list"></div>
+      <button id="clear-all" style="width: 100%; margin-top: 10px; padding: 8px; border: 2px solid #1a1206; background: #f0cfcf; color: #5a1010; border-radius: 8px; font-weight: 900; cursor: pointer; font-size: 12px;" disabled>Clear all</button>
     </div>
+  </div>
+
+  <div class="popover-panel left" data-popover="history">
+    <div class="popover-title">History</div>
+    <div class="popover-content" id="history-content">
+      <div style="text-align: center; color: #5a5a5a; padding: 20px;">Loading...</div>
+    </div>
+  </div>
+
+  <div class="popover-panel right" data-popover="betSize">
+    <div class="popover-title">Bet Size</div>
+    <div class="popover-content">
+      <div class="chips-grid">
+        <button class="chip-button" data-chip="100">100</button>
+        <button class="chip-button" data-chip="200">200</button>
+        <button class="chip-button" data-chip="500">500</button>
+        <button class="chip-button" data-chip="1000">1000</button>
+      </div>
+      <div class="adjust-buttons">
+        <button class="adjust-btn" id="bet-minus">−</button>
+        <button class="adjust-btn" id="bet-plus">+</button>
+      </div>
+      <div class="amount-readout">Standard Bet: <span id="standard-bet">100</span> TKN</div>
+    </div>
+  </div>
+
+  <div class="popover-panel right" data-popover="hallOfSurvivors">
+    <div class="popover-title">🏆 Hall of Survivors</div>
+    <div class="popover-content" id="leaderboard"></div>
   </div>
 
   <!-- Aged-film overlays -->
@@ -940,58 +970,18 @@
   <!-- Colored reveal/win composition -->
   <div class="fx-overlay" id="fx-overlay"></div>
 
-  <!-- Coin HUD (with wallet button) -->
-  <div class="hud-coin metal">
-    <div class="coin-icon"></div>
-    <div class="hud-coin-text">
-      <span id="balance">0</span>
-      <div class="hud-winnings" id="hud-winnings" style="display: none;"></div>
+  <!-- World (grayscale) -->
+  <div class="world" id="world">
+    <div class="mansion">
+      <div class="room-grid" id="room-grid"></div>
+      <div class="pocong-container" id="pocong-container"></div>
     </div>
-    <button id="wallet-btn" class="icon-btn" title="Open wallet" style="display: none; margin-left: 6px;">💼</button>
-  </div>
-
-  <!-- Status panel -->
-  <div class="hud-panel metal">
-    <div class="hud-panel-row">
-      <span class="hud-panel-label">Bet</span>
-      <span id="stake">100</span>
-    </div>
-    <div class="hud-panel-row">
-      <span class="hud-panel-label">Round</span>
-      <span id="round-display">1</span>
-    </div>
-    <div class="hud-panel-row">
-      <span class="hud-panel-label">Time</span>
-      <span class="hud-timer" id="timer">20s</span>
-    </div>
-    <div class="hud-status" id="status">Place your bets!</div>
-  </div>
-
-  <!-- Room Bets board -->
-  <div class="bet-board metal">
-    <div class="bet-board-title">Room Bets</div>
-    <div id="bet-list"><div class="bet-empty">No bets yet</div></div>
-    <button id="clear-all" class="clear-all-btn" disabled>Clear all</button>
-  </div>
-
-  <!-- Hall of Survivors -->
-  <div class="hall-of-survivors metal">
-    <div class="hall-title">Hall of Survivors</div>
-    <div id="leaderboard"></div>
-  </div>
-
-  <!-- Bet chips bar -->
-  <div class="chips-bar metal">
-    <button class="adjust-btn" id="bet-minus">−</button>
-    <button class="chip" data-chip="100">100</button>
-    <button class="chip" data-chip="200">200</button>
-    <button class="chip" data-chip="500">500</button>
-    <button class="chip" data-chip="1000">1000</button>
-    <button class="adjust-btn" id="bet-plus">+</button>
-    <div class="standard-readout"><span id="standard-bet">100</span><small>STANDARD BET</small></div>
   </div>
 
   <div class="banner-container" id="banner-container"></div>
+
+  <!-- Staging badge -->
+  <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
 
   <!-- Wallet Modal -->
   <div class="modal-backdrop" id="wallet-modal">
@@ -1000,7 +990,7 @@
       <div class="wallet-page">
         <div class="wallet-header">
           <h2>Wallet</h2>
-          <div class="balance-display">Balance: <span id="wallet-balance">0</span> TKN</div>
+          <div class="wallet-display">Balance: <span id="wallet-balance">0</span> TKN</div>
         </div>
 
         <div class="section-title">Deposit TKN</div>
@@ -1034,14 +1024,14 @@
   <div class="modal-backdrop" id="help-modal">
     <div class="modal-card metal">
       <h2>How to Play</h2>
-      <ol style="margin: 0 0 16px 18px;">
-        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Pick your <b>standard bet</b> with the chips (100 / 200 / 500 / 1000), or nudge it with + / −.</li>
-        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
-        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Refund any room or <b>Clear all</b> while betting is open.</li>
-        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
-        <li style="margin: 7px 0; font-weight: 600; line-height: 1.35;">Every <b>safe</b> room pays out <b>3×</b> your stake. Come out ahead and the win fanfare plays!</li>
+      <ol class="help-modal">
+        <li>Pick your <b>standard bet</b> with the chips (🪙 button) or adjust with + / −.</li>
+        <li>During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
+        <li>Refund any room or <b>Clear all</b> while betting is open.</li>
+        <li>The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
+        <li>Every <b>safe</b> room pays out <b>3×</b> your stake. Come out ahead and the win fanfare plays!</li>
       </ol>
-      <button class="modal-close-btn" id="help-close" style="position: static; width: 100%; margin: 0; border-radius: 10px; padding: 10px;">Got it!</button>
+      <button id="help-close" style="width: 100%; margin: 0; border-radius: 10px; padding: 10px; border: 2px solid #1a1206; background: #e8e8e8; color: #1a1206; font-weight: 900; cursor: pointer;">Got it!</button>
     </div>
   </div>
 
@@ -1064,7 +1054,7 @@
       hauntedRoom: null,
       bannerShown: false,
       revealStarted: false,
-      page: 'game' // 'game' or 'wallet'
+      page: 'game'
     };
 
     let walletState = {
@@ -1098,287 +1088,274 @@
       const ctx = ac(); if (!ctx) return;
       const o = ctx.createOscillator();
       const g = ctx.createGain();
-      o.type = type || 'square';
-      o.frequency.setValueAtTime(freq, ctx.currentTime + start);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime + start);
-      g.gain.exponentialRampToValueAtTime(gain || 0.18, ctx.currentTime + start + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(ctx.currentTime + start);
-      o.stop(ctx.currentTime + start + dur + 0.02);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.frequency.value = freq;
+      o.type = type || 'sine';
+      g.gain.setValueAtTime(gain || 0.3, start);
+      g.gain.exponentialRampToValueAtTime(0.01, start + dur);
+      o.start(start);
+      o.stop(start + dur);
     }
-    function sfxHop() { if (muted) return; blip(520, 0, 0.12, 'square', 0.14); blip(660, 0.04, 0.1, 'square', 0.10); }
+    function sfxWin() {
+      if (muted) return;
+      const t = ac() ? ac().currentTime : 0;
+      blip(440, t, 0.1, 'square', 0.3);
+      blip(550, t + 0.1, 0.1, 'square', 0.3);
+      blip(659, t + 0.2, 0.2, 'square', 0.4);
+    }
     function sfxScream() {
       if (muted) return;
-      const ctx = ac(); if (!ctx) return;
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(880, ctx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.7);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.05);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.75);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(); o.stop(ctx.currentTime + 0.8);
+      const t = ac() ? ac().currentTime : 0;
+      const g = ac().createGain();
+      const o = ac().createOscillator();
+      o.connect(g);
+      g.connect(ac().destination);
+      o.frequency.setValueAtTime(200, t);
+      o.frequency.exponentialRampToValueAtTime(800, t + 0.3);
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+      o.start(t);
+      o.stop(t + 0.3);
     }
-    function sfxFanfare() {
+    function sfxHop() {
       if (muted) return;
-      [523, 659, 784, 1047].forEach((f, i) => blip(f, i * 0.12, 0.2, 'triangle', 0.2));
+      const t = ac() ? ac().currentTime : 0;
+      blip(300, t, 0.05, 'sine', 0.2);
     }
-    function updateMuteBtn() { document.getElementById('mute-btn').textContent = muted ? '✕' : '♪'; }
 
-    // --- Page navigation ---
     function showPage(page) {
       state.page = page;
+      const wallet = document.getElementById('wallet-modal');
       if (page === 'wallet') {
-        document.getElementById('world').style.display = 'none';
-        document.getElementById('wallet-modal').classList.add('open');
-        updateWalletUI();
+        wallet.classList.add('open');
       } else {
-        document.getElementById('world').style.display = 'block';
-        document.getElementById('wallet-modal').classList.remove('open');
+        wallet.classList.remove('open');
       }
     }
 
-    async function loadWalletState() {
-      try {
-        const res = await fetch('/api/wallet/state', { headers });
-        if (!res.ok) return;
-        const data = await res.json();
-        walletState = data;
-        state.balance = data.balance;
+    function togglePopover(name) {
+      const buttons = {
+        'roomBets': 'room-bets-btn',
+        'history': 'history-btn',
+        'betSize': 'bet-chips-btn',
+        'hallOfSurvivors': 'hall-btn'
+      };
 
-        if (state.balance === 0) {
-          showPage('wallet');
-        } else if (state.page === 'wallet') {
-          showPage('game');
+      // Close all others
+      for (const [key, btnId] of Object.entries(buttons)) {
+        const panel = document.querySelector(`[data-popover="${key}"]`);
+        const btn = document.getElementById(btnId);
+        if (key === name) {
+          panel.classList.toggle('open');
+          btn.classList.toggle('open');
+        } else {
+          panel.classList.remove('open');
+          btn.classList.remove('open');
         }
-
-        document.getElementById('wallet-btn').style.display = state.balance > 0 ? 'flex' : 'none';
-      } catch (err) { console.error(err); }
-    }
-
-    function updateWalletUI() {
-      document.getElementById('wallet-balance').textContent = walletState.balance;
-      const withdrawalNet = Math.max(0, walletState.balance - 10);
-      document.getElementById('withdrawal-net').textContent = withdrawalNet;
-
-      if (walletState.balance > 10) {
-        document.getElementById('withdrawal-section').style.display = 'block';
-        document.getElementById('no-withdrawal').style.display = 'none';
-      } else {
-        document.getElementById('withdrawal-section').style.display = 'none';
-        document.getElementById('no-withdrawal').style.display = 'block';
       }
     }
 
-    // Deposit flow
-    async function startDeposit() {
+    document.getElementById('room-bets-btn').addEventListener('click', () => togglePopover('roomBets'));
+    document.getElementById('history-btn').addEventListener('click', () => togglePopover('history'));
+    document.getElementById('bet-chips-btn').addEventListener('click', () => togglePopover('betSize'));
+    document.getElementById('hall-btn').addEventListener('click', () => togglePopover('hallOfSurvivors'));
+
+    async function loadTransactionHistory() {
       try {
-        const res = await fetch('/api/wallet/deposit-start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ amount: depositAmount })
-        });
-        if (!res.ok) { alert('Failed to start deposit'); return; }
+        const res = await fetch('/api/transactions/history', { headers });
+        if (!res.ok) throw new Error('Failed to load history');
         const data = await res.json();
-        const txHash = data.txHash;
-        const amount = data.amount;
-
-        // Open bridge modal
-        if (window.usernode && window.usernode.sendTransaction) {
-          await window.usernode.sendTransaction({
-            to: data.address,
-            amount: amount,
-            memo: 'Deposit: ' + amount + ' TKN',
-            txId: txHash
-          });
-
-          // Poll for tx completion
-          let polling = setInterval(async () => {
-            try {
-              if (window.usernode && window.usernode.getTxStatus) {
-                const status = await window.usernode.getTxStatus(txHash);
-                if (status && (status.status === 'confirmed' || status.status === 'completed')) {
-                  clearInterval(polling);
-                  await confirmDeposit(txHash);
-                }
-              }
-            } catch (err) { console.error(err); }
-          }, 1000);
-
-          // Timeout after 5 minutes
-          setTimeout(() => clearInterval(polling), 300000);
-        } else {
-          alert('Bridge not available');
+        const container = document.getElementById('history-content');
+        if (!data.transactions || data.transactions.length === 0) {
+          container.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">No transactions yet</div>';
+          return;
         }
-      } catch (err) { console.error(err); alert('Deposit error: ' + err.message); }
+        container.innerHTML = data.transactions.map(tx => {
+          let label = '';
+          if (tx.type === 'deposit') {
+            label = `<span class="history-type">Deposited</span> ${tx.amount} TKN`;
+          } else if (tx.type === 'withdrawal') {
+            label = `<span class="history-type">Withdrew</span> ${tx.amount} TKN (${tx.fee} TKN fee)`;
+          } else if (tx.type === 'round_result') {
+            const winLose = tx.status === 'won' ? `<span style="color: #0a7a00;">Won</span> +${tx.net}` : `<span style="color: #7a1010;">Lost</span> ${tx.net}`;
+            label = `Round #${tx.round_id}: ${winLose} TKN`;
+          }
+          const date = new Date(tx.timestamp).toLocaleString();
+          return `<div class="history-entry">${label}<br><span style="font-size: 11px; color: #5a5a5a;">${date}</span></div>`;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        document.getElementById('history-content').innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">Failed to load</div>';
+      }
     }
 
-    async function confirmDeposit(txHash) {
+    function loadWalletState() {
+      fetch('/api/wallet/state', { headers })
+        .then(r => r.json())
+        .then(d => {
+          walletState = d;
+          document.getElementById('wallet-balance').textContent = d.balance;
+          const net = Math.max(0, d.balance - 10);
+          document.getElementById('withdrawal-net').textContent = net;
+          if (d.balance > 10) {
+            document.getElementById('withdrawal-section').style.display = 'block';
+            document.getElementById('no-withdrawal').style.display = 'none';
+          } else {
+            document.getElementById('withdrawal-section').style.display = 'none';
+            document.getElementById('no-withdrawal').style.display = 'block';
+          }
+        })
+        .catch(err => console.error(err));
+    }
+
+    async function updateState() {
       try {
-        const res = await fetch('/api/wallet/deposit-confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ txHash })
-        });
+        const res = await fetch('/api/round/state', { headers });
         if (!res.ok) return;
-        await loadWalletState();
-        showPage('game');
+        const data = await res.json();
+        state.round = data.round || {};
+        state.participant = data.participant || null;
+        state.bets = data.bets || {};
+        state.roomTotals = data.roomTotals || {};
+        state.balance = (typeof data.balance === 'number') ? data.balance : state.balance;
+        state.hauntedRoom = data.hauntedRoom || null;
+
+        renderGrid();
+        renderBets();
+        renderLeaderboard();
+
+        document.getElementById('balance').textContent = state.balance;
+
+        const phase = state.round.phase;
+
+        if (phase === 'betting') {
+          resetWinFx();
+          document.getElementById('pocong-container').innerHTML = '';
+          document.getElementById('pocong-container').style.display = 'none';
+        } else if (phase === 'reveal') {
+          if (!state.revealStarted) {
+            state.revealStarted = true;
+            const pc = document.getElementById('pocong-container');
+            pc.style.display = 'block';
+            pc.innerHTML = '';
+            const pocong = document.createElement('div');
+            pocong.className = 'pocong corridor';
+            const wrap = document.createElement('div');
+            wrap.className = 'pocong-wrap';
+            wrap.innerHTML = '👻<div class="pocong-eye pocong-eye-l"></div><div class="pocong-eye pocong-eye-r"></div>';
+            pocong.appendChild(wrap);
+            pc.appendChild(pocong);
+            sfxHop();
+            const hopTimer = setInterval(sfxHop, 500);
+            setTimeout(() => {
+              clearInterval(hopTimer);
+              pocong.classList.remove('corridor');
+              pocong.style.left = '50%';
+              pocong.style.top = '50%';
+              if (state.hauntedRoom) {
+                const room = document.querySelector('[data-room="' + state.hauntedRoom + '"]');
+                if (room) room.classList.add('active');
+                showRevealWash(state.hauntedRoom);
+                sfxScream();
+              }
+            }, 2500);
+          }
+        } else if (phase === 'results') {
+          document.getElementById('pocong-container').style.display = 'none';
+          const net = state.participant ? (state.participant.net || 0) : 0;
+          if (net > 0) {
+            const pocongRoom = state.hauntedRoom || ROOMS[2];
+            const safeRoom = Object.keys(state.bets).find(r => r !== pocongRoom) || ROOMS.find(r => r !== pocongRoom) || ROOMS[1];
+            composeWinTableau(pocongRoom, safeRoom, net);
+            sfxWin();
+          } else if (state.hauntedRoom) {
+            showRevealWash(state.hauntedRoom);
+          }
+        }
+
+        await loadLeaderboard();
+
+        if (DEMO_WIN) {
+          document.getElementById('staging-badge').style.display = 'block';
+          composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+        }
       } catch (err) { console.error(err); }
     }
 
-    // Withdrawal flow
-    async function startWithdrawal() {
-      try {
-        const res = await fetch('/api/wallet/withdrawal-start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({})
-        });
-        if (!res.ok) { alert('Failed to start withdrawal'); return; }
-        const data = await res.json();
-        const txHash = data.txHash;
-        const amount = data.amount;
-
-        if (window.usernode && window.usernode.sendTransaction) {
-          await window.usernode.sendTransaction({
-            to: data.address,
-            amount: amount,
-            memo: 'Withdraw: ' + amount + ' TKN',
-            txId: txHash
-          });
-
-          let polling = setInterval(async () => {
-            try {
-              if (window.usernode && window.usernode.getTxStatus) {
-                const status = await window.usernode.getTxStatus(txHash);
-                if (status && (status.status === 'confirmed' || status.status === 'completed')) {
-                  clearInterval(polling);
-                  await confirmWithdrawal(txHash);
-                }
-              }
-            } catch (err) { console.error(err); }
-          }, 1000);
-
-          setTimeout(() => clearInterval(polling), 300000);
-        } else {
-          alert('Bridge not available');
-        }
-      } catch (err) { console.error(err); alert('Withdrawal error: ' + err.message); }
-    }
-
-    async function confirmWithdrawal(txHash) {
-      try {
-        const res = await fetch('/api/wallet/withdrawal-confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ txHash })
-        });
-        if (!res.ok) return;
-        alert('Withdrawal initiated. It may take up to 24 hours to appear.');
-        showPage('game');
-      } catch (err) { console.error(err); }
-    }
-
-    // Sprites
-    function characterSVG(opts) {
-      opts = opts || {};
-      const slump = opts.slump;
-      const eyes = slump
-        ? '<path d="M5 5 L9 9 M9 5 L5 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>' +
-          '<path d="M13 5 L17 9 M17 5 L13 9" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>'
-        : '<circle cx="7" cy="7" r="1.7" fill="#000"/><circle cx="13" cy="7" r="1.7" fill="#000"/>';
-      const mouth = slump
-        ? '<path d="M7 13 Q10 10 13 13" stroke="#000" stroke-width="1.5" fill="none" stroke-linecap="round"/>'
-        : '<path d="M7 12 Q10 15 13 12" stroke="#000" stroke-width="1.4" fill="none" stroke-linecap="round"/>';
-      const rot = slump ? 'transform="rotate(18 11 11)"' : '';
-      return '<svg class="char-svg" viewBox="0 0 22 22" width="' + (opts.size || 20) + '" height="' + (opts.size || 20) + '" ' + rot + '>' +
-        '<circle cx="11" cy="9" r="6.5" fill="#fff" stroke="#000" stroke-width="2.2"/>' + eyes + mouth +
-        '<rect x="2.5" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/>' +
-        '<rect x="15" y="13" width="4.5" height="6.5" rx="2" fill="#fff" stroke="#000" stroke-width="1.6"/></svg>';
-    }
-    function playerTopHatSVG(size) {
-      const s = size || 130;
-      return '<svg viewBox="0 0 120 140" width="' + s + '" height="' + (s * 140 / 120) + '">' +
-        '<rect x="30" y="4" width="60" height="30" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>' +
-        '<rect x="33" y="9" width="54" height="6" fill="#3a3a3a"/>' +
-        '<rect x="16" y="32" width="88" height="10" rx="3" fill="#111" stroke="#000" stroke-width="3.5"/>' +
-        '<circle cx="60" cy="78" r="34" fill="#fff" stroke="#000" stroke-width="4.5"/>' +
-        '<circle cx="48" cy="72" r="5.5" fill="#000"/><circle cx="72" cy="72" r="5.5" fill="#000"/>' +
-        '<path d="M46 92 Q60 106 74 92" stroke="#000" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-        '<rect x="14" y="96" width="14" height="20" rx="7" fill="#fff" stroke="#000" stroke-width="4"/></svg>';
-    }
-    function bookshelfSVG(w, h) {
-      return '<svg viewBox="0 0 120 150" width="' + w + '" height="' + h + '">' +
-        '<rect x="5" y="5" width="110" height="140" rx="4" fill="#7a7a7a" stroke="#000" stroke-width="6"/>' +
-        '<line x1="8" y1="42" x2="112" y2="42" stroke="#000" stroke-width="5"/>' +
-        '<line x1="8" y1="80" x2="112" y2="80" stroke="#000" stroke-width="5"/>' +
-        '<line x1="8" y1="118" x2="112" y2="118" stroke="#000" stroke-width="5"/>' +
-        '<g stroke="#000" stroke-width="2.5">' +
-        '<rect x="14" y="14" width="11" height="26" fill="#cfcfcf"/><rect x="27" y="12" width="11" height="28" fill="#9a9a9a"/>' +
-        '<rect x="40" y="16" width="11" height="24" fill="#e4e4e4"/><rect x="70" y="14" width="11" height="26" fill="#b4b4b4"/>' +
-        '<rect x="84" y="12" width="11" height="28" fill="#cfcfcf"/><rect x="16" y="52" width="11" height="26" fill="#b4b4b4"/>' +
-        '<rect x="29" y="50" width="11" height="28" fill="#e4e4e4"/><rect x="78" y="52" width="11" height="26" fill="#9a9a9a"/>' +
-        '<rect x="91" y="50" width="11" height="28" fill="#cfcfcf"/><rect x="18" y="90" width="11" height="26" fill="#cfcfcf"/>' +
-        '<rect x="84" y="90" width="11" height="26" fill="#b4b4b4"/></g></svg>';
-    }
-
-    // Room grid
     function renderGrid() {
-      const gridEl = document.getElementById('room-grid');
-      gridEl.innerHTML = '';
-      ROOMS.forEach(room => {
+      const grid = document.getElementById('room-grid');
+      grid.innerHTML = ROOMS.map((room, i) => {
+        const betting = state.round.phase === 'betting';
+        const bet = state.bets[room] || 0;
         const total = state.roomTotals[room] || 0;
-        const mine = state.bets[room] || 0;
-        const roomEl = document.createElement('div');
-        roomEl.className = 'room' + (mine > 0 ? ' mine' : '');
-        roomEl.dataset.room = room;
+        return `
+          <div class="room${bet > 0 ? ' mine' : ''}${state.hauntedRoom === room ? ' active' : ''}" data-room="${room}">
+            <div class="room-label">${room}</div>
+            ${total > 0 ? `<div class="room-total">${total}</div>` : ''}
+            ${bet > 0 ? `<div class="room-mine-chip" style="display: block;">${bet}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+      if (betting) {
+        grid.querySelectorAll('.room').forEach(el => {
+          el.addEventListener('click', () => placeBet(el.dataset.room));
+        });
+      }
+    }
 
-        const label = document.createElement('div');
-        label.className = 'room-label';
-        label.textContent = room;
-        roomEl.appendChild(label);
+    function renderBets() {
+      const list = document.getElementById('bet-list');
+      const entries = Object.keys(state.bets).filter(r => state.bets[r] > 0);
+      const betting = state.round.phase === 'betting';
+      if (entries.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 8px;">No bets yet</div>';
+        document.getElementById('clear-all').disabled = true;
+        return;
+      }
+      list.innerHTML = entries.map(r => `
+        <div class="bet-entry">
+          <span class="bet-room">${r}</span>
+          <span class="bet-amount">${state.bets[r]}</span>
+          ${betting ? `<button class="bet-refund" onclick="clearRoom('${r}')">×</button>` : ''}
+        </div>
+      `).join('');
+      document.getElementById('clear-all').disabled = !betting;
+    }
 
-        const totalEl = document.createElement('div');
-        totalEl.className = 'room-total';
-        totalEl.textContent = total > 0 ? ('Σ ' + total) : 'Σ 0';
-        roomEl.appendChild(totalEl);
-
-        const mineEl = document.createElement('div');
-        mineEl.className = 'room-mine-chip';
-        if (mine > 0) { mineEl.style.display = 'block'; mineEl.textContent = 'you ' + mine; }
-        roomEl.appendChild(mineEl);
-
-        const crowd = Math.min(4, Math.max(0, Math.round(total / 200)));
-        for (let i = 0; i < crowd; i++) {
-          const char = document.createElement('div');
-          char.className = 'character';
-          char.style.top = (28 + Math.random() * 40) + 'px';
-          char.style.left = (Math.random() * 70) + 'px';
-          char.style.animationDelay = (Math.random() * -1.6) + 's';
-          char.innerHTML = characterSVG({});
-          roomEl.appendChild(char);
+    async function renderLeaderboard() {
+      try {
+        const res = await fetch('/api/leaderboard', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        const leaderboard = document.getElementById('leaderboard');
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+          leaderboard.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">No players yet</div>';
+          return;
         }
-
-        roomEl.addEventListener('click', () => placeBet(room));
-        gridEl.appendChild(roomEl);
-      });
+        leaderboard.innerHTML = data.leaderboard.map((p, i) => `
+          <div class="leaderboard-entry">
+            <span class="leader-rank">${i+1}</span>
+            <span class="leader-name">${p.username}</span>
+            <span class="leader-score">${p.balance}</span>
+          </div>
+        `).join('');
+      } catch (err) { console.error(err); }
     }
 
-    function roomRect(roomName) {
-      const el = document.querySelector('#room-grid [data-room="' + roomName + '"]');
-      return el ? el.getBoundingClientRect() : null;
+    async function loadLeaderboard() {
+      await renderLeaderboard();
     }
 
-    // Betting
     async function placeBet(room) {
       if (state.round.phase !== 'betting') return;
       ac();
       state.bets[room] = (state.bets[room] || 0) + standardBet;
       state.roomTotals[room] = (state.roomTotals[room] || 0) + standardBet;
       state.balance = Math.max(0, state.balance - standardBet);
-      renderGrid(); renderBetBoard(); renderHud();
+      renderGrid();
+      renderBets();
+      document.getElementById('balance').textContent = state.balance;
       try {
         const res = await fetch('/api/round/bet', {
           method: 'POST',
@@ -1413,297 +1390,223 @@
       } catch (err) { console.error(err); }
     }
 
-    // Renders
-    function renderHud() {
-      document.getElementById('balance').textContent = state.balance;
-      document.getElementById('stake').textContent = standardBet;
-      document.getElementById('round-display').textContent = state.round.id || '–';
-      document.getElementById('timer').textContent = (state.round.secondsRemaining || 0) + 's';
-      document.getElementById('standard-bet').textContent = standardBet;
+    document.getElementById('clear-all').addEventListener('click', clearAll);
+
+    function resetWinFx() {
+      state.bannerShown = false;
+      state.revealStarted = false;
+      document.getElementById('fx-overlay').classList.remove('active');
+      document.getElementById('banner-container').innerHTML = '';
+      document.querySelectorAll('.room').forEach(r => r.classList.remove('active'));
+      document.querySelectorAll('.reveal-wash').forEach(r => r.remove());
     }
 
-    function renderBetBoard() {
-      const list = document.getElementById('bet-list');
-      const entries = Object.keys(state.bets).filter(r => state.bets[r] > 0);
-      const betting = state.round.phase === 'betting';
-      if (entries.length === 0) {
-        list.innerHTML = '<div class="bet-empty">No bets yet</div>';
-        document.getElementById('clear-all').disabled = true;
-        return;
+    function showRevealWash(room) {
+      const roomEl = document.querySelector('[data-room="' + room + '"]');
+      if (roomEl) {
+        const wash = document.createElement('div');
+        wash.className = 'reveal-wash';
+        roomEl.appendChild(wash);
       }
-      list.innerHTML = entries.map(r =>
-        '<div class="bet-row"><span class="bet-room-name">' + r + '</span>' +
-        '<span class="bet-room-amt">' + state.bets[r] + '</span>' +
-        (betting ? '<button class="bet-refund" data-room="' + r + '">✕</button>' : '') +
-        '</div>'
-      ).join('');
-      list.querySelectorAll('.bet-refund').forEach(b =>
-        b.addEventListener('click', () => clearRoom(b.dataset.room)));
-      document.getElementById('clear-all').disabled = !betting;
-    }
-
-    function clearFx() { document.getElementById('fx-overlay').innerHTML = ''; }
-
-    function showRevealWash(roomName) {
-      const fx = document.getElementById('fx-overlay');
-      const r = roomRect(roomName);
-      if (!r) return;
-      let wash = fx.querySelector('.room-wash[data-for="' + roomName + '"]');
-      if (!wash) {
-        wash = document.createElement('div');
-        wash.className = 'room-wash';
-        wash.dataset.for = roomName;
-        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 22 }) +
-                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 22 }) + '</div>';
-        fx.appendChild(wash);
-      }
-      wash.style.left = r.left + 'px';
-      wash.style.top = r.top + 'px';
-      wash.style.width = r.width + 'px';
-      wash.style.height = r.height + 'px';
+      document.getElementById('fx-overlay').classList.add('active');
     }
 
     function composeWinTableau(pocongRoom, safeRoom, net) {
-      const fx = document.getElementById('fx-overlay');
-      fx.innerHTML = '';
-      const dr = roomRect(pocongRoom);
-      if (dr) {
-        const wash = document.createElement('div');
-        wash.className = 'room-wash';
-        wash.style.left = dr.left + 'px';
-        wash.style.top = dr.top + 'px';
-        wash.style.width = dr.width + 'px';
-        wash.style.height = dr.height + 'px';
-        wash.innerHTML = '<div class="slumped">' + characterSVG({ slump: true, size: 24 }) +
-                         '</div><div class="slumped">' + characterSVG({ slump: true, size: 24 }) + '</div>';
-        fx.appendChild(wash);
-      }
-      const sr = roomRect(safeRoom) || dr;
-      if (sr) {
-        const cx = sr.left + sr.width / 2;
-        const player = document.createElement('div');
-        player.className = 'player-zoom';
-        player.style.left = (cx - 65) + 'px';
-        player.style.top = Math.max(60, sr.top - 26) + 'px';
-        player.innerHTML = playerTopHatSVG(120);
-        fx.appendChild(player);
-
-        const shelf = document.createElement('div');
-        shelf.className = 'bookshelf';
-        shelf.style.left = (cx - 46) + 'px';
-        shelf.style.top = (sr.top + sr.height * 0.42) + 'px';
-        shelf.innerHTML = bookshelfSVG(92, 115);
-        fx.appendChild(shelf);
-      }
-      const w = document.getElementById('hud-winnings');
-      w.style.display = 'block';
-      w.textContent = '+' + net + ' TKN';
-      if (!state.bannerShown) {
-        showWinBanner(net);
-        state.bannerShown = true;
-        sfxFanfare();
-      }
-    }
-
-    function showWinBanner(net) {
-      const c = document.getElementById('banner-container');
-      c.innerHTML = '';
+      if (state.bannerShown) return;
+      state.bannerShown = true;
       const banner = document.createElement('div');
       banner.className = 'win-banner';
-      banner.innerHTML = 'You Win!<div class="win-amount">+' + net + ' tokens</div>';
-      c.appendChild(banner);
+      banner.textContent = `You won! +${net} TKN`;
+      document.getElementById('banner-container').appendChild(banner);
     }
 
-    function resetWinFx() {
-      document.getElementById('banner-container').innerHTML = '';
-      document.getElementById('hud-winnings').style.display = 'none';
-      clearFx();
-      state.bannerShown = false;
-      state.revealStarted = false;
-    }
-
-    async function loadLeaderboard() {
-      try {
-        const res = await fetch('/api/leaderboard', { headers });
-        if (!res.ok) return;
-        const { leaderboard } = await res.json();
-        if (leaderboard.some(r => (r.username || '').startsWith('staging-demo'))) {
-          document.getElementById('staging-badge').style.display = 'block';
-        }
-        const el = document.getElementById('leaderboard');
-        if (!leaderboard.length) {
-          el.innerHTML = '<p style="text-align:center;color:#5a5a5a">No survivors yet</p>';
-          return;
-        }
-        el.innerHTML = leaderboard.slice(0, 10).map((r, i) =>
-          '<div class="survivor-row"><span class="survivor-rank">' + (i + 1) +
-          '.</span><span class="survivor-name">' + r.username +
-          '</span><span class="survivor-score">' + r.balance + '</span></div>'
-        ).join('');
-      } catch (err) { console.error(err); }
-    }
-
-    async function updateState() {
-      try {
-        const res = await fetch('/api/round/state', { headers });
-        if (!res.ok) return;
-        const data = await res.json();
-        state.round = data.round || {};
-        state.participant = data.participant || null;
-        state.bets = data.bets || {};
-        state.roomTotals = data.roomTotals || {};
-        state.balance = (typeof data.balance === 'number') ? data.balance : state.balance;
-        state.hauntedRoom = data.hauntedRoom || null;
-
-        renderGrid();
-        renderHud();
-        renderBetBoard();
-
-        const statusEl = document.getElementById('status');
-        const phase = state.round.phase;
-
-        if (phase === 'betting') {
-          resetWinFx();
-          document.getElementById('pocong-container').innerHTML = '';
-          statusEl.textContent = 'Place your bets!';
-        } else if (phase === 'reveal') {
-          statusEl.textContent = 'The pocong is coming...';
-          if (!state.revealStarted) {
-            state.revealStarted = true;
-            const pc = document.getElementById('pocong-container');
-            pc.innerHTML = '';
-            const pocong = document.createElement('div');
-            pocong.className = 'pocong corridor';
-            pc.appendChild(pocong);
-            sfxHop();
-            const hopTimer = setInterval(sfxHop, 500);
-            setTimeout(() => {
-              clearInterval(hopTimer);
-              pocong.classList.remove('corridor');
-              pocong.style.left = '50%';
-              pocong.style.top = '50%';
-              if (state.hauntedRoom) {
-                const room = document.querySelector('[data-room="' + state.hauntedRoom + '"]');
-                if (room) room.classList.add('active');
-                showRevealWash(state.hauntedRoom);
-                sfxScream();
-              }
-            }, 2500);
-          }
-        } else if (phase === 'results') {
-          document.getElementById('pocong-container').innerHTML = '';
-          const net = state.participant ? (state.participant.net || 0) : 0;
-          if (net > 0) {
-            const pocongRoom = state.hauntedRoom || ROOMS[2];
-            const safeRoom = Object.keys(state.bets).find(r => r !== pocongRoom) ||
-              ROOMS.find(r => r !== pocongRoom) || ROOMS[1];
-            composeWinTableau(pocongRoom, safeRoom, net);
-            statusEl.textContent = 'You won! +' + net;
-          } else if (state.hauntedRoom) {
-            showRevealWash(state.hauntedRoom);
-            statusEl.textContent = (state.participant && state.participant.total_staked > 0)
-              ? 'Haunted — bets lost' : 'The pocong struck!';
-          }
-        }
-
-        await loadLeaderboard();
-
-        if (DEMO_WIN) {
-          document.getElementById('staging-badge').style.display = 'block';
-          composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
-          statusEl.textContent = 'You won! +' + DEMO_PAYOUT;
-        }
-      } catch (err) { console.error(err); }
-    }
-
-    // Chip/control wiring
     function selectChip(val) {
       standardBet = val;
       localStorage.setItem('aap_standard_bet', String(val));
-      document.querySelectorAll('.chip').forEach(c =>
+      document.querySelectorAll('.chip-button').forEach(c =>
         c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === val));
-      renderHud();
+      document.getElementById('standard-bet').textContent = val;
     }
-    document.querySelectorAll('.chip').forEach(c =>
+
+    document.querySelectorAll('.chip-button').forEach(c =>
       c.addEventListener('click', () => { ac(); selectChip(parseInt(c.dataset.chip, 10)); }));
+
     document.getElementById('bet-plus').addEventListener('click', () => {
       standardBet = Math.min(100000, standardBet + 100);
       localStorage.setItem('aap_standard_bet', String(standardBet));
-      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === standardBet));
-      renderHud();
+      selectChip(standardBet);
     });
+
     document.getElementById('bet-minus').addEventListener('click', () => {
       standardBet = Math.max(100, standardBet - 100);
       localStorage.setItem('aap_standard_bet', String(standardBet));
-      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === standardBet));
-      renderHud();
-    });
-    document.getElementById('clear-all').addEventListener('click', clearAll);
-    document.getElementById('mute-btn').addEventListener('click', () => {
-      muted = !muted;
-      localStorage.setItem('aap_muted', muted ? '1' : '0');
-      updateMuteBtn();
-      if (!muted) { ac(); blip(660, 0, 0.1, 'triangle', 0.15); }
-    });
-    document.getElementById('help-btn').addEventListener('click', () => document.getElementById('help-modal').classList.add('open'));
-    document.getElementById('help-close').addEventListener('click', () => document.getElementById('help-modal').classList.remove('open'));
-    document.getElementById('help-modal').addEventListener('click', (e) => {
-      if (e.target.id === 'help-modal') e.target.classList.remove('open');
+      selectChip(standardBet);
     });
 
-    // Wallet UI
-    document.getElementById('wallet-btn').addEventListener('click', () => showPage('wallet'));
-    document.getElementById('wallet-close').addEventListener('click', () => {
-      if (state.balance > 0) showPage('game');
-    });
-
-    document.querySelectorAll('.chip-sm').forEach(c => {
-      c.addEventListener('click', () => {
-        ac();
-        const amt = parseInt(c.dataset.deposit, 10);
-        depositAmount = amt;
-        document.getElementById('deposit-amount').textContent = depositAmount;
-        document.querySelectorAll('.chip-sm').forEach(cc => cc.classList.toggle('selected', parseInt(cc.dataset.deposit, 10) === depositAmount));
-      });
-    });
+    // Deposit/Withdrawal
+    document.querySelectorAll('.chip-sm').forEach(c =>
+      c.addEventListener('click', () => { ac(); selectDepositChip(parseInt(c.dataset.deposit, 10)); }));
 
     document.getElementById('deposit-plus').addEventListener('click', () => {
       depositAmount = Math.min(100000, depositAmount + 100);
-      document.getElementById('deposit-amount').textContent = depositAmount;
-      document.querySelectorAll('.chip-sm').forEach(c => c.classList.remove('selected'));
+      updateDepositDisplay();
     });
 
     document.getElementById('deposit-minus').addEventListener('click', () => {
       depositAmount = Math.max(100, depositAmount - 100);
-      document.getElementById('deposit-amount').textContent = depositAmount;
-      document.querySelectorAll('.chip-sm').forEach(c => c.classList.remove('selected'));
+      updateDepositDisplay();
     });
+
+    function selectDepositChip(val) {
+      depositAmount = val;
+      updateDepositDisplay();
+      document.querySelectorAll('.chip-sm').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.deposit, 10) === val));
+    }
+
+    function updateDepositDisplay() {
+      document.getElementById('deposit-amount').textContent = depositAmount;
+      document.querySelectorAll('.chip-sm').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.deposit, 10) === depositAmount));
+    }
 
     document.getElementById('deposit-btn').addEventListener('click', startDeposit);
     document.getElementById('withdraw-btn').addEventListener('click', startWithdrawal);
+    document.getElementById('wallet-close').addEventListener('click', () => {
+      if (state.balance > 0) showPage('game');
+    });
 
-    window.addEventListener('resize', () => {
-      if (DEMO_WIN) composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+    async function startDeposit() {
+      try {
+        const res = await fetch('/api/wallet/deposit-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ amount: depositAmount })
+        });
+        if (!res.ok) throw new Error('Failed to start deposit');
+        const data = await res.json();
+        if (usernode && usernode.sendTransaction) {
+          await usernode.sendTransaction({
+            to: 'ut1xqgzkzd8tesvwg3f4pm7ghspqpd3edwgydkcpvlha3em0frm78es6uft0u',
+            amount: depositAmount,
+            txId: data.txHash
+          });
+          pollDepositStatus(data.txHash);
+        }
+      } catch (err) { console.error(err); alert('Deposit failed'); }
+    }
+
+    function pollDepositStatus(txHash) {
+      const maxAttempts = 300;
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        if (attempts++ > maxAttempts) {
+          clearInterval(interval);
+          alert('Deposit timeout');
+          return;
+        }
+        if (usernode && usernode.getTxStatus) {
+          const status = await usernode.getTxStatus(txHash);
+          if (status && status.status === 'confirmed') {
+            clearInterval(interval);
+            confirmDeposit(txHash);
+          }
+        }
+      }, 1000);
+    }
+
+    async function confirmDeposit(txHash) {
+      try {
+        const res = await fetch('/api/wallet/deposit-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (res.ok) {
+          loadWalletState();
+          showPage('game');
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    async function startWithdrawal() {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) throw new Error('Failed to start withdrawal');
+        const data = await res.json();
+        const amount = Math.max(0, walletState.balance - 10);
+        if (usernode && usernode.sendTransaction) {
+          await usernode.sendTransaction({
+            to: 'ut1xqgzkzd8tesvwg3f4pm7ghspqpd3edwgydkcpvlha3em0frm78es6uft0u',
+            amount: amount,
+            memo: `Withdraw: ${amount} TKN`,
+            txId: data.txHash
+          });
+          pollWithdrawalStatus(data.txHash);
+        }
+      } catch (err) { console.error(err); alert('Withdrawal failed'); }
+    }
+
+    function pollWithdrawalStatus(txHash) {
+      const maxAttempts = 300;
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        if (attempts++ > maxAttempts) {
+          clearInterval(interval);
+          alert('Withdrawal timeout');
+          return;
+        }
+        if (usernode && usernode.getTxStatus) {
+          const status = await usernode.getTxStatus(txHash);
+          if (status && status.status === 'confirmed') {
+            clearInterval(interval);
+            confirmWithdrawal(txHash);
+          }
+        }
+      }, 1000);
+    }
+
+    async function confirmWithdrawal(txHash) {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (res.ok) {
+          loadWalletState();
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    // Help modal
+    document.getElementById('help-close').addEventListener('click', () => {
+      document.getElementById('help-modal').classList.remove('open');
     });
 
     // Init
     selectChip(standardBet);
-    updateMuteBtn();
+    updateDepositDisplay();
 
-    if (DEMO_WIN) {
-      document.getElementById('staging-badge').style.display = 'block';
-      state.roomTotals = {}; state.bets = {};
-      ROOMS.forEach((r, i) => { state.roomTotals[r] = (i % 4) * 100; });
-      state.bets['Library'] = 400;
-      renderGrid(); renderBetBoard();
-      composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
-    } else {
-      renderGrid();
+    (async () => {
       loadWalletState();
-    }
-
-    updateState();
-    setInterval(updateState, 1000);
+      await updateState();
+      await loadTransactionHistory();
+      setInterval(updateState, 1000);
+      setInterval(loadTransactionHistory, 5000);
+    })();
   </script>
+
+  <!-- SVG filter -->
+  <svg id="inkRoughen" style="display: none;">
+    <filter id="inkRoughen">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" seed="2" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" />
+    </filter>
+  </svg>
 </body>
 </html>
