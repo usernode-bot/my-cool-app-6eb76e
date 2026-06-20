@@ -76,7 +76,7 @@
 
     canvas#game-canvas {
       display: block; position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%; cursor: grab;
+      width: 100%; height: 100%; cursor: default;
     }
 
     #title {
@@ -87,14 +87,8 @@
       letter-spacing: 2px; z-index: 10; pointer-events: none; white-space: nowrap;
     }
 
-    #compass {
-      position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
-      font-family: 'Creepster', cursive; font-size: 0.85rem; letter-spacing: 1px;
-      background: rgba(10,10,10,0.7); border: 1px solid #555; border-radius: 5px;
-      padding: 4px 10px; color: #ccc;
-    }
     #compass-hint {
-      position: fixed; top: 42px; left: 16px; z-index: 10; pointer-events: none;
+      position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
       font-family: monospace; font-size: 0.62rem; color: #444; line-height: 1.5;
     }
 
@@ -290,8 +284,7 @@
 <body>
   <div id="title">👻 Awas Ada Pocong</div>
 
-  <div id="compass">◆ NE</div>
-  <div id="compass-hint">scroll: zoom<br>drag: pan<br>right-drag: rotate</div>
+  <div id="compass-hint">scroll / pinch to zoom</div>
 
   <canvas id="mascot-canvas" width="130" height="130"></canvas>
 
@@ -389,14 +382,9 @@
     const camState = {
       target: new THREE.Vector3(6, 0, 6),
       viewSize: 16,
-      liveAzimuth: 0,
-      azimuth: 0,
-      snapTarget: 0,
-      isSnapping: false,
     };
 
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
-    const FACING_NAMES = { 0: 'NE', 90: 'NW', 180: 'SW', 270: 'SE' };
     const ISO_ELEV = 35.264 * Math.PI / 180;
 
     function updateCamera() {
@@ -405,33 +393,17 @@
       camera.right  =  camState.viewSize * aspect;
       camera.top    =  camState.viewSize;
       camera.bottom = -camState.viewSize;
-      const az = camState.liveAzimuth * Math.PI / 180;
-      const r  = camState.viewSize * 2.5;
+      // Fixed NE isometric angle: azimuth=0 → sin(0)=0, cos(0)=1
+      const r = camState.viewSize * 2.5;
       camera.position.set(
-        camState.target.x + r * Math.cos(ISO_ELEV) * Math.sin(az),
+        camState.target.x,
         camState.target.y + r * Math.sin(ISO_ELEV),
-        camState.target.z + r * Math.cos(ISO_ELEV) * Math.cos(az)
+        camState.target.z + r * Math.cos(ISO_ELEV)
       );
       camera.lookAt(camState.target);
       camera.updateProjectionMatrix();
     }
     updateCamera();
-
-    function snapAzimuth() {
-      const n = ((camState.liveAzimuth % 360) + 360) % 360;
-      let best = 0, bestDist = Infinity;
-      for (const c of [0, 90, 180, 270, 360]) {
-        const d = Math.abs(n - c);
-        if (d < bestDist) { bestDist = d; best = c % 360; }
-      }
-      camState.snapTarget = best;
-      camState.isSnapping = true;
-    }
-
-    function updateCompass(az) {
-      const snap = ((Math.round(az / 90) * 90) + 360) % 360;
-      document.getElementById('compass').textContent = `◆ ${FACING_NAMES[snap] || '—'}`;
-    }
 
     // ── Lights ────────────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0xffffff, 0.35));
@@ -610,71 +582,184 @@
     // ── Furniture ─────────────────────────────────────────────────────────────
     function addFurniture(group, type) {
       const P = [];
+      const matPillow = toonMat(0xf0f0ee);
+      const matLampShade = toonMat(0xddddcc);
+      const matMid = toonMat(0x888888);
+      const matBook = toonMat(0x998877);
+
       if (type === 'bedroom') {
-        P.push({ geo: new THREE.BoxGeometry(1.4, 0.25, 0.9),  mat: matFurn, x: 0.5,  y: 0.125, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.4, 0.1,  0.25), mat: matDark, x: 0.5,  y: 0.26,  z: -0.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2,  0.3),  mat: matDark, x: -1.1, y: 0.6,   z: -1.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.5, 1.2,  0.3),  mat: matDark, x: -0.55,y: 0.6,   z: -1.2 });
+        // Bed against negZ wall
+        P.push({ geo: new THREE.BoxGeometry(1.75, 0.26, 1.0), mat: matFurn, x: -0.2, y: 0.13, z: -1.15 });
+        // Headboard
+        P.push({ geo: new THREE.BoxGeometry(1.75, 0.72, 0.09), mat: matDark, x: -0.2, y: 0.5, z: -1.63 });
+        // Pillow
+        P.push({ geo: new THREE.BoxGeometry(0.65, 0.1, 0.42), mat: matPillow, x: -0.55, y: 0.32, z: -1.25 });
+        // Wardrobe against negX wall (right of doorway — avoids z=0 doorway center)
+        P.push({ geo: new THREE.BoxGeometry(0.28, 1.62, 1.1), mat: matDark, x: -1.82, y: 0.81, z: -0.65 });
+        // Wardrobe door panels
+        P.push({ geo: new THREE.BoxGeometry(0.04, 1.35, 0.48), mat: matFurn, x: -1.68, y: 0.8, z: -0.44 });
+        P.push({ geo: new THREE.BoxGeometry(0.04, 1.35, 0.48), mat: matFurn, x: -1.68, y: 0.8, z: -0.92 });
+        // Nightstand
+        P.push({ geo: new THREE.BoxGeometry(0.44, 0.5, 0.4), mat: matFurn, x: 0.85, y: 0.25, z: -0.88 });
+        // Lamp on nightstand
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.05, 0.32, 6), mat: matDark, x: 0.85, y: 0.66, z: -0.88 });
+        P.push({ geo: new THREE.ConeGeometry(0.15, 0.18, 8), mat: matLampShade, x: 0.85, y: 0.82, z: -0.88 });
+
       } else if (type === 'library') {
+        // 3 tall bookshelves along negZ wall (avoid doorway at x=0, ±0.6)
         for (let i = 0; i < 3; i++) {
-          P.push({ geo: new THREE.BoxGeometry(0.7, 1.6, 0.25), mat: matDark, x: -1.0 + i * 0.75, y: 0.8,  z: -1.4 });
-          for (let j = 0; j < 3; j++)
-            P.push({ geo: new THREE.BoxGeometry(0.7, 0.05, 0.2), mat: matFurn, x: -1.0 + i * 0.75, y: 0.4 + j * 0.5, z: -1.38 });
+          P.push({ geo: new THREE.BoxGeometry(0.65, 1.85, 0.26), mat: matDark, x: -1.15 + i * 0.72, y: 0.925, z: -1.77 });
+          // Book rows
+          for (let j = 0; j < 4; j++)
+            P.push({ geo: new THREE.BoxGeometry(0.6, 0.3, 0.16), mat: matBook, x: -1.15 + i * 0.72, y: 0.2 + j * 0.44, z: -1.66 });
         }
-        P.push({ geo: new THREE.BoxGeometry(0.7, 0.07, 0.5),  mat: matFurn, x: 0.8, y: 0.5, z: 0.4 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 0.5, y: 0.25, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.5, 0.07), mat: matFurn, x: 1.1, y: 0.25, z: 0.2 });
+        // Reading desk
+        P.push({ geo: new THREE.BoxGeometry(1.1, 0.06, 0.62), mat: matFurn, x: 0.9, y: 0.68, z: -0.44 });
+        // Desk legs (4)
+        for (const [lx, lz] of [[-0.3,-0.2],[0.5,-0.2],[-0.3,-0.65],[0.5,-0.65]])
+          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.68, 6), mat: matDark, x: 0.9 + lx * 0.5, y: 0.34, z: lz });
+        // Chair
+        P.push({ geo: new THREE.BoxGeometry(0.44, 0.05, 0.4), mat: matDark, x: 0.9, y: 0.42, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.44, 0.48, 0.06), mat: matDark, x: 0.9, y: 0.66, z: -0.17 });
+        // Floor lamp
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.06, 1.65, 6), mat: matDark, x: -1.55, y: 0.825, z: 0.85 });
+        P.push({ geo: new THREE.ConeGeometry(0.22, 0.28, 8), mat: matLampShade, x: -1.55, y: 1.78, z: 0.85 });
+
       } else if (type === 'laundry') {
-        P.push({ geo: new THREE.CylinderGeometry(0.33, 0.33, 0.8, 12), mat: matFurn, x: -0.8, y: 0.4, z: -0.8 });
-        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.18, 0.44, 10), mat: matDark, x: 0.6, y: 0.22, z: 0.4 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), mat: matDark, x: -0.5, y: 0.8, z: 0.8 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), mat: matDark, x: 0.5,  y: 0.8, z: 0.8 });
+        // Washing machine (front-loader box)
+        P.push({ geo: new THREE.BoxGeometry(0.78, 0.82, 0.74), mat: matFurn, x: -1.42, y: 0.41, z: -1.42 });
+        P.push({ geo: new THREE.CylinderGeometry(0.27, 0.27, 0.04, 16), mat: matDark, x: -1.42, y: 0.83, z: -1.12 });
+        // Dryer stacked on top
+        P.push({ geo: new THREE.BoxGeometry(0.78, 0.82, 0.74), mat: matMid, x: -1.42, y: 1.23, z: -1.42 });
+        P.push({ geo: new THREE.CylinderGeometry(0.25, 0.25, 0.04, 16), mat: matDark, x: -1.42, y: 1.65, z: -1.12 });
+        // Laundry basket
+        P.push({ geo: new THREE.CylinderGeometry(0.27, 0.23, 0.52, 10), mat: matMid, x: 0.8, y: 0.26, z: -0.6 });
+        // Clothesline poles
+        P.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, 2.1, 6), mat: matDark, x: -0.3, y: 1.05, z: 1.0 });
+        P.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, 2.1, 6), mat: matDark, x: 1.0, y: 1.05, z: 1.0 });
+        P.push({ geo: new THREE.BoxGeometry(1.35, 0.022, 0.022), mat: matDark, x: 0.35, y: 2.07, z: 1.0 });
+
       } else if (type === 'kitchen') {
-        P.push({ geo: new THREE.BoxGeometry(2.0, 0.65, 0.4), mat: matFurn, x: 0,    y: 0.325, z: -1.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.05, 0.4), mat: matDark, x: -0.5, y: 0.68,  z: -1.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.35),mat: toonMat(0x888888), x: 0.6, y: 0.68, z: -1.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.45, 1.4, 0.4), mat: matFurn, x: -1.3, y: 0.7,  z: -1.3 });
+        // Counter along negZ wall (left portion — right of doorway)
+        P.push({ geo: new THREE.BoxGeometry(1.1, 0.72, 0.44), mat: matFurn, x: 0.65, y: 0.36, z: -1.74 });
+        // Counter left side
+        P.push({ geo: new THREE.BoxGeometry(0.8, 0.72, 0.44), mat: matFurn, x: -1.5, y: 0.36, z: -1.74 });
+        // Counter top surface tint
+        P.push({ geo: new THREE.BoxGeometry(1.1, 0.04, 0.46), mat: matDark, x: 0.65, y: 0.74, z: -1.74 });
+        // Stove circles on right counter top
+        P.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.03, 12), mat: matDark, x: 0.45, y: 0.77, z: -1.65 });
+        P.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.03, 12), mat: matDark, x: 0.85, y: 0.77, z: -1.65 });
+        // Tall cabinet/fridge at negX-negZ corner
+        P.push({ geo: new THREE.BoxGeometry(0.42, 1.78, 0.44), mat: matMid, x: -1.75, y: 0.89, z: -1.72 });
+        // Upper wall cabinet
+        P.push({ geo: new THREE.BoxGeometry(1.55, 0.52, 0.32), mat: matFurn, x: 0.6, y: 1.52, z: -1.84 });
+        // Small kitchen stool
+        P.push({ geo: new THREE.CylinderGeometry(0.14, 0.14, 0.04, 8), mat: matDark, x: 0.7, y: 0.44, z: 0.8 });
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.44, 6), mat: matDark, x: 0.7, y: 0.22, z: 0.8 });
+
       } else if (type === 'playroom') {
-        P.push({ geo: new THREE.BoxGeometry(0.7, 0.06, 0.5),  mat: matFurn, x: 0,    y: 0.4,  z: 0 });
-        P.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), mat: matFurn, x: -0.28, y: 0.2, z: -0.18 });
-        P.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 0.4, 6), mat: matFurn, x:  0.28, y: 0.2, z: -0.18 });
-        P.push({ geo: new THREE.BoxGeometry(0.6, 0.4, 0.4),   mat: matDark, x: -0.9, y: 0.2,  z: -0.9 });
-        P.push({ geo: new THREE.SphereGeometry(0.18, 8, 8),   mat: toonMat(0xaaaaaa), x: 0.7, y: 0.18, z: 0.6 });
+        // Toy chest against negX wall (below doorway at z=0)
+        P.push({ geo: new THREE.BoxGeometry(0.28, 0.55, 1.1), mat: matDark, x: -1.82, y: 0.275, z: -0.65 });
+        P.push({ geo: new THREE.BoxGeometry(0.3, 0.07, 1.14), mat: matFurn, x: -1.82, y: 0.585, z: -0.65 });
+        // Toy shelf along negZ wall
+        P.push({ geo: new THREE.BoxGeometry(1.6, 1.1, 0.24), mat: matDark, x: -0.15, y: 0.55, z: -1.78 });
+        for (let j = 0; j < 2; j++)
+          P.push({ geo: new THREE.BoxGeometry(1.55, 0.05, 0.18), mat: matFurn, x: -0.15, y: 0.28 + j * 0.5, z: -1.67 });
+        // Play table center
+        P.push({ geo: new THREE.BoxGeometry(0.82, 0.05, 0.6), mat: matFurn, x: 0.55, y: 0.38, z: 0.0 });
+        for (const [lx, lz] of [[-0.35,-0.25],[0.35,-0.25],[-0.35,0.25],[0.35,0.25]])
+          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), mat: matDark, x: 0.55 + lx, y: 0.19, z: lz });
+        // Ball
+        P.push({ geo: new THREE.SphereGeometry(0.17, 8, 8), mat: matMid, x: 0.9, y: 0.17, z: 0.85 });
+        // Building blocks (3 small boxes)
+        P.push({ geo: new THREE.BoxGeometry(0.18, 0.18, 0.18), mat: matDark, x: -0.3, y: 0.09, z: 0.7 });
+        P.push({ geo: new THREE.BoxGeometry(0.18, 0.18, 0.18), mat: matFurn, x: -0.14, y: 0.27, z: 0.7 });
+
       } else if (type === 'living') {
-        P.push({ geo: new THREE.BoxGeometry(1.5, 0.3,  0.55), mat: matDark, x: 0, y: 0.15, z: 0.5 });
-        P.push({ geo: new THREE.BoxGeometry(1.5, 0.5,  0.15), mat: matDark, x: 0, y: 0.4,  z: 0.78 });
-        P.push({ geo: new THREE.BoxGeometry(0.7, 0.07, 0.45), mat: matFurn, x: 0, y: 0.3,  z: -0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.0, 0.07, 0.3),  mat: matDark, x: 0, y: 0.6,  z: -1.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.5,  0.07), mat: matFurn, x: 0, y: 0.9,  z: -1.3 });
+        // Sofa against negZ wall (3-seat)
+        P.push({ geo: new THREE.BoxGeometry(1.9, 0.32, 0.64), mat: matDark, x: 0.0, y: 0.16, z: -1.3 });
+        P.push({ geo: new THREE.BoxGeometry(1.9, 0.52, 0.12), mat: matDark, x: 0.0, y: 0.48, z: -1.58 });
+        // Sofa armrests
+        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -1.0,  y: 0.3, z: -1.27 });
+        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x:  1.0,  y: 0.3, z: -1.27 });
+        // Coffee table
+        P.push({ geo: new THREE.BoxGeometry(0.85, 0.05, 0.5), mat: matFurn, x: 0.0, y: 0.38, z: -0.35 });
+        for (const [lx, lz] of [[-0.36,-0.2],[0.36,-0.2],[-0.36,0.18],[0.36,0.18]])
+          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), mat: matDark, x: lx, y: 0.19, z: lz });
+        // TV unit against negX wall
+        P.push({ geo: new THREE.BoxGeometry(0.22, 0.68, 1.3), mat: matDark, x: -1.82, y: 0.34, z: -0.45 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.48, 0.9), mat: matMid, x: -1.72, y: 0.5, z: -0.45 });
+
       } else if (type === 'bathroom') {
-        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.25, 0.35, 10), mat: matFurn, x: -0.9, y: 0.175, z: -0.9 });
-        P.push({ geo: new THREE.BoxGeometry(0.45, 0.08, 0.32), mat: matFurn, x: -0.9, y: 0.38, z: -0.9 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.05, 0.3),   mat: matFurn, x: 0.8,  y: 0.65, z: -1.1 });
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.65, 0.1),   mat: matDark, x: 0.8,  y: 0.325,z: -1.3 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), mat: matFurn, x: 0.9, y: 0.75, z: 0.9 });
+        // Bathtub against negX wall
+        P.push({ geo: new THREE.BoxGeometry(0.28, 0.42, 1.3), mat: matFurn, x: -1.79, y: 0.21, z: -0.55 });
+        P.push({ geo: new THREE.BoxGeometry(0.2, 0.3, 1.18), mat: toonMat(0xe8e8e8), x: -1.76, y: 0.32, z: -0.55 });
+        // Toilet against negZ wall (off-center)
+        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.25, 0.36, 10), mat: matFurn, x: 0.9, y: 0.18, z: -1.6 });
+        P.push({ geo: new THREE.BoxGeometry(0.46, 0.08, 0.33), mat: matFurn, x: 0.9, y: 0.4, z: -1.6 });
+        P.push({ geo: new THREE.BoxGeometry(0.42, 0.1, 0.14), mat: matFurn, x: 0.9, y: 0.44, z: -1.77 });
+        // Sink / vanity against negZ left side
+        P.push({ geo: new THREE.BoxGeometry(0.52, 0.62, 0.38), mat: matFurn, x: -0.6, y: 0.31, z: -1.74 });
+        P.push({ geo: new THREE.BoxGeometry(0.46, 0.06, 0.32), mat: toonMat(0xe8e8e8), x: -0.6, y: 0.65, z: -1.71 });
+        // Towel bar on negX wall
+        P.push({ geo: new THREE.BoxGeometry(0.022, 0.022, 0.65), mat: matDark, x: -1.87, y: 1.2, z: 0.3 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.06), mat: matDark, x: -1.87, y: 1.2, z: -0.02 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.06), mat: matDark, x: -1.87, y: 1.2, z: 0.62 });
+
       } else if (type === 'backyard') {
-        P.push({ geo: new THREE.CylinderGeometry(0.12, 0.15, 1.0, 8), mat: matDark, x: -0.8, y: 0.5, z: -0.8 });
-        P.push({ geo: new THREE.SphereGeometry(0.44, 8, 8), mat: toonMat(0x888888), x: -0.8, y: 1.2, z: -0.8 });
-        P.push({ geo: new THREE.BoxGeometry(0.9, 0.07, 0.25), mat: matFurn, x: 0.6,  y: 0.4, z: 0.4 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.25, y: 0.2, z: 0.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.07, 0.4, 0.07), mat: matFurn, x: 0.95, y: 0.2, z: 0.3 });
+        // Tree trunk at negX-negZ corner
+        P.push({ geo: new THREE.CylinderGeometry(0.12, 0.16, 1.1, 8), mat: matDark, x: -1.45, y: 0.55, z: -1.45 });
+        // Tree foliage (layered spheres)
+        P.push({ geo: new THREE.SphereGeometry(0.46, 8, 8), mat: matMid, x: -1.45, y: 1.38, z: -1.45 });
+        P.push({ geo: new THREE.SphereGeometry(0.32, 8, 8), mat: matFurn, x: -1.2, y: 1.65, z: -1.2 });
+        // Garden bench along negZ
+        P.push({ geo: new THREE.BoxGeometry(1.1, 0.06, 0.3), mat: matFurn, x: 0.4, y: 0.42, z: -1.65 });
+        P.push({ geo: new THREE.BoxGeometry(1.1, 0.45, 0.06), mat: matDark, x: 0.4, y: 0.55, z: -1.78 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.3), mat: matDark, x: -0.1, y: 0.21, z: -1.65 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.3), mat: matDark, x:  0.9, y: 0.21, z: -1.65 });
+        // Plant pots
+        P.push({ geo: new THREE.CylinderGeometry(0.14, 0.1, 0.28, 8), mat: matDark, x: -0.5, y: 0.14, z: -1.65 });
+        P.push({ geo: new THREE.SphereGeometry(0.15, 6, 6), mat: matMid, x: -0.5, y: 0.37, z: -1.65 });
+
       } else if (type === 'storage') {
-        for (let i = 0; i < 2; i++) {
-          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -0.9 + i * 1.6, y: 0.7, z: -1.3 });
-          P.push({ geo: new THREE.BoxGeometry(0.07, 1.4, 0.07), mat: matDark, x: -0.9 + i * 1.6, y: 0.7, z: -0.95 });
-          for (let j = 0; j < 3; j++)
-            P.push({ geo: new THREE.BoxGeometry(1.6, 0.05, 0.38), mat: matFurn, x: -0.1 + i * 0.8, y: 0.3 + j * 0.45, z: -1.1 });
-        }
-        P.push({ geo: new THREE.BoxGeometry(0.4, 0.35, 0.35), mat: toonMat(0x777777), x: 0.5, y: 0.175, z: 0.5 });
+        // Heavy shelving unit 1 (left)
+        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 0.06, z: -1.62 });
+        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 0.54, z: -1.62 });
+        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 1.02, z: -1.62 });
+        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 1.5, z: -1.62 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 1.55, 0.38), mat: matDark, x: -1.68, y: 0.8, z: -1.62 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 1.55, 0.38), mat: matDark, x: -0.14, y: 0.8, z: -1.62 });
+        // Boxes on shelves
+        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matFurn, x: -1.4, y: 0.275, z: -1.6 });
+        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matMid, x: -1.0, y: 0.275, z: -1.6 });
+        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matFurn, x: -0.62, y: 0.275, z: -1.6 });
+        // Barrel
+        P.push({ geo: new THREE.CylinderGeometry(0.2, 0.18, 0.55, 10), mat: matDark, x: 1.1, y: 0.275, z: -1.5 });
+        // Tall ladder against negX wall
+        P.push({ geo: new THREE.BoxGeometry(0.06, 1.8, 0.06), mat: matFurn, x: -1.72, y: 0.9, z: 0.2 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 1.8, 0.06), mat: matFurn, x: -1.72, y: 0.9, z: 0.55 });
+        for (let j = 0; j < 4; j++)
+          P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.38), mat: matFurn, x: -1.72, y: 0.25 + j * 0.45, z: 0.37 });
+
       } else if (type === 'reading') {
-        P.push({ geo: new THREE.BoxGeometry(0.75, 0.3,  0.65), mat: matDark, x: -0.6, y: 0.15, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.75, 0.55, 0.12), mat: matDark, x: -0.6, y: 0.5,  z: 0.52 });
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.97,y: 0.37, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -0.22,y: 0.37, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(1.0,  1.4,  0.25), mat: matDark, x:  0.9, y: 0.7,  z: -1.3 });
-        P.push({ geo: new THREE.CylinderGeometry(0.02, 0.04, 1.4, 6), mat: matFurn, x: -0.1, y: 0.7, z: -0.3 });
-        P.push({ geo: new THREE.ConeGeometry(0.18, 0.25, 8), mat: matFurn, x: -0.1, y: 1.45, z: -0.3 });
+        // Full bookcase along negZ wall
+        P.push({ geo: new THREE.BoxGeometry(2.4, 1.9, 0.26), mat: matDark, x: 0.05, y: 0.95, z: -1.77 });
+        for (let j = 0; j < 4; j++) {
+          P.push({ geo: new THREE.BoxGeometry(2.3, 0.28, 0.16), mat: matBook, x: 0.05, y: 0.18 + j * 0.44, z: -1.66 });
+        }
+        // Armchair against negX wall
+        P.push({ geo: new THREE.BoxGeometry(0.28, 0.36, 0.7), mat: matDark, x: -1.79, y: 0.18, z: 0.45 });
+        P.push({ geo: new THREE.BoxGeometry(0.26, 0.55, 0.06), mat: matDark, x: -1.79, y: 0.44, z: 0.78 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.7), mat: matDark, x: -1.79, y: 0.35, z: 0.09 });
+        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.7), mat: matDark, x: -1.79, y: 0.35, z: 0.81 });
+        // Floor lamp beside chair
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.06, 1.65, 6), mat: matDark, x: -1.2, y: 0.825, z: 1.3 });
+        P.push({ geo: new THREE.ConeGeometry(0.22, 0.27, 8), mat: matLampShade, x: -1.2, y: 1.775, z: 1.3 });
+        // Small side table
+        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.22, 0.04, 12), mat: matFurn, x: -1.72, y: 0.42, z: 1.25 });
+        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.42, 6), mat: matDark, x: -1.72, y: 0.21, z: 1.25 });
       }
+
       for (const p of P) {
         const m = new THREE.Mesh(p.geo, p.mat);
         m.position.set(p.x, p.y, p.z);
@@ -823,30 +908,6 @@
 
     for (const r of ROOMS) buildRoom(r);
 
-    // ── Wall visibility ───────────────────────────────────────────────────────
-    function updateWallsForAzimuth(az) {
-      const snap = ((Math.round(az / 90) * 90) + 360) % 360;
-      const showNegX = (snap === 0 || snap === 270);
-      const showPosX = (snap === 90 || snap === 180);
-      const showNegZ = (snap === 0 || snap === 90);
-      const showPosZ = (snap === 180 || snap === 270);
-
-      for (const slug of Object.keys(roomGroups)) {
-        const { walls, ceilings } = roomGroups[slug].userData;
-        if (!walls) continue;
-        if (walls.negX) walls.negX.visible = showNegX;
-        if (walls.posX) walls.posX.visible = showPosX;
-        if (walls.negZ) walls.negZ.visible = showNegZ;
-        if (walls.posZ) walls.posZ.visible = showPosZ;
-        if (ceilings) {
-          if (ceilings.negX) ceilings.negX.visible = showNegX;
-          if (ceilings.posX) ceilings.posX.visible = showPosX;
-          if (ceilings.negZ) ceilings.negZ.visible = showNegZ;
-          if (ceilings.posZ) ceilings.posZ.visible = showPosZ;
-        }
-      }
-    }
-
     // ── Hover overlay ─────────────────────────────────────────────────────────
     const hoverOverlay = new THREE.Mesh(
       new THREE.PlaneGeometry(ROOM_W - 0.3, ROOM_D - 0.3),
@@ -859,57 +920,100 @@
     scene.add(hoverOverlay);
     let hoveredRoomSlug = null;
 
-    // ── Pocong ghost sprite ───────────────────────────────────────────────────
-    let pocongSprite = null;
-    const texLoader = new THREE.TextureLoader();
-    texLoader.load('/assets/pocong.jpg', tex => {
-      pocongSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-      pocongSprite.scale.set(1.1, 1.6, 1);
-      pocongSprite.position.set(4, 1.1, 12);
-      scene.add(pocongSprite);
-    });
+    // ── 3D player figure ─────────────────────────────────────────────────────
+    function makePlayerFigure(initial) {
+      const g = new THREE.Group();
+      const bodyMat  = new THREE.MeshToonMaterial({ color: 0x2a2a2a, gradientMap });
+      const headMat  = new THREE.MeshToonMaterial({ color: 0xc89060, gradientMap });
+      const hatMat   = new THREE.MeshToonMaterial({ color: 0x111111, gradientMap });
+      const tieMat   = new THREE.MeshToonMaterial({ color: 0xcc1111, gradientMap });
 
-    // ── Player tokens ─────────────────────────────────────────────────────────
-    const playerSprites = [];
-    const TOKEN_COLORS  = ['#555','#444','#666','#333','#777','#222','#888'];
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.5, 8), bodyMat);
+      body.position.y = 0.25; body.castShadow = true; g.add(body);
 
-    function makeTokenSprite(initial, color) {
-      const c = document.createElement('canvas');
-      c.width = 64; c.height = 64;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = color || '#555';
-      ctx.beginPath(); ctx.arc(32, 32, 28, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 26px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(initial.toUpperCase(), 32, 33);
-      const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(0.4, 0.4, 1);
-      return sprite;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), headMat);
+      head.position.y = 0.59; head.castShadow = true; g.add(head);
+
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.03, 12), hatMat);
+      brim.position.y = 0.7; g.add(brim);
+
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.18, 12), hatMat);
+      crown.position.y = 0.8; g.add(crown);
+
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.04), tieMat);
+      tie.position.set(0, 0.36, 0.12); g.add(tie);
+
+      // Initial letter sprite floating above hat
+      const lc = document.createElement('canvas');
+      lc.width = 64; lc.height = 64;
+      const lctx = lc.getContext('2d');
+      lctx.fillStyle = 'rgba(0,0,0,0.75)';
+      lctx.beginPath(); lctx.arc(32, 32, 26, 0, Math.PI * 2); lctx.fill();
+      lctx.strokeStyle = '#aaa'; lctx.lineWidth = 2; lctx.stroke();
+      lctx.fillStyle = '#fff'; lctx.font = 'bold 26px sans-serif';
+      lctx.textAlign = 'center'; lctx.textBaseline = 'middle';
+      lctx.fillText((initial || '?').toUpperCase().charAt(0), 32, 33);
+      const lblSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(lc), depthTest: false
+      }));
+      lblSprite.scale.set(0.28, 0.28, 1);
+      lblSprite.position.y = 1.1;
+      g.add(lblSprite);
+
+      return g;
     }
 
+    // ── 3D Pocong figure ──────────────────────────────────────────────────────
+    function makePocongFigure() {
+      const g = new THREE.Group();
+      const clothMat = new THREE.MeshToonMaterial({ color: 0xf0f0ec, gradientMap });
+      const knotMat  = new THREE.MeshToonMaterial({ color: 0xe4e4e0, gradientMap });
+      const eyeMat   = new THREE.MeshBasicMaterial({ color: 0x111111 });
+
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.24, 0.78, 10), clothMat);
+      body.position.y = 0.39; body.castShadow = true; g.add(body);
+
+      const hd = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), clothMat);
+      hd.position.y = 0.95; hd.castShadow = true; g.add(hd);
+
+      const knot = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 8), knotMat);
+      knot.position.y = 1.3; g.add(knot);
+
+      const eyeGeo = new THREE.SphereGeometry(0.045, 6, 6);
+      const eL = new THREE.Mesh(eyeGeo, eyeMat); eL.position.set(-0.08, 0.97, 0.2); g.add(eL);
+      const eR = new THREE.Mesh(eyeGeo, eyeMat); eR.position.set( 0.08, 0.97, 0.2); g.add(eR);
+
+      return g;
+    }
+
+    // ── Player figures ────────────────────────────────────────────────────────
+    const playerFigures = [];
+
     function placePlayerTokens(players) {
-      for (const s of playerSprites) scene.remove(s);
-      playerSprites.length = 0;
+      for (const fig of playerFigures) scene.remove(fig);
+      playerFigures.length = 0;
       const offsets = {};
       for (let i = 0; i < Math.min(players.length, 50); i++) {
         const p = players[i];
         const center = roomCenters[p.room_slug];
         if (!center) continue;
         offsets[p.room_slug] = (offsets[p.room_slug] || 0) + 1;
-        const n   = offsets[p.room_slug];
-        const ang = n * 2.1;
-        const r   = Math.min(0.3 + n * 0.12, 1.2);
-        const sprite = makeTokenSprite(p.username[0], TOKEN_COLORS[i % TOKEN_COLORS.length]);
-        sprite.position.set(center.x + r * Math.cos(ang), 0.55, center.z + r * Math.sin(ang));
-        sprite.userData.slug = p.room_slug;
-        sprite.userData.username = p.username;
-        scene.add(sprite);
-        playerSprites.push(sprite);
+        const n = offsets[p.room_slug];
+        const ang = (n - 1) * 2.41;
+        const r = Math.min(0.22 + (n - 1) * 0.24, 1.2);
+        const fig = makePlayerFigure(p.username[0]);
+        fig.position.set(center.x + r * Math.cos(ang), 0, center.z + r * Math.sin(ang));
+        fig.userData.slug = p.room_slug;
+        fig.userData.username = p.username;
+        scene.add(fig);
+        playerFigures.push(fig);
       }
     }
+
+    // ── Pocong 3D figure in scene ─────────────────────────────────────────────
+    const pocongGroup = makePocongFigure();
+    pocongGroup.position.set(4, 0, 12);
+    scene.add(pocongGroup);
 
     // ── Post-processing ───────────────────────────────────────────────────────
     const composer = new EffectComposer(renderer);
@@ -1051,15 +1155,21 @@
       const overlay = roomOverlays[round.winner_room];
       if (overlay) overlay.material.opacity = 0.28;
 
-      // Tint tokens
-      for (const s of playerSprites) {
-        s.material.color.set(s.userData.slug === round.winner_room ? 0x444444 : 0xddddaa);
+      // Tint 3D player figures
+      for (const fig of playerFigures) {
+        const tint = fig.userData.slug === round.winner_room ? 0x444444 : 0xddddaa;
+        fig.traverse(child => {
+          if (child.isMesh && child.material && child.material.color) {
+            child.material = child.material.clone();
+            child.material.color.set(tint);
+          }
+        });
       }
 
-      // Move ghost to winner room
-      if (pocongSprite && roomCenters[round.winner_room]) {
+      // Move Pocong to winner room
+      if (roomCenters[round.winner_room]) {
         const c = roomCenters[round.winner_room];
-        pocongSprite.position.set(c.x, 1.1, c.z);
+        pocongGroup.position.set(c.x, 0, c.z);
       }
 
       const banner  = document.getElementById('win-banner');
@@ -1092,7 +1202,6 @@
     function clearWinState() {
       for (const slug of Object.keys(roomOverlays)) roomOverlays[slug].material.opacity = 0;
       for (const slug of Object.keys(roomBloods))   roomBloods[slug].material.opacity   = 0;
-      for (const s of playerSprites) s.material.color.set(0xffffff);
       document.getElementById('win-banner').style.display = 'none';
       document.getElementById('win-calc').style.display   = 'none';
       document.getElementById('tkn-winnings').style.display = 'none';
@@ -1128,10 +1237,10 @@
     pollState();
     setInterval(pollState, 3000);
 
-    // ── Camera input ──────────────────────────────────────────────────────────
-    const raycaster   = new THREE.Raycaster();
-    const mouseNDC    = new THREE.Vector2();
-    const xzPlane     = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    // ── Input ─────────────────────────────────────────────────────────────────
+    const raycaster = new THREE.Raycaster();
+    const mouseNDC  = new THREE.Vector2();
+    const xzPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
     function getPlanePoint(sx, sy) {
       mouseNDC.x =  (sx / window.innerWidth)  * 2 - 1;
@@ -1141,91 +1250,45 @@
       return raycaster.ray.intersectPlane(xzPlane, pt) ? pt : null;
     }
 
-    let panActive = false, rotActive = false, didDrag = false;
-    let panStartX = 0, panStartY = 0;
-    let panWorldStart = null;
-    const panTargetStart = new THREE.Vector3();
-    let rotStartX = 0, rotStartAz = 0;
-    const CLAMP_MIN = -3, CLAMP_MAX = 15;
-
-    function setCursor(c) { canvas.style.cursor = c; }
-
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    let clickStart = null, didDrag = false;
 
     canvas.addEventListener('mousedown', e => {
-      if (e.button === 0) {
-        panActive = true; didDrag = false;
-        panStartX = e.clientX; panStartY = e.clientY;
-        panWorldStart = getPlanePoint(e.clientX, e.clientY);
-        panTargetStart.copy(camState.target);
-        setCursor('grabbing');
-      } else if (e.button === 2) {
-        rotActive = true;
-        rotStartX = e.clientX;
-        rotStartAz = camState.liveAzimuth;
-        camState.isSnapping = false;
-        setCursor('ew-resize');
-      }
+      if (e.button === 0) { clickStart = { x: e.clientX, y: e.clientY }; didDrag = false; }
     });
 
     window.addEventListener('mousemove', e => {
-      if (panActive) {
-        const dx = e.clientX - panStartX;
-        const dy = e.clientY - panStartY;
-        if (Math.hypot(dx, dy) > 4) didDrag = true;
-        if (didDrag && panWorldStart) {
-          const curr = getPlanePoint(e.clientX, e.clientY);
-          if (curr) {
-            camState.target.x = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.x + panWorldStart.x - curr.x));
-            camState.target.z = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, panTargetStart.z + panWorldStart.z - curr.z));
-            updateCamera();
-          }
-        }
-      }
-      if (rotActive) {
-        camState.liveAzimuth = rotStartAz + (e.clientX - rotStartX) * 0.35;
-        updateCamera();
-      }
+      if (clickStart && Math.hypot(e.clientX - clickStart.x, e.clientY - clickStart.y) > 4) didDrag = true;
 
-      // Hover detection
-      if (!panActive && !rotActive) {
-        const canBet = currentState.round?.status === 'active' && !currentState.bet;
-        if (canBet) {
-          const pt = getPlanePoint(e.clientX, e.clientY);
-          const hit = pt ? ROOMS.find(r => {
-            if (!r.slug) return false;
-            const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
-            return Math.abs(pt.x - cx) < ROOM_W / 2 - 0.05 && Math.abs(pt.z - cz) < ROOM_D / 2 - 0.05;
-          }) : null;
-          if (hit && hit.slug) {
-            hoveredRoomSlug = hit.slug;
-            const c = roomCenters[hit.slug];
-            hoverOverlay.position.set(c.x, 0.07, c.z);
-            hoverOverlay.visible = true;
-            setCursor('pointer');
-          } else {
-            hoveredRoomSlug = null;
-            hoverOverlay.visible = false;
-            setCursor('grab');
-          }
+      const canBet = currentState.round?.status === 'active' && !currentState.bet;
+      if (canBet) {
+        const pt = getPlanePoint(e.clientX, e.clientY);
+        const hit = pt ? ROOMS.find(r => {
+          if (!r.slug) return false;
+          const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
+          return Math.abs(pt.x - cx) < ROOM_W / 2 - 0.05 && Math.abs(pt.z - cz) < ROOM_D / 2 - 0.05;
+        }) : null;
+        if (hit && hit.slug) {
+          hoveredRoomSlug = hit.slug;
+          const c = roomCenters[hit.slug];
+          hoverOverlay.position.set(c.x, 0.07, c.z);
+          hoverOverlay.visible = true;
+          canvas.style.cursor = 'pointer';
         } else {
           hoveredRoomSlug = null;
           hoverOverlay.visible = false;
-          setCursor('grab');
+          canvas.style.cursor = 'default';
         }
+      } else {
+        hoveredRoomSlug = null;
+        hoverOverlay.visible = false;
+        canvas.style.cursor = 'default';
       }
     });
 
     window.addEventListener('mouseup', e => {
       if (e.button === 0) {
         if (!didDrag) handleClick(e);
-        panActive = false; panWorldStart = null; didDrag = false;
-        setCursor(hoveredRoomSlug ? 'pointer' : 'grab');
-      }
-      if (e.button === 2) {
-        if (rotActive) snapAzimuth();
-        rotActive = false;
-        setCursor('grab');
+        clickStart = null; didDrag = false;
       }
     });
 
@@ -1235,59 +1298,46 @@
       updateCamera();
     }, { passive: false });
 
-    // ── Touch ─────────────────────────────────────────────────────────────────
-    let touchPanStart = null;
-    const touchPanTargetStart = new THREE.Vector3();
-    let lastPinchDist = null, lastTouchAngle = null;
+    // ── Touch (pinch-zoom + tap) ───────────────────────────────────────────────
+    let lastPinchDist = null, touchTapStart = null;
 
     canvas.addEventListener('touchstart', e => {
       e.preventDefault();
       const ta = Array.from(e.touches);
       if (ta.length === 1) {
-        touchPanStart = getPlanePoint(ta[0].clientX, ta[0].clientY);
-        touchPanTargetStart.copy(camState.target);
-        lastPinchDist = null; lastTouchAngle = null;
+        touchTapStart = { x: ta[0].clientX, y: ta[0].clientY };
+        lastPinchDist = null;
       } else if (ta.length === 2) {
-        lastPinchDist  = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
-        lastTouchAngle = Math.atan2(ta[0].clientY - ta[1].clientY, ta[0].clientX - ta[1].clientX);
-        camState.isSnapping = false;
-        touchPanStart = null;
+        touchTapStart = null;
+        lastPinchDist = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
       }
     }, { passive: false });
 
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
       const ta = Array.from(e.touches);
-      if (ta.length === 1 && touchPanStart) {
-        const curr = getPlanePoint(ta[0].clientX, ta[0].clientY);
-        if (curr) {
-          camState.target.x = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, touchPanTargetStart.x + touchPanStart.x - curr.x));
-          camState.target.z = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, touchPanTargetStart.z + touchPanStart.z - curr.z));
-          updateCamera();
-        }
-      } else if (ta.length === 2) {
+      if (ta.length === 2) {
+        touchTapStart = null;
         const dist = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
         if (lastPinchDist && dist > 0) {
           camState.viewSize = Math.max(10, Math.min(40, camState.viewSize * (lastPinchDist / dist)));
           updateCamera();
         }
         lastPinchDist = dist;
-        const angle = Math.atan2(ta[0].clientY - ta[1].clientY, ta[0].clientX - ta[1].clientX);
-        if (lastTouchAngle !== null) {
-          camState.liveAzimuth += (angle - lastTouchAngle) * (180 / Math.PI) * 0.5;
-          updateCamera();
-        }
-        lastTouchAngle = angle;
+      } else if (ta.length === 1 && touchTapStart) {
+        if (Math.hypot(ta[0].clientX - touchTapStart.x, ta[0].clientY - touchTapStart.y) > 10)
+          touchTapStart = null;
       }
     }, { passive: false });
 
     canvas.addEventListener('touchend', e => {
       e.preventDefault();
-      if (Array.from(e.touches).length < 2) {
-        snapAzimuth();
-        lastPinchDist = null; lastTouchAngle = null;
+      if (Array.from(e.touches).length < 2) lastPinchDist = null;
+      if (Array.from(e.touches).length === 0 && touchTapStart) {
+        const t = e.changedTouches[0];
+        handleClick({ clientX: t.clientX, clientY: t.clientY });
+        touchTapStart = null;
       }
-      if (Array.from(e.touches).length === 0) touchPanStart = null;
     }, { passive: false });
 
     // ── Room click ────────────────────────────────────────────────────────────
@@ -1345,34 +1395,15 @@
       requestAnimationFrame(animate);
       t += 0.016;
 
-      if (camState.isSnapping) {
-        let curr = ((camState.liveAzimuth % 360) + 360) % 360;
-        let diff = camState.snapTarget - curr;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        if (Math.abs(diff) < 0.3) {
-          camState.liveAzimuth = camState.snapTarget;
-          camState.isSnapping  = false;
-          camState.azimuth     = camState.snapTarget;
-          updateWallsForAzimuth(camState.snapTarget);
-          updateCompass(camState.snapTarget);
-        } else {
-          camState.liveAzimuth = curr + diff * 0.14;
-        }
-        updateCamera();
-      }
-
-      if (pocongSprite && currentState.round?.status !== 'completed') {
+      if (currentState.round?.status !== 'completed') {
         const a = corridorPath[pathIdx];
         const b = corridorPath[(pathIdx + 1) % corridorPath.length];
         pathProgress += 0.003;
         if (pathProgress >= 1) { pathProgress = 0; pathIdx = (pathIdx + 1) % corridorPath.length; }
-        pocongSprite.position.x = a.x + (b.x - a.x) * pathProgress;
-        pocongSprite.position.z = a.z + (b.z - a.z) * pathProgress;
-        pocongSprite.position.y = 1.1 + Math.sin(t * 2) * 0.09;
-      } else if (pocongSprite) {
-        pocongSprite.position.y = 1.1 + Math.sin(t * 2) * 0.09;
+        pocongGroup.position.x = a.x + (b.x - a.x) * pathProgress;
+        pocongGroup.position.z = a.z + (b.z - a.z) * pathProgress;
       }
+      pocongGroup.position.y = Math.sin(t * 2) * 0.07;
 
       composer.render();
     }
