@@ -876,20 +876,22 @@
       // Red overlay (plain, for general win state)
       const overlay = new THREE.Mesh(
         new THREE.PlaneGeometry(ROOM_W - 0.18, ROOM_D - 0.18),
-        new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0, depthWrite: false })
+        new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0, depthWrite: false, depthTest: false })
       );
       overlay.rotation.x = -Math.PI / 2;
       overlay.position.y = 0.06;
+      overlay.renderOrder = 10;
       group.add(overlay);
       if (slug) roomOverlays[slug] = overlay;
 
       // Blood splatter overlay
       const blood = new THREE.Mesh(
         new THREE.PlaneGeometry(ROOM_W - 0.12, ROOM_D - 0.12),
-        new THREE.MeshBasicMaterial({ map: makeBloodSplatter(), transparent: true, opacity: 0, depthWrite: false })
+        new THREE.MeshBasicMaterial({ map: makeBloodSplatter(), transparent: true, opacity: 0, depthWrite: false, depthTest: false })
       );
       blood.rotation.x = -Math.PI / 2;
       blood.position.y = 0.065;
+      blood.renderOrder = 11;
       group.add(blood);
       if (slug) roomBloods[slug] = blood;
 
