@@ -1,3 +1,26 @@
 {
-  "secrets": []
+  "name": "Awas Ada Pocong",
+  "secrets": [],
+  "tests": [
+    {
+      "name": "Game loads with mansion",
+      "path": "/",
+      "expectSelector": ".mansion"
+    },
+    {
+      "name": "Room Bets board renders",
+      "path": "/",
+      "expectSelector": ".bet-board"
+    },
+    {
+      "name": "Wallet page renders",
+      "path": "/",
+      "expectSelector": ".wallet-page"
+    },
+    {
+      "name": "Win tableau renders",
+      "path": "/?demo=win",
+      "expectSelector": ".win-banner"
+    }
+  ]
 }
