@@ -74,7 +74,6 @@
     body { background: #050505; overflow-x: hidden; overflow-y: auto; }
 
     .world {
-      filter: grayscale(100%) contrast(1.12);
       position: relative;
       min-height: calc(100vh - 140px);
       margin-top: 140px;
@@ -90,119 +89,108 @@
       position: relative;
       width: 100%;
       height: auto;
-      perspective: 1000px;
       display: flex;
       justify-content: center;
-      align-items: center;
+      align-items: flex-start;
     }
 
-    .room-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      padding: 12px 18px;
-      max-width: 440px;
-      width: 100%;
-      box-sizing: border-box;
-      margin: 0;
-    }
-
-    @media (max-width: 768px) {
-      .room-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        padding: 10px 14px;
-        max-width: 360px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .room-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
-        padding: 10px 14px;
-        max-width: 280px;
-      }
-    }
-
-    .room {
+    /* Static hand-drawn mansion artwork, centered & responsive.
+       The hotspot overlay scales with it because both live inside
+       .mansion-stage, which keeps the artwork's 1376x768 aspect ratio. */
+    .mansion-stage {
       position: relative;
-      aspect-ratio: 1.25;
-      background: linear-gradient(135deg, #d8d8d8 0%, #b4b4b4 55%, #9a9a9a 100%);
-      border: 4px solid var(--ink);
-      border-radius: 6px;
-      cursor: pointer;
-      transition: transform 0.18s, box-shadow 0.18s;
-      overflow: hidden;
-      box-shadow: inset 0 0 0 2px #000, 4px 5px 0 #000;
-      filter: url(#inkRoughen);
+      width: 100%;
+      max-width: 1100px;
+      aspect-ratio: 1376 / 768;
+      margin: 0 auto;
     }
 
-    .room::after {
-      content: '';
+    .mansion-art {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: grayscale(100%) contrast(1.12);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hotspot-layer {
       position: absolute;
       inset: 0;
-      pointer-events: none;
-      background:
-        repeating-linear-gradient(45deg, rgba(0,0,0,.20) 0 1px, transparent 1px 6px),
-        repeating-linear-gradient(-45deg, rgba(0,0,0,.12) 0 1px, transparent 1px 8px),
-        radial-gradient(ellipse at 30% 25%, rgba(255,255,255,.35), transparent 60%);
-      mix-blend-mode: multiply;
-      opacity: .55;
+      z-index: 5;
     }
 
-    .room:hover {
-      transform: scale(1.05) rotate(-0.4deg);
-      box-shadow: inset 0 0 0 2px #000, 6px 7px 0 #000;
+    /* Invisible click regions placed over the artwork via ROOM_HOTSPOTS.
+       Transparent by default; faint highlight on hover / when staked. */
+    .hotspot {
+      position: absolute;
+      cursor: pointer;
+      border-radius: 8px;
+      background: transparent;
+      box-sizing: border-box;
+      transition: background 0.15s, box-shadow 0.15s;
     }
 
-    .room.mine { box-shadow: inset 0 0 0 3px #1a1206, 0 0 16px rgba(245,197,66,.55), 4px 5px 0 #000; }
+    .hotspot:hover {
+      background: rgba(245, 197, 66, 0.18);
+      box-shadow: inset 0 0 0 2px rgba(26, 18, 6, 0.55);
+    }
 
-    .room.active {
-      background: linear-gradient(135deg, #ffffff 0%, #cfcfcf 100%);
-      box-shadow: inset 0 0 0 3px #000, 0 0 22px rgba(255,255,255,.7), 4px 5px 0 #000;
+    .hotspot.mine {
+      background: rgba(245, 197, 66, 0.14);
+      box-shadow: inset 0 0 0 3px rgba(245, 197, 66, 0.85);
+    }
+
+    .hotspot.active {
+      box-shadow: inset 0 0 0 3px rgba(180, 0, 0, 0.85);
     }
 
     .room-label {
       position: absolute;
-      top: 4px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
       text-align: center;
-      color: #111;
+      color: #fff;
       font-weight: 800;
-      font-size: 7px;
-      letter-spacing: .1px;
-      text-shadow: 1px 1px 0 rgba(255,255,255,.6);
+      font-size: clamp(7px, 1vw, 11px);
+      letter-spacing: .2px;
+      background: rgba(20, 16, 10, 0.55);
+      padding: 2px 5px;
+      border-radius: 4px;
       pointer-events: none;
-      width: 94%;
+      white-space: nowrap;
       line-height: 1.1;
+      opacity: .8;
       z-index: 3;
     }
 
     .room-total {
       position: absolute;
-      bottom: 3px;
-      left: 3px;
+      bottom: 4px;
+      left: 4px;
       background: var(--ink);
       color: #fff;
-      padding: 1px 4px;
-      font-size: 7px;
+      padding: 1px 5px;
+      font-size: clamp(8px, 1vw, 11px);
       font-weight: 700;
       border-radius: 3px;
-      z-index: 3;
+      pointer-events: none;
+      z-index: 4;
     }
     .room-mine-chip {
       position: absolute;
-      bottom: 3px;
-      right: 3px;
+      bottom: 4px;
+      right: 4px;
       background: #1a1206;
       color: #ffe082;
-      padding: 1px 4px;
-      font-size: 7px;
+      padding: 1px 5px;
+      font-size: clamp(8px, 1vw, 11px);
       font-weight: 800;
       border-radius: 10px;
-      z-index: 3;
+      pointer-events: none;
+      z-index: 4;
       display: none;
     }
 
@@ -995,11 +983,14 @@
   <!-- Colored reveal/win composition -->
   <div class="fx-overlay" id="fx-overlay"></div>
 
-  <!-- World (grayscale) -->
+  <!-- World -->
   <div class="world" id="world">
     <div class="mansion">
-      <div class="room-grid" id="room-grid"></div>
-      <div class="pocong-container" id="pocong-container"></div>
+      <div class="mansion-stage" id="mansion-stage">
+        <img class="mansion-art" src="/mansion.svg" alt="Haunted mansion cutaway" draggable="false">
+        <div class="hotspot-layer" id="room-grid"></div>
+        <div class="pocong-container" id="pocong-container"></div>
+      </div>
     </div>
   </div>
 
@@ -1098,6 +1089,29 @@
       'Bathroom', 'Powder Room', 'Backyard', 'Warehouse',
       'Reading Room', 'Theater Room'
     ];
+
+    // ── Hotspot coordinate table (FIRST-PASS BEST GUESS — refine on staging) ──
+    // Each room maps to a clickable region over the mansion artwork, expressed
+    // as percentages of the .mansion-stage box (which holds the art's 1376x768
+    // aspect ratio). x/y = top-left corner, w/h = size. Adjust these numbers to
+    // align hotspots to the drawn rooms; everything else scales automatically.
+    // Layout: 4 columns × ~4 rows over the cutaway (last row centered).
+    const ROOM_HOTSPOTS = {
+      'Master Bedroom': { x: 7,  y: 8,  w: 18, h: 18 },
+      'Library':        { x: 28, y: 8,  w: 18, h: 18 },
+      'Kitchen':        { x: 54, y: 8,  w: 18, h: 18 },
+      'Dining Room':    { x: 75, y: 8,  w: 18, h: 18 },
+      'Laundry Room':   { x: 7,  y: 30, w: 18, h: 18 },
+      'Kids Bedroom':   { x: 28, y: 30, w: 18, h: 18 },
+      'Playing Room':   { x: 54, y: 30, w: 18, h: 18 },
+      'Living Room':    { x: 75, y: 30, w: 18, h: 18 },
+      'Bathroom':       { x: 7,  y: 52, w: 18, h: 18 },
+      'Powder Room':    { x: 28, y: 52, w: 18, h: 18 },
+      'Backyard':       { x: 54, y: 52, w: 18, h: 18 },
+      'Warehouse':      { x: 75, y: 52, w: 18, h: 18 },
+      'Reading Room':   { x: 28, y: 74, w: 18, h: 18 },
+      'Theater Room':   { x: 54, y: 74, w: 18, h: 18 }
+    };
 
     // Audio
     let muted = localStorage.getItem('aap_muted') === '1';
@@ -1310,12 +1324,14 @@
 
     function renderGrid() {
       const grid = document.getElementById('room-grid');
-      grid.innerHTML = ROOMS.map((room, i) => {
-        const betting = state.round.phase === 'betting';
+      const betting = state.round.phase === 'betting';
+      grid.innerHTML = ROOMS.map((room) => {
+        const pos = ROOM_HOTSPOTS[room] || { x: 0, y: 0, w: 12, h: 12 };
         const bet = state.bets[room] || 0;
         const total = state.roomTotals[room] || 0;
+        const style = `left:${pos.x}%;top:${pos.y}%;width:${pos.w}%;height:${pos.h}%;`;
         return `
-          <div class="room${bet > 0 ? ' mine' : ''}${state.hauntedRoom === room ? ' active' : ''}" data-room="${room}">
+          <div class="hotspot${bet > 0 ? ' mine' : ''}${state.hauntedRoom === room ? ' active' : ''}" data-room="${room}" style="${style}">
             <div class="room-label">${room}</div>
             ${total > 0 ? `<div class="room-total">${total}</div>` : ''}
             ${bet > 0 ? `<div class="room-mine-chip" style="display: block;">${bet}</div>` : ''}
@@ -1323,7 +1339,7 @@
         `;
       }).join('');
       if (betting) {
-        grid.querySelectorAll('.room').forEach(el => {
+        grid.querySelectorAll('.hotspot').forEach(el => {
           el.addEventListener('click', () => placeBet(el.dataset.room));
         });
       }
@@ -1422,7 +1438,7 @@
       state.revealStarted = false;
       document.getElementById('fx-overlay').classList.remove('active');
       document.getElementById('banner-container').innerHTML = '';
-      document.querySelectorAll('.room').forEach(r => r.classList.remove('active'));
+      document.querySelectorAll('.hotspot').forEach(r => r.classList.remove('active'));
       document.querySelectorAll('.reveal-wash').forEach(r => r.remove());
     }
 

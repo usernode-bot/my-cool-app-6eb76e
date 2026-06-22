@@ -8,9 +8,14 @@
       "expectSelector": ".mansion"
     },
     {
-      "name": "Room Bets board renders",
+      "name": "Mansion artwork renders",
       "path": "/",
-      "expectSelector": ".bet-board",
+      "expectSelector": ".mansion-art"
+    },
+    {
+      "name": "Room Bets popover renders",
+      "path": "/",
+      "expectSelector": ".popover-panel",
       "expectText": "Room Bets"
     },
     {
