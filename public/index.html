@@ -95,11 +95,19 @@
         el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
         return;
       }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
+      el.innerHTML = '';
+      leaderboard.forEach((r, i) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400');
+        const name = document.createElement('span');
+        name.textContent = (i + 1) + '. ' + r.username;
+        const count = document.createElement('span');
+        count.className = 'font-mono';
+        count.textContent = r.presses;
+        row.appendChild(name);
+        row.appendChild(count);
+        el.appendChild(row);
+      });
       const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
       document.getElementById('count').textContent = total + ' total presses';
     }
@@ -110,9 +118,14 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
         });
-        if (res.ok) loadLeaderboard();
+        if (res.ok) loadLeaderboard().catch(() => {});
         else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
+      } catch {
+        const countEl = document.getElementById('count');
+        const prev = countEl.textContent;
+        countEl.textContent = 'Something went wrong — try again';
+        setTimeout(() => { countEl.textContent = prev; }, 2000);
+      }
     });
 
     loadLeaderboard();

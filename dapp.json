@@ -1,3 +1,7 @@
 {
-  "secrets": []
+  "name": "my cool app",
+  "secrets": [],
+  "tests": [
+    { "name": "App loads", "path": "/", "expectSelector": "#press-btn" }
+  ]
 }

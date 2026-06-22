@@ -83,6 +83,8 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+const IS_STAGING = process.env.USERNODE_ENV === 'staging';
+
 async function start() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS presses (
@@ -92,6 +94,20 @@ async function start() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  if (IS_STAGING) {
+    const { rows } = await pool.query(`SELECT COUNT(*) FROM presses WHERE username LIKE 'staging-demo-%'`);
+    if (parseInt(rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO presses (user_id, username) VALUES
+        (900001, 'staging-demo-alice'),
+        (900001, 'staging-demo-alice'),
+        (900001, 'staging-demo-alice'),
+        (900002, 'staging-demo-bob'),
+        (900002, 'staging-demo-bob'),
+        (900003, 'staging-demo-carol')
+      `);
+    }
+  }
   app.listen(port, () => console.log(`Listening on :${port}`));
 }
 
