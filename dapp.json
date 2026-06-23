@@ -1,6 +1,10 @@
 {
   "name": "Awas Ada Pocong",
   "secrets": [],
+  "visibility": {
+    "build": "private",
+    "view": "public"
+  },
   "tests": [
     {
       "name": "Game loads with mansion",
