@@ -1,6 +1,10 @@
 {
   "name": "my cool app",
   "secrets": [],
+  "visibility": {
+    "build": "private",
+    "view": "public"
+  },
   "tests": [
     { "name": "App loads", "path": "/", "expectSelector": "#press-btn" }
   ]
