@@ -1,7 +1,37 @@
 {
+  "name": "Awas Ada Pocong",
   "secrets": [],
   "visibility": {
     "build": "private",
     "view": "public"
-  }
+  },
+  "tests": [
+    {
+      "name": "Game loads with mansion",
+      "path": "/",
+      "expectSelector": ".mansion"
+    },
+    {
+      "name": "Mansion artwork renders",
+      "path": "/",
+      "expectSelector": ".mansion-art"
+    },
+    {
+      "name": "Room Bets popover renders",
+      "path": "/",
+      "expectSelector": ".popover-panel",
+      "expectText": "Room Bets"
+    },
+    {
+      "name": "Wallet page renders",
+      "path": "/",
+      "expectSelector": ".wallet-page",
+      "expectText": "Wallet"
+    },
+    {
+      "name": "Win tableau renders",
+      "path": "/?demo=win",
+      "expectSelector": ".win-banner"
+    }
+  ]
 }
