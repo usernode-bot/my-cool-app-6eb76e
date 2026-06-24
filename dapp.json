@@ -3,5 +3,16 @@
   "visibility": {
     "build": "private",
     "view": "public"
-  }
+  },
+  "tests": [
+    {
+      "name": "Game state endpoint returns round with phase",
+      "path": "/api/round/state",
+      "method": "GET",
+      "expect": {
+        "status": 200,
+        "bodyContains": "phase"
+      }
+    }
+  ]
 }
