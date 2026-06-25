@@ -309,7 +309,8 @@ async function ensureParticipant(round, userId, username) {
   const { rows: ins } = await pool.query(
     `INSERT INTO round_participants (round_id, user_id, username, is_bot, alive)
      VALUES ($1, $2, $3, false, true)
-     ON CONFLICT (round_id, user_id) DO UPDATE SET username = EXCLUDED.username
+     ON CONFLICT (round_id, user_id) WHERE user_id IS NOT NULL
+     DO UPDATE SET username = EXCLUDED.username
      RETURNING *`,
     [round.id, userId, username || ('player_' + userId)]
   );
@@ -942,8 +943,9 @@ async function start() {
       await createNewRound();
     }
 
-    // Start ticker
-    setInterval(tick, 750);
+    // Start ticker — wrap to catch any tick errors so they don't become
+    // unhandled rejections (which crash Node 15+).
+    setInterval(() => tick().catch(err => console.error('tick error:', err)), 750);
 
     app.listen(port, () => console.log(`Listening on :${port}`));
   } catch (err) {

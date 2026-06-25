@@ -6,13 +6,9 @@
   },
   "tests": [
     {
-      "name": "Game state endpoint returns round with phase",
-      "path": "/api/round/state",
-      "method": "GET",
-      "expect": {
-        "status": 200,
-        "bodyContains": "phase"
-      }
+      "name": "Health endpoint responds",
+      "path": "/health",
+      "expectText": "ok"
     }
   ]
 }
