@@ -3,5 +3,12 @@
   "visibility": {
     "build": "private",
     "view": "public"
-  }
+  },
+  "tests": [
+    {
+      "name": "Health endpoint responds",
+      "path": "/health",
+      "expectText": "ok"
+    }
+  ]
 }

@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
+  <script src="https://social-vibecoding.usernodelabs.org/usernode-bridge/v1/bridge.js"></script>
+
   <script>
   // usernode-dev-console@1
   (function () {
@@ -63,22 +65,990 @@
     try { post('info', ['[dev-console ready]'], { kind: 'ready' }); } catch (_) {}
   })();
   </script>
-  <title>my cool app</title>
+  <title>Awas Ada Pocong</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
+  <style>
+    :root { --ink: #0c0c0c; }
+
+    body { background: #050505; overflow-x: hidden; overflow-y: auto; }
+
+    .world {
+      position: relative;
+      min-height: calc(100vh - 140px);
+      margin-top: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .mansion {
+      position: relative;
+      width: 100%;
+      height: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    /* Static hand-drawn mansion artwork, centered & responsive.
+       The hotspot overlay scales with it because both live inside
+       .mansion-stage, which keeps the artwork's 1376x768 aspect ratio. */
+    .mansion-stage {
+      position: relative;
+      width: 100%;
+      max-width: 1100px;
+      aspect-ratio: 1376 / 768;
+      margin: 0 auto;
+    }
+
+    .mansion-art {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter: grayscale(100%) contrast(1.12);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hotspot-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+    }
+
+    /* Invisible click regions placed over the artwork via ROOM_HOTSPOTS.
+       Transparent by default; faint highlight on hover / when staked. */
+    .hotspot {
+      position: absolute;
+      cursor: pointer;
+      border-radius: 8px;
+      background: transparent;
+      box-sizing: border-box;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .hotspot:hover {
+      background: rgba(245, 197, 66, 0.18);
+      box-shadow: inset 0 0 0 2px rgba(26, 18, 6, 0.55);
+    }
+
+    .hotspot.mine {
+      background: rgba(245, 197, 66, 0.14);
+      box-shadow: inset 0 0 0 3px rgba(245, 197, 66, 0.85);
+    }
+
+    .hotspot.active {
+      box-shadow: inset 0 0 0 3px rgba(180, 0, 0, 0.85);
+    }
+
+    .room-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: #fff;
+      font-weight: 800;
+      font-size: clamp(7px, 1vw, 11px);
+      letter-spacing: .2px;
+      background: rgba(20, 16, 10, 0.55);
+      padding: 2px 5px;
+      border-radius: 4px;
+      pointer-events: none;
+      white-space: nowrap;
+      line-height: 1.1;
+      opacity: .8;
+      z-index: 3;
+    }
+
+    .room-total {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      background: var(--ink);
+      color: #fff;
+      padding: 1px 5px;
+      font-size: clamp(8px, 1vw, 11px);
+      font-weight: 700;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 4;
+    }
+    .room-mine-chip {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: #1a1206;
+      color: #ffe082;
+      padding: 1px 5px;
+      font-size: clamp(8px, 1vw, 11px);
+      font-weight: 800;
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 4;
+      display: none;
+    }
+
+    .character {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: boil 1.6s infinite ease-in-out;
+      z-index: 2;
+    }
+
+    @keyframes boil {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(0.5px, -0.7px) rotate(-0.6deg); }
+      50% { transform: translate(-0.5px, 0.6px) rotate(0.5deg); }
+      75% { transform: translate(0.4px, 0.3px) rotate(-0.3deg); }
+    }
+
+    .char-svg { display: block; }
+
+    svg#inkRoughen { display: none; }
+
+    /* Header Bar */
+    .header-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0;
+      box-sizing: border-box;
+      border-bottom: 3px solid #1a1206;
+      border-radius: 0;
+    }
+
+    .metal {
+      background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 50%, #d4d4d4 100%);
+      border: 3px solid #1a1206;
+      color: #1a1206;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* Title row (main header) */
+    .header-title {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #1a1206;
+      text-shadow: 2px 2px 0 rgba(255,255,255,.6);
+      padding: 12px 20px 8px;
+      border-bottom: 2px solid rgba(0,0,0,.2);
+    }
+
+    /* Menu row (secondary bar below title) */
+    .header-menu {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 20px;
+      gap: 20px;
+    }
+
+    .header-left, .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 0 0 auto;
+    }
+
+    .popover-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 3px solid #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-size: 24px;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s, box-shadow 0.1s;
+      z-index: 101;
+    }
+
+    .popover-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1a1206;
+    }
+
+    .popover-btn.open {
+      outline: 3px solid #1a1206;
+      transform: scale(1.05);
+    }
+
+    .balance-display {
+      font-size: 18px;
+      font-weight: 900;
+      color: #7a5a00;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+    }
+
+    /* Popover Panels */
+    .popover-panel {
+      position: fixed;
+      z-index: 90;
+      display: none;
+      background: linear-gradient(180deg, #f5f5f5 0%, #e8e8e8 50%, #d4d4d4 100%);
+      border: 3px solid #1a1206;
+      color: #1a1206;
+      border-radius: 12px;
+      overflow-y: auto;
+      max-height: calc(100vh - 100px);
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    .popover-panel.open {
+      display: block;
+    }
+
+    .popover-panel.left {
+      left: 20px;
+      top: 150px;
+      width: 280px;
+      max-width: calc(100vw - 40px);
+      transform: translateX(0);
+    }
+
+    .popover-panel.left:not(.open) {
+      transform: translateX(-320px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .popover-panel.right {
+      right: 20px;
+      top: 150px;
+      width: 280px;
+      max-width: calc(100vw - 40px);
+      transform: translateX(0);
+    }
+
+    .popover-panel.right:not(.open) {
+      transform: translateX(320px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .popover-title {
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #1a1206;
+      text-align: center;
+      margin-bottom: 12px;
+      text-shadow: 0 1px 0 rgba(255,255,255,.5);
+      padding: 14px;
+      border-bottom: 2px solid rgba(0,0,0,.2);
+    }
+
+    .popover-content {
+      padding: 14px;
+    }
+
+    .bet-entry {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-size: 13px;
+    }
+
+    .bet-entry:last-child { border-bottom: none; }
+    .bet-room { flex: 1; font-weight: 800; color: #1c1c1c; }
+    .bet-amount { font-weight: 900; color: #7a5a00; }
+    .bet-refund {
+      border: 2px solid #1a1206;
+      background: #e8caca;
+      color: #7a1010;
+      border-radius: 6px;
+      font-weight: 900;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+
+    .history-entry {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-size: 12px;
+      font-weight: 600;
+      color: #1c1c1c;
+      line-height: 1.4;
+    }
+
+    .history-entry:last-child { border-bottom: none; }
+    .history-type { color: #7a5a00; font-weight: 900; }
+
+    .chip-button {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px dashed #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s;
+    }
+
+    .chip-button.selected {
+      outline: 3px solid #1a1206;
+      transform: translateY(-3px);
+    }
+
+    .chip-button:active { transform: translateY(-1px); }
+
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .adjust-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .adjust-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 2px solid #1a1206;
+      background: #e8e8e8;
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .amount-readout {
+      text-align: center;
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    .leaderboard-entry {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(0,0,0,.15);
+      font-weight: 700;
+      color: #1c1c1c;
+      font-size: 12px;
+    }
+
+    .leaderboard-entry:last-child { border-bottom: none; }
+    .leader-rank { color: #5a5a5a; min-width: 20px; }
+    .leader-name { flex: 1; margin-left: 10px; }
+    .leader-score { color: #7a5a00; font-weight: 900; min-width: 36px; text-align: right; }
+
+    .staging-badge {
+      position: fixed;
+      top: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(170, 12, 12, 0.85);
+      border: 2px solid #ff5252;
+      color: #fff;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 70;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+
+    .film-grain {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0, rgba(0,0,0,.03) 1px, transparent 1px, transparent 2px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,.03) 0, rgba(0,0,0,.03) 1px, transparent 1px, transparent 2px);
+      animation: flicker 0.15s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes flicker {
+      0% { opacity: 0.97; }
+      50% { opacity: 0.99; }
+      100% { opacity: 0.97; }
+    }
+
+    .vignette {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,.4) 100%);
+      pointer-events: none;
+    }
+
+    .fx-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      pointer-events: none;
+      display: none;
+    }
+
+    .fx-overlay.active {
+      display: block;
+      animation: haunt 0.3s ease-out;
+    }
+
+    @keyframes haunt {
+      0% { background: transparent; }
+      50% { background: rgba(139, 0, 0, 0.3); }
+      100% { background: transparent; }
+    }
+
+    .pocong-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 15;
+    }
+
+    .pocong {
+      position: absolute;
+      width: 60px;
+      height: 100px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.9;
+    }
+
+    .pocong.corridor {
+      animation: hop 0.4s ease-in-out;
+    }
+
+    @keyframes hop {
+      0%, 100% { transform: translate(-50%, -50%) translateX(0); }
+      50% { transform: translate(-50%, -50%) translateX(80px); }
+    }
+
+    .pocong-wrap {
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+      border: 3px solid #1a1206;
+      border-radius: 8px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      font-weight: 900;
+    }
+
+    .pocong-eye { position: absolute; width: 14px; height: 14px; background: #1a1206; border-radius: 50%; }
+    .pocong-eye-l { top: 20px; left: 12px; }
+    .pocong-eye-r { top: 20px; right: 12px; }
+
+    .banner-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .win-banner {
+      position: relative;
+      background:
+        repeating-linear-gradient(48deg, rgba(0,0,0,.06) 0 2px, transparent 2px 7px),
+        linear-gradient(45deg, #fff4b0, #f5c542 45%, #e0a81e 70%, #fff4b0);
+      color: #1a1206;
+      padding: 32px 52px;
+      border: 6px solid #1a1206;
+      border-radius: 18px;
+      text-align: center;
+      font-weight: 900;
+      font-size: 48px;
+      letter-spacing: 1px;
+      line-height: 1;
+      text-transform: uppercase;
+      animation: dropBanner 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 12px 0 #1a1206, 0 14px 36px rgba(0,0,0,.6);
+      text-shadow: 3px 3px 0 rgba(255,255,255,.5);
+    }
+
+    @keyframes dropBanner {
+      0% { transform: translateY(-150%) rotate(-6deg); opacity: 0; }
+      100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    }
+
+    .reveal-wash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 300px 200px at 50% 50%, rgba(200,0,0,0.4), transparent);
+      pointer-events: none;
+      z-index: 25;
+      border-radius: 8px;
+    }
+
+    /* Modal Styles */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 150;
+      overflow-y: auto;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-card {
+      max-width: 480px;
+      margin: 20px;
+      padding: 30px;
+      border-radius: 16px;
+      color: #1a1206;
+    }
+
+    .modal-card h2 {
+      font-weight: 900;
+      font-size: 24px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 40px;
+      height: 40px;
+      border: 2px solid #1a1206;
+      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      border-radius: 8px;
+      font-weight: 900;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .wallet-page {
+      position: relative;
+      padding-top: 40px;
+    }
+
+    .wallet-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .wallet-header h2 {
+      font-size: 28px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .wallet-display {
+      font-size: 24px;
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-top: 18px;
+      margin-bottom: 12px;
+      color: #1a1206;
+    }
+
+    .chips-row {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .chip-sm {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 3px dashed #1a1206;
+      background: radial-gradient(circle at 35% 30%, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+    }
+
+    .chip-sm.selected {
+      outline: 3px solid #1a1206;
+      transform: translateY(-3px);
+    }
+
+    .chip-sm:active { transform: translateY(-1px); }
+
+    .adjust-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .adjust-sm {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: 2px solid #1a1206;
+      background: #e8e8e8;
+      color: #1a1206;
+      font-weight: 900;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .amount-display {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 900;
+      color: #7a5a00;
+      margin-bottom: 14px;
+    }
+
+    .deposit-btn, .withdraw-btn {
+      width: 100%;
+      padding: 12px;
+      border: 3px solid #1a1206;
+      border-radius: 10px;
+      font-weight: 900;
+      font-size: 14px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 3px 0 #1a1206;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    .deposit-btn {
+      background: linear-gradient(180deg, #fff4b0, #f5c542 55%, #c98f0e);
+      color: #1a1206;
+      margin-bottom: 14px;
+    }
+
+    .withdraw-btn {
+      background: linear-gradient(180deg, #e8caca, #d89a9a);
+      color: #5a1010;
+    }
+
+    .deposit-btn:active, .withdraw-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #1a1206;
+    }
+
+    .withdrawal-disabled {
+      text-align: center;
+      color: #5a5a5a;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 12px;
+    }
+
+    .withdraw-note {
+      text-align: center;
+      color: #5a5a5a;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .help-modal ol {
+      margin: 0 0 16px 18px;
+    }
+
+    .help-modal li {
+      margin: 7px 0;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 768px) {
+      .header-title {
+        font-size: 22px;
+        padding: 10px 14px 6px;
+      }
+
+      .header-menu {
+        padding: 8px 14px;
+        gap: 12px;
+      }
+
+      .header-left, .header-right {
+        gap: 8px;
+      }
+
+      .popover-btn {
+        width: 42px;
+        height: 42px;
+        font-size: 20px;
+      }
+
+      .balance-display {
+        font-size: 14px;
+        padding: 6px 10px;
+      }
+
+      .popover-panel.left {
+        width: 240px;
+        top: 138px;
+      }
+
+      .popover-panel.right {
+        width: 240px;
+        top: 138px;
+      }
+
+      .world {
+        margin-top: 128px;
+        min-height: calc(100vh - 128px);
+      }
+
+      .staging-badge {
+        top: 138px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-title {
+        font-size: 17px;
+        padding: 8px 12px 5px;
+      }
+
+      .header-menu {
+        padding: 6px 10px;
+        gap: 8px;
+      }
+
+      .popover-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 18px;
+        box-shadow: 0 2px 0 #1a1206;
+      }
+
+      .balance-display {
+        font-size: 12px;
+        padding: 5px 8px;
+      }
+
+      .popover-panel.left {
+        width: calc(100vw - 40px);
+        max-width: 280px;
+        top: 120px;
+      }
+
+      .popover-panel.right {
+        width: calc(100vw - 40px);
+        max-width: 280px;
+        top: 120px;
+      }
+
+      .world {
+        margin-top: 112px;
+        min-height: calc(100vh - 112px);
+        padding: 12px;
+      }
+
+      .staging-badge {
+        top: 120px;
+      }
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col items-center justify-center gap-8 p-4">
-  <h1 class="text-2xl font-bold">my cool app</h1>
+<body>
+  <!-- Header Bar -->
+  <div class="header-bar metal">
+    <div class="header-title">Awas Ada Pocong</div>
+    <div class="header-menu">
+      <div class="header-left">
+        <button class="popover-btn" id="room-bets-btn" title="Room Bets">💸</button>
+        <button class="popover-btn" id="history-btn" title="History">📔</button>
+      </div>
+      <div class="header-right">
+        <button class="popover-btn" id="bet-chips-btn" title="Bet Size">🪙</button>
+        <button class="popover-btn" id="hall-btn" title="Hall of Survivors">🏆</button>
+        <div class="balance-display"><span id="balance">0</span> TKN</div>
+      </div>
+    </div>
+  </div>
 
-  <button id="press-btn" class="w-32 h-32 rounded-full bg-violet-600 hover:bg-violet-500 active:scale-95 transition-all text-white text-xl font-bold shadow-lg shadow-violet-600/30">
-    Press!
-  </button>
+  <!-- Popover Panels -->
+  <div class="popover-panel left" data-popover="roomBets">
+    <div class="popover-title">Room Bets</div>
+    <div class="popover-content">
+      <div id="bet-list"></div>
+      <button id="clear-all" style="width: 100%; margin-top: 10px; padding: 8px; border: 2px solid #1a1206; background: #f0cfcf; color: #5a1010; border-radius: 8px; font-weight: 900; cursor: pointer; font-size: 12px;" disabled>Clear all</button>
+    </div>
+  </div>
 
-  <div id="count" class="text-lg text-zinc-400">0 total presses</div>
+  <div class="popover-panel left" data-popover="history">
+    <div class="popover-title">History</div>
+    <div class="popover-content" id="history-content">
+      <div style="text-align: center; color: #5a5a5a; padding: 20px;">Loading...</div>
+    </div>
+  </div>
 
-  <div class="w-full max-w-sm">
-    <h2 class="text-sm font-medium text-zinc-500 mb-2 text-center">Leaderboard</h2>
-    <div id="leaderboard" class="space-y-1"></div>
+  <div class="popover-panel right" data-popover="betSize">
+    <div class="popover-title">Bet Size</div>
+    <div class="popover-content">
+      <div class="chips-grid">
+        <button class="chip-button" data-chip="100">100</button>
+        <button class="chip-button" data-chip="200">200</button>
+        <button class="chip-button" data-chip="500">500</button>
+        <button class="chip-button" data-chip="1000">1000</button>
+      </div>
+      <div class="adjust-buttons">
+        <button class="adjust-btn" id="bet-minus">−</button>
+        <button class="adjust-btn" id="bet-plus">+</button>
+      </div>
+      <div class="amount-readout">Standard Bet: <span id="standard-bet">100</span> TKN</div>
+    </div>
+  </div>
+
+  <div class="popover-panel right" data-popover="hallOfSurvivors">
+    <div class="popover-title">🏆 Hall of Survivors</div>
+    <div class="popover-content" id="leaderboard"></div>
+  </div>
+
+  <!-- Aged-film overlays -->
+  <div class="film-grain"></div>
+  <div class="vignette"></div>
+
+  <!-- Colored reveal/win composition -->
+  <div class="fx-overlay" id="fx-overlay"></div>
+
+  <!-- World -->
+  <div class="world" id="world">
+    <div class="mansion">
+      <div class="mansion-stage" id="mansion-stage">
+        <img class="mansion-art" src="/mansion.svg" alt="Haunted mansion cutaway" draggable="false">
+        <div class="hotspot-layer" id="room-grid"></div>
+        <div class="pocong-container" id="pocong-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner-container" id="banner-container"></div>
+
+  <!-- Staging badge -->
+  <div id="staging-badge" class="staging-badge" style="display: none;">Staging demo</div>
+
+  <!-- Wallet Modal -->
+  <div class="modal-backdrop" id="wallet-modal">
+    <div class="modal-card metal" style="position: relative;">
+      <button class="modal-close-btn" id="wallet-close">×</button>
+      <div class="wallet-page">
+        <div class="wallet-header">
+          <h2>Wallet</h2>
+          <div class="wallet-display">Balance: <span id="wallet-balance">0</span> TKN</div>
+        </div>
+
+        <div class="section-title">Deposit TKN</div>
+        <div class="chips-row" id="deposit-chips">
+          <button class="chip-sm" data-deposit="100">100</button>
+          <button class="chip-sm" data-deposit="200">200</button>
+          <button class="chip-sm" data-deposit="500">500</button>
+          <button class="chip-sm" data-deposit="1000">1000</button>
+        </div>
+        <div class="adjust-row">
+          <button class="adjust-sm" id="deposit-minus">−</button>
+          <button class="adjust-sm" id="deposit-plus">+</button>
+        </div>
+        <div class="amount-display">Deposit: <span id="deposit-amount">100</span> TKN</div>
+        <button class="deposit-btn" id="deposit-btn">Deposit</button>
+
+        <div id="withdrawal-section" style="display: none;">
+          <div class="section-title">Withdraw TKN</div>
+          <div style="text-align: center; margin-bottom: 12px; font-size: 14px; color: #1c1c1c; font-weight: 700;">
+            Withdraw: <span id="withdrawal-net">0</span> TKN <span style="font-size: 12px; color: #5a5a5a;">(10 TKN fee)</span>
+          </div>
+          <button class="withdraw-btn" id="withdraw-btn">Withdraw</button>
+          <div class="withdraw-note">Withdrawals can take up to 24 hours to appear.</div>
+        </div>
+        <div id="no-withdrawal" class="withdrawal-disabled" style="display: none;">Balance too low to withdraw (need 10 TKN fee)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- How-to-play modal -->
+  <div class="modal-backdrop" id="help-modal">
+    <div class="modal-card metal">
+      <h2>How to Play</h2>
+      <ol class="help-modal">
+        <li>Pick your <b>standard bet</b> with the chips (🪙 button) or adjust with + / −.</li>
+        <li>During the betting window, <b>click any room</b> to stake that the pocong will NOT haunt it. Bet on as many rooms as you like — clicking again stacks more.</li>
+        <li>Refund any room or <b>Clear all</b> while betting is open.</li>
+        <li>The pocong haunts exactly <b>one room</b> at random. Bets there are <b>lost</b>.</li>
+        <li>Every <b>safe</b> room pays out <b>3×</b> your stake. Come out ahead and the win fanfare plays!</li>
+      </ol>
+      <button id="help-close" style="width: 100%; margin: 0; border-radius: 10px; padding: 10px; border: 2px solid #1a1206; background: #e8e8e8; color: #1a1206; font-weight: 900; cursor: pointer;">Got it!</button>
+    </div>
   </div>
 
   <script>
@@ -86,36 +1056,605 @@
     const token = params.get('token') || '';
     const headers = token ? { 'x-usernode-token': token } : {};
 
-    async function loadLeaderboard() {
-      const res = await fetch('/api/leaderboard', { headers });
-      if (!res.ok) return;
-      const { leaderboard } = await res.json();
-      const el = document.getElementById('leaderboard');
-      if (!leaderboard.length) {
-        el.innerHTML = '<p class="text-center text-zinc-600 text-sm">No presses yet</p>';
-        return;
+    const DEMO_WIN = params.get('demo') === 'win';
+    const DEMO_POCONG_ROOM = 'kitchen';
+    const DEMO_SAFE_ROOM = 'library';
+    const DEMO_PAYOUT = 800;
+
+    let state = {
+      round: {},
+      participant: null,
+      bets: {},
+      roomTotals: {},
+      balance: 0,
+      hauntedRoom: null,
+      bannerShown: false,
+      revealStarted: false,
+      page: 'game'
+    };
+
+    let walletState = {
+      balance: 0,
+      pending_tx: null,
+      pending_tx_type: null
+    };
+
+    let standardBet = parseInt(localStorage.getItem('aap_standard_bet') || '100', 10);
+    let depositAmount = 100;
+    if (!([100,200,500,1000].includes(standardBet))) standardBet = 100;
+
+    const ROOMS = [
+      { slug: 'master-bedroom', label: 'Master Bedroom' },
+      { slug: 'library',        label: 'Library'        },
+      { slug: 'kitchen',        label: 'Kitchen'        },
+      { slug: 'dining-room',    label: 'Dining Room'    },
+      { slug: 'laundry-room',   label: 'Laundry Room'   },
+      { slug: 'kids-bedroom',   label: 'Kids Bedroom'   },
+      { slug: 'playing-room',   label: 'Playing Room'   },
+      { slug: 'living-room',    label: 'Living Room'    },
+      { slug: 'bathroom',       label: 'Bathroom'       },
+      { slug: 'powder-room',    label: 'Powder Room'    },
+      { slug: 'backyard',       label: 'Backyard'       },
+      { slug: 'warehouse',      label: 'Warehouse'      },
+      { slug: 'reading-room',   label: 'Reading Room'   },
+    ];
+
+    // Hotspot coordinate table (percent-based over the .mansion-stage box).
+    // Layout: 4 columns × 4 rows; last row has one centered room.
+    const ROOM_HOTSPOTS = {
+      'master-bedroom': { x: 7,  y: 8,  w: 18, h: 18 },
+      'library':        { x: 28, y: 8,  w: 18, h: 18 },
+      'kitchen':        { x: 54, y: 8,  w: 18, h: 18 },
+      'dining-room':    { x: 75, y: 8,  w: 18, h: 18 },
+      'laundry-room':   { x: 7,  y: 30, w: 18, h: 18 },
+      'kids-bedroom':   { x: 28, y: 30, w: 18, h: 18 },
+      'playing-room':   { x: 54, y: 30, w: 18, h: 18 },
+      'living-room':    { x: 75, y: 30, w: 18, h: 18 },
+      'bathroom':       { x: 7,  y: 52, w: 18, h: 18 },
+      'powder-room':    { x: 28, y: 52, w: 18, h: 18 },
+      'backyard':       { x: 54, y: 52, w: 18, h: 18 },
+      'warehouse':      { x: 75, y: 52, w: 18, h: 18 },
+      'reading-room':   { x: 28, y: 74, w: 18, h: 18 },
+    };
+
+    // Audio
+    let muted = localStorage.getItem('aap_muted') === '1';
+    let audioCtx = null;
+    function ac() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; }
       }
-      el.innerHTML = leaderboard.map((r, i) =>
-        '<div class="flex justify-between px-3 py-1 rounded ' + (i === 0 ? 'bg-violet-600/20 text-violet-300' : 'text-zinc-400') + '">' +
-        '<span>' + (i + 1) + '. ' + r.username + '</span>' +
-        '<span class="font-mono">' + r.presses + '</span></div>'
-      ).join('');
-      const total = leaderboard.reduce((s, r) => s + parseInt(r.presses), 0);
-      document.getElementById('count').textContent = total + ' total presses';
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    function blip(freq, start, dur, type, gain) {
+      const ctx = ac(); if (!ctx) return;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.frequency.value = freq;
+      o.type = type || 'sine';
+      g.gain.setValueAtTime(gain || 0.3, start);
+      g.gain.exponentialRampToValueAtTime(0.01, start + dur);
+      o.start(start);
+      o.stop(start + dur);
+    }
+    function sfxWin() {
+      if (muted) return;
+      const t = ac() ? ac().currentTime : 0;
+      blip(440, t, 0.1, 'square', 0.3);
+      blip(550, t + 0.1, 0.1, 'square', 0.3);
+      blip(659, t + 0.2, 0.2, 'square', 0.4);
+    }
+    function sfxScream() {
+      if (muted) return;
+      const t = ac() ? ac().currentTime : 0;
+      const g = ac().createGain();
+      const o = ac().createOscillator();
+      o.connect(g);
+      g.connect(ac().destination);
+      o.frequency.setValueAtTime(200, t);
+      o.frequency.exponentialRampToValueAtTime(800, t + 0.3);
+      g.gain.setValueAtTime(0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+      o.start(t);
+      o.stop(t + 0.3);
+    }
+    function sfxHop() {
+      if (muted) return;
+      const t = ac() ? ac().currentTime : 0;
+      blip(300, t, 0.05, 'sine', 0.2);
     }
 
-    document.getElementById('press-btn').addEventListener('click', async () => {
+    function showPage(page) {
+      state.page = page;
+      const wallet = document.getElementById('wallet-modal');
+      if (page === 'wallet') {
+        wallet.classList.add('open');
+      } else {
+        wallet.classList.remove('open');
+      }
+    }
+
+    function togglePopover(name) {
+      const buttons = {
+        'roomBets': 'room-bets-btn',
+        'history': 'history-btn',
+        'betSize': 'bet-chips-btn',
+        'hallOfSurvivors': 'hall-btn'
+      };
+
+      // Close all others
+      for (const [key, btnId] of Object.entries(buttons)) {
+        const panel = document.querySelector(`[data-popover="${key}"]`);
+        const btn = document.getElementById(btnId);
+        if (key === name) {
+          panel.classList.toggle('open');
+          btn.classList.toggle('open');
+        } else {
+          panel.classList.remove('open');
+          btn.classList.remove('open');
+        }
+      }
+    }
+
+    document.getElementById('room-bets-btn').addEventListener('click', () => togglePopover('roomBets'));
+    document.getElementById('history-btn').addEventListener('click', () => togglePopover('history'));
+    document.getElementById('bet-chips-btn').addEventListener('click', () => togglePopover('betSize'));
+    document.getElementById('hall-btn').addEventListener('click', () => togglePopover('hallOfSurvivors'));
+
+    async function loadTransactionHistory() {
       try {
-        const res = await fetch('/api/press', {
+        const res = await fetch('/api/transactions/history', { headers });
+        if (!res.ok) throw new Error('Failed to load history');
+        const data = await res.json();
+        const container = document.getElementById('history-content');
+        if (!data.transactions || data.transactions.length === 0) {
+          container.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">No transactions yet</div>';
+          return;
+        }
+        container.innerHTML = data.transactions.map(tx => {
+          let label = '';
+          if (tx.type === 'deposit') {
+            label = `<span class="history-type">Deposited</span> ${tx.amount} TKN`;
+          } else if (tx.type === 'withdrawal') {
+            label = `<span class="history-type">Withdrew</span> ${tx.amount} TKN (${tx.fee} TKN fee)`;
+          } else if (tx.type === 'round_result') {
+            const winLose = tx.status === 'won' ? `<span style="color: #0a7a00;">Won</span> +${tx.net}` : `<span style="color: #7a1010;">Lost</span> ${tx.net}`;
+            label = `Round #${tx.round_id}: ${winLose} TKN`;
+          }
+          const date = new Date(tx.timestamp).toLocaleString();
+          return `<div class="history-entry">${label}<br><span style="font-size: 11px; color: #5a5a5a;">${date}</span></div>`;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        document.getElementById('history-content').innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">Failed to load</div>';
+      }
+    }
+
+    function loadWalletState() {
+      fetch('/api/wallet/state', { headers })
+        .then(r => r.json())
+        .then(d => {
+          walletState = d;
+          document.getElementById('wallet-balance').textContent = d.balance;
+          const net = Math.max(0, d.balance - 10);
+          document.getElementById('withdrawal-net').textContent = net;
+          if (d.balance > 10) {
+            document.getElementById('withdrawal-section').style.display = 'block';
+            document.getElementById('no-withdrawal').style.display = 'none';
+          } else {
+            document.getElementById('withdrawal-section').style.display = 'none';
+            document.getElementById('no-withdrawal').style.display = 'block';
+          }
+        })
+        .catch(err => console.error(err));
+    }
+
+    async function updateState() {
+      try {
+        const res = await fetch('/api/round/state', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        state.round = data.round || {};
+        state.participant = data.participant || null;
+        state.bets = data.bets || {};
+        state.roomTotals = data.roomTotals || {};
+        state.balance = (typeof data.balance === 'number') ? data.balance : state.balance;
+        state.hauntedRoom = data.hauntedRoom || null;
+
+        renderGrid();
+        renderBets();
+        renderLeaderboard();
+
+        document.getElementById('balance').textContent = state.balance;
+
+        const phase = state.round.phase;
+
+        if (phase === 'betting') {
+          resetWinFx();
+          document.getElementById('pocong-container').innerHTML = '';
+          document.getElementById('pocong-container').style.display = 'none';
+        } else if (phase === 'reveal') {
+          if (!state.revealStarted) {
+            state.revealStarted = true;
+            const pc = document.getElementById('pocong-container');
+            pc.style.display = 'block';
+            pc.innerHTML = '';
+            const pocong = document.createElement('div');
+            pocong.className = 'pocong corridor';
+            const wrap = document.createElement('div');
+            wrap.className = 'pocong-wrap';
+            wrap.innerHTML = '👻<div class="pocong-eye pocong-eye-l"></div><div class="pocong-eye pocong-eye-r"></div>';
+            pocong.appendChild(wrap);
+            pc.appendChild(pocong);
+            sfxHop();
+            const hopTimer = setInterval(sfxHop, 500);
+            setTimeout(() => {
+              clearInterval(hopTimer);
+              pocong.classList.remove('corridor');
+              pocong.style.left = '50%';
+              pocong.style.top = '50%';
+              if (state.hauntedRoom) {
+                const room = document.querySelector('[data-room="' + state.hauntedRoom + '"]');
+                if (room) room.classList.add('active');
+                showRevealWash(state.hauntedRoom);
+                sfxScream();
+              }
+            }, 2500);
+          }
+        } else if (phase === 'results') {
+          document.getElementById('pocong-container').style.display = 'none';
+          const net = state.participant ? (state.participant.net || 0) : 0;
+          if (net > 0) {
+            const pocongRoom = state.hauntedRoom || ROOMS[2].slug;
+            const safeRoom = Object.keys(state.bets).find(r => r !== pocongRoom) || ROOMS.find(r => r.slug !== pocongRoom)?.slug || ROOMS[1].slug;
+            composeWinTableau(pocongRoom, safeRoom, net);
+            sfxWin();
+          } else if (state.hauntedRoom) {
+            showRevealWash(state.hauntedRoom);
+          }
+        }
+
+        await loadLeaderboard();
+
+        if (DEMO_WIN) {
+          document.getElementById('staging-badge').style.display = 'block';
+          composeWinTableau(DEMO_POCONG_ROOM, DEMO_SAFE_ROOM, DEMO_PAYOUT);
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById('room-grid');
+      const betting = state.round.phase === 'betting';
+      grid.innerHTML = ROOMS.map(({ slug, label }) => {
+        const pos = ROOM_HOTSPOTS[slug] || { x: 0, y: 0, w: 12, h: 12 };
+        const bet = state.bets[slug] || 0;
+        const total = state.roomTotals[slug] || 0;
+        const style = `left:${pos.x}%;top:${pos.y}%;width:${pos.w}%;height:${pos.h}%;`;
+        return `
+          <div class="hotspot${bet > 0 ? ' mine' : ''}${state.hauntedRoom === slug ? ' active' : ''}" data-room="${slug}" style="${style}">
+            <div class="room-label">${label}</div>
+            ${total > 0 ? `<div class="room-total">${total}</div>` : ''}
+            ${bet > 0 ? `<div class="room-mine-chip" style="display: block;">${bet}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+      if (betting) {
+        grid.querySelectorAll('.hotspot').forEach(el => {
+          el.addEventListener('click', () => placeBet(el.dataset.room));
+        });
+      }
+    }
+
+    function renderBets() {
+      const list = document.getElementById('bet-list');
+      const entries = Object.keys(state.bets).filter(r => state.bets[r] > 0);
+      const betting = state.round.phase === 'betting';
+      if (entries.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 8px;">No bets yet</div>';
+        document.getElementById('clear-all').disabled = true;
+        return;
+      }
+      list.innerHTML = entries.map(r => {
+        const roomLabel = (ROOMS.find(rm => rm.slug === r) || {}).label || r;
+        return `
+          <div class="bet-entry">
+            <span class="bet-room">${roomLabel}</span>
+            <span class="bet-amount">${state.bets[r]}</span>
+            ${betting ? `<button class="bet-refund" onclick="clearRoom('${r}')">×</button>` : ''}
+          </div>
+        `;
+      }).join('');
+      document.getElementById('clear-all').disabled = !betting;
+    }
+
+    async function renderLeaderboard() {
+      try {
+        const res = await fetch('/api/leaderboard', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        const leaderboard = document.getElementById('leaderboard');
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+          leaderboard.innerHTML = '<div style="text-align: center; color: #5a5a5a; padding: 20px;">No players yet</div>';
+          return;
+        }
+        leaderboard.innerHTML = data.leaderboard.map((p, i) => `
+          <div class="leaderboard-entry">
+            <span class="leader-rank">${i+1}</span>
+            <span class="leader-name">${p.username}</span>
+            <span class="leader-score">${p.balance}</span>
+          </div>
+        `).join('');
+      } catch (err) { console.error(err); }
+    }
+
+    async function loadLeaderboard() {
+      await renderLeaderboard();
+    }
+
+    async function placeBet(room) {
+      if (state.round.phase !== 'betting') return;
+      ac();
+      state.bets[room] = (state.bets[room] || 0) + standardBet;
+      state.roomTotals[room] = (state.roomTotals[room] || 0) + standardBet;
+      state.balance = Math.max(0, state.balance - standardBet);
+      renderGrid();
+      renderBets();
+      document.getElementById('balance').textContent = state.balance;
+      try {
+        const res = await fetch('/api/round/bet', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ room: room, amount: standardBet })
         });
-        if (res.ok) loadLeaderboard();
-        else if (res.status === 401) document.getElementById('count').textContent = 'Sign in to press!';
-      } catch {}
+        if (!res.ok) await updateState();
+      } catch (err) { console.error(err); }
+    }
+
+    async function clearRoom(room) {
+      if (state.round.phase !== 'betting') return;
+      try {
+        await fetch('/api/round/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ room: room })
+        });
+        await updateState();
+      } catch (err) { console.error(err); }
+    }
+
+    async function clearAll() {
+      if (state.round.phase !== 'betting') return;
+      try {
+        await fetch('/api/round/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({})
+        });
+        await updateState();
+      } catch (err) { console.error(err); }
+    }
+
+    document.getElementById('clear-all').addEventListener('click', clearAll);
+
+    function resetWinFx() {
+      state.bannerShown = false;
+      state.revealStarted = false;
+      document.getElementById('fx-overlay').classList.remove('active');
+      document.getElementById('banner-container').innerHTML = '';
+      document.querySelectorAll('.hotspot').forEach(r => r.classList.remove('active'));
+      document.querySelectorAll('.reveal-wash').forEach(r => r.remove());
+    }
+
+    function showRevealWash(room) {
+      const roomEl = document.querySelector('[data-room="' + room + '"]');
+      if (roomEl) {
+        const wash = document.createElement('div');
+        wash.className = 'reveal-wash';
+        roomEl.appendChild(wash);
+      }
+      document.getElementById('fx-overlay').classList.add('active');
+    }
+
+    function composeWinTableau(pocongRoom, safeRoom, net) {
+      if (state.bannerShown) return;
+      state.bannerShown = true;
+      const banner = document.createElement('div');
+      banner.className = 'win-banner';
+      banner.textContent = `You won! +${net} TKN`;
+      document.getElementById('banner-container').appendChild(banner);
+    }
+
+    function selectChip(val) {
+      standardBet = val;
+      localStorage.setItem('aap_standard_bet', String(val));
+      document.querySelectorAll('.chip-button').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.chip, 10) === val));
+      document.getElementById('standard-bet').textContent = val;
+    }
+
+    document.querySelectorAll('.chip-button').forEach(c =>
+      c.addEventListener('click', () => { ac(); selectChip(parseInt(c.dataset.chip, 10)); }));
+
+    document.getElementById('bet-plus').addEventListener('click', () => {
+      standardBet = Math.min(100000, standardBet + 100);
+      localStorage.setItem('aap_standard_bet', String(standardBet));
+      selectChip(standardBet);
     });
 
-    loadLeaderboard();
+    document.getElementById('bet-minus').addEventListener('click', () => {
+      standardBet = Math.max(100, standardBet - 100);
+      localStorage.setItem('aap_standard_bet', String(standardBet));
+      selectChip(standardBet);
+    });
+
+    // Deposit/Withdrawal
+    document.querySelectorAll('.chip-sm').forEach(c =>
+      c.addEventListener('click', () => { ac(); selectDepositChip(parseInt(c.dataset.deposit, 10)); }));
+
+    document.getElementById('deposit-plus').addEventListener('click', () => {
+      depositAmount = Math.min(100000, depositAmount + 100);
+      updateDepositDisplay();
+    });
+
+    document.getElementById('deposit-minus').addEventListener('click', () => {
+      depositAmount = Math.max(100, depositAmount - 100);
+      updateDepositDisplay();
+    });
+
+    function selectDepositChip(val) {
+      depositAmount = val;
+      updateDepositDisplay();
+      document.querySelectorAll('.chip-sm').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.deposit, 10) === val));
+    }
+
+    function updateDepositDisplay() {
+      document.getElementById('deposit-amount').textContent = depositAmount;
+      document.querySelectorAll('.chip-sm').forEach(c =>
+        c.classList.toggle('selected', parseInt(c.dataset.deposit, 10) === depositAmount));
+    }
+
+    document.getElementById('deposit-btn').addEventListener('click', startDeposit);
+    document.getElementById('withdraw-btn').addEventListener('click', startWithdrawal);
+    document.getElementById('wallet-close').addEventListener('click', () => {
+      if (state.balance > 0) showPage('game');
+    });
+
+    async function startDeposit() {
+      try {
+        const res = await fetch('/api/wallet/deposit-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ amount: depositAmount })
+        });
+        if (!res.ok) throw new Error('Failed to start deposit');
+        const data = await res.json();
+        if (usernode && usernode.sendTransaction) {
+          await usernode.sendTransaction({
+            to: 'ut1xqgzkzd8tesvwg3f4pm7ghspqpd3edwgydkcpvlha3em0frm78es6uft0u',
+            amount: depositAmount,
+            txId: data.txHash
+          });
+          pollDepositStatus(data.txHash);
+        }
+      } catch (err) { console.error(err); alert('Deposit failed'); }
+    }
+
+    function pollDepositStatus(txHash) {
+      const maxAttempts = 300;
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        if (attempts++ > maxAttempts) {
+          clearInterval(interval);
+          alert('Deposit timeout');
+          return;
+        }
+        if (usernode && usernode.getTxStatus) {
+          const status = await usernode.getTxStatus(txHash);
+          if (status && status.status === 'confirmed') {
+            clearInterval(interval);
+            confirmDeposit(txHash);
+          }
+        }
+      }, 1000);
+    }
+
+    async function confirmDeposit(txHash) {
+      try {
+        const res = await fetch('/api/wallet/deposit-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (res.ok) {
+          loadWalletState();
+          showPage('game');
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    async function startWithdrawal() {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) throw new Error('Failed to start withdrawal');
+        const data = await res.json();
+        const amount = Math.max(0, walletState.balance - 10);
+        if (usernode && usernode.sendTransaction) {
+          await usernode.sendTransaction({
+            to: 'ut1xqgzkzd8tesvwg3f4pm7ghspqpd3edwgydkcpvlha3em0frm78es6uft0u',
+            amount: amount,
+            memo: `Withdraw: ${amount} TKN`,
+            txId: data.txHash
+          });
+          pollWithdrawalStatus(data.txHash);
+        }
+      } catch (err) { console.error(err); alert('Withdrawal failed'); }
+    }
+
+    function pollWithdrawalStatus(txHash) {
+      const maxAttempts = 300;
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        if (attempts++ > maxAttempts) {
+          clearInterval(interval);
+          alert('Withdrawal timeout');
+          return;
+        }
+        if (usernode && usernode.getTxStatus) {
+          const status = await usernode.getTxStatus(txHash);
+          if (status && status.status === 'confirmed') {
+            clearInterval(interval);
+            confirmWithdrawal(txHash);
+          }
+        }
+      }, 1000);
+    }
+
+    async function confirmWithdrawal(txHash) {
+      try {
+        const res = await fetch('/api/wallet/withdrawal-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ txHash })
+        });
+        if (res.ok) {
+          loadWalletState();
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    // Help modal
+    document.getElementById('help-close').addEventListener('click', () => {
+      document.getElementById('help-modal').classList.remove('open');
+    });
+
+    // Init
+    selectChip(standardBet);
+    updateDepositDisplay();
+
+    (async () => {
+      loadWalletState();
+      await updateState();
+      await loadTransactionHistory();
+      setInterval(updateState, 1000);
+      setInterval(loadTransactionHistory, 5000);
+    })();
   </script>
+
+  <!-- SVG filter -->
+  <svg id="inkRoughen" style="display: none;">
+    <filter id="inkRoughen">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" seed="2" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" />
+    </filter>
+  </svg>
 </body>
 </html>
