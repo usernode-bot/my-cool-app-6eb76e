@@ -3,5 +3,10 @@
   "visibility": {
     "build": "private",
     "view": "public"
-  }
+  },
+  "tests": [
+    { "name": "health check", "path": "/health", "expect": { "status": 200 } },
+    { "name": "game state is public", "path": "/api/game/state", "expect": { "status": 200 } },
+    { "name": "game env is public", "path": "/api/game/env", "expect": { "status": 200 } }
+  ]
 }
