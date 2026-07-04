@@ -29,6 +29,12 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+// Favicon: answer the browser's automatic /favicon.ico request with a
+// successful 204 so it never falls through to the auth-gated catch-all
+// (which would return 401 and log a console error). This route is a GET
+// on a non-/api/ path, so it bypasses the JWT gate above.
+app.get('/favicon.ico', (_req, res) => res.status(204).end());
+
 app.get('/api/game/env', (_req, res) => res.json({ isStaging: IS_STAGING }));
 
 // ── Game state (public) ──────────────────────────────────────────────────────
