@@ -1,8 +1,20 @@
 {
+  "name": "Awas Ada Pocong",
   "secrets": [],
   "visibility": {
     "build": "private",
     "view": "public"
   },
-  "name": "Awas Ada Pocong"
+  "tests": [
+    {
+      "name": "Game loads with no errors",
+      "path": "/",
+      "expectSelector": "#title"
+    },
+    {
+      "name": "Game state API returns round data",
+      "path": "/api/game/state",
+      "expectText": "round"
+    }
+  ]
 }
