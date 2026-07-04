@@ -285,10 +285,73 @@
     #confirm-yes:hover { filter: brightness(1.2); }
     #confirm-no:hover  { filter: brightness(1.2); }
 
+    /* How-to-play intro overlay */
+    #intro-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(4,4,6,0.82);
+      align-items: center; justify-content: center;
+      padding: 20px;
+      animation: introFade 0.25s ease-out;
+    }
+    #intro-overlay.show { display: flex; }
+    @keyframes introFade { from { opacity: 0; } to { opacity: 1; } }
+    #intro-card {
+      max-width: 420px; width: 100%;
+      background: linear-gradient(160deg, #17171a, #101012);
+      border: 2px solid #ff2222; border-radius: 16px;
+      padding: 22px 24px 20px;
+      box-shadow: 0 0 44px rgba(255,0,0,0.35);
+      color: #e8e8e8; text-align: center;
+    }
+    #intro-card h2 {
+      font-family: 'Creepster', cursive; font-size: 2rem;
+      color: #ff3030; letter-spacing: 2px;
+      text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6);
+      margin-bottom: 4px;
+    }
+    #intro-card .intro-sub {
+      font-family: sans-serif; font-size: 0.78rem; color: #9a9a9a;
+      margin-bottom: 14px;
+    }
+    #intro-card ol {
+      text-align: left; margin: 0 0 14px; padding-left: 4px;
+      list-style: none; counter-reset: step;
+    }
+    #intro-card ol li {
+      font-family: sans-serif; font-size: 0.9rem; line-height: 1.45;
+      color: #dcdcdc; margin-bottom: 10px; padding-left: 34px; position: relative;
+      counter-increment: step;
+    }
+    #intro-card ol li::before {
+      content: counter(step);
+      position: absolute; left: 0; top: 0;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #7c1d0e; color: #ffd0c4;
+      font-family: 'Creepster', cursive; font-size: 0.95rem;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 8px rgba(255,60,20,0.4);
+    }
+    #intro-card ol li b { color: #ffd700; }
+    #intro-card ol li .lose { color: #ff5555; font-weight: bold; }
+    #intro-card ol li .win  { color: #7fe07f; font-weight: bold; }
+    #intro-note {
+      font-family: sans-serif; font-size: 0.74rem; color: #b98;
+      background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
+      border-radius: 8px; padding: 8px 10px; margin-bottom: 16px; line-height: 1.4;
+    }
+    #intro-got {
+      font-family: 'Creepster', cursive; font-size: 1.3rem; letter-spacing: 1px;
+      color: #fff; background: #7c3aed; border: none; border-radius: 10px;
+      padding: 9px 30px; cursor: pointer; transition: filter 0.15s;
+    }
+    #intro-got:hover { filter: brightness(1.18); }
+
     @media (max-width: 768px) {
       #tutorial-panel, #mascot-canvas { display: none; }
       #hud-coin { right: 16px; }
       .bet-chip { padding: 4px 7px; font-size: 0.8rem; }
+      #intro-card h2 { font-size: 1.7rem; }
     }
   </style>
 </head>
@@ -359,6 +422,20 @@
     <span id="confirm-text">Bet 1000 TKN on ...?</span>
     <button id="confirm-yes">✓ OK</button>
     <button id="confirm-no">✕</button>
+  </div>
+
+  <div id="intro-overlay">
+    <div id="intro-card">
+      <h2>👻 Cara Bermain</h2>
+      <div class="intro-sub">How to play — Awas Ada Pocong</div>
+      <ol>
+        <li>Pilih jumlah taruhan <b>(100–5000 TKN)</b> di panel bawah. <em>(Pick a bet amount.)</em></li>
+        <li>Ketuk sebuah ruangan untuk memasang taruhan di sana. <em>(Tap a room to bet.)</em></li>
+        <li>Pocong memilih <b>pintu acak</b>. Kalau ia masuk ruanganmu — <span class="lose">kamu KALAH 💀</span>. Ruangan lain — <span class="win">kamu MENANG 🎉</span> (Modal + 2× Bet).</li>
+      </ol>
+      <div id="intro-note">🛠 Di staging, pakai <b>Dev Controls</b> di kiri-bawah — <b>Resolve Round</b> lalu <b>New Round</b> — untuk menjalankan ronde sendiri dan melihat Pocong memilih pintu.</div>
+      <button id="intro-got">Got it 👻</button>
+    </div>
   </div>
 
   <script>
@@ -617,38 +694,66 @@
         .forEach(el => layer.appendChild(el));
     }
 
-    // ── Pocong ghost (2D sprite along the hallway) ──────────────────────────────
+    // ── Pocong ghost (2D sprite with fake-3D flair) ─────────────────────────────
     const GHOST_W = 42, GHOST_H = 58;
-    const ghostImg = svgEl('image', { width: GHOST_W, height: GHOST_H });
+    // Soft ground shadow (grows/shrinks with the bob) + the sprite itself.
+    const ghostShadow = svgEl('ellipse', {
+      cx: 0, cy: 0, rx: 20, ry: 6, fill: 'rgba(0,0,0,0.34)',
+    });
+    $('layer-ghost').appendChild(ghostShadow);
+    const ghostImg = svgEl('image', { x: 0, y: 0, width: GHOST_W, height: GHOST_H });
     ghostImg.setAttributeNS(XLINK, 'href', '/assets/pocong.jpg');
     ghostImg.setAttribute('href', '/assets/pocong.jpg');
     $('layer-ghost').appendChild(ghostImg);
 
-    // Hallway path: the corridor tiles (fallback to a central point if none)
-    const ghostLoop = corridorCenters.length
-      ? corridorCenters.slice()
-      : [{ x: ISO.ox, y: ISO.oy + 300 }];
+    // Central hallway: a spine down the middle of the map, spanning the WHOLE
+    // mansion top-to-bottom (front-to-back), not just the last few tiles.
+    // Points are stored as a there-and-back palindrome so the ghost paces the
+    // full corridor and returns smoothly instead of teleporting.
+    const spineX = ISO.ox; // screen-center column (gx == gz)
+    const spine = [
+      { x: spineX,       y: ISO.oy - 12 },   // behind Kamar Utama
+      { x: spineX + 26,  y: ISO.oy + 108 },
+      { x: spineX - 26,  y: ISO.oy + 226 },
+      { x: spineX + 26,  y: ISO.oy + 344 },
+      { x: spineX - 20,  y: ISO.oy + 452 },
+      { x: spineX,       y: ISO.oy + 452 + ISO.hh }, // front corridor edge
+    ];
+    const ghostLoop = spine.concat(spine.slice(1, -1).reverse());
     let ghostBase = { x: ghostLoop[0].x, y: ghostLoop[0].y };
     let gSeg = 0, gT = 0;
 
-    function placeGhost(px, py) {
-      ghostImg.setAttribute('x', (px - GHOST_W / 2).toFixed(1));
-      ghostImg.setAttribute('y', (py - GHOST_H).toFixed(1));
+    function renderGhost(gx, gy) {
+      const t = performance.now();
+      const lift  = Math.abs(Math.sin(t / 300)) * 16;      // lively hop, returns to floor
+      const sway  = Math.sin(t / 620) * 6;                 // gentle side-to-side
+      const pulse = 1 + Math.sin(t / 240) * 0.05;          // subtle scale breathing
+      const f     = 1 - (lift / 16) * 0.55;                // shadow factor (small when high)
+      ghostShadow.setAttribute('cx', (gx + sway * 0.5).toFixed(1));
+      ghostShadow.setAttribute('cy', gy.toFixed(1));
+      ghostShadow.setAttribute('rx', (20 * f).toFixed(1));
+      ghostShadow.setAttribute('ry', (6 * f).toFixed(1));
+      ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.34 * f).toFixed(3) + ')');
+      // Position + scale the sprite around its bottom-center (the feet).
+      const px = gx + sway, py = gy - lift;
+      ghostImg.setAttribute('transform',
+        'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ') ' +
+        'scale(' + pulse.toFixed(3) + ') ' +
+        'translate(' + (-GHOST_W / 2) + ',' + (-GHOST_H) + ')');
     }
 
     function tickGhost() {
       if (currentState.round?.status !== 'completed' && ghostLoop.length > 1) {
-        gT += 0.018;
+        gT += 0.016;
         if (gT >= 1) { gT = 0; gSeg = (gSeg + 1) % ghostLoop.length; }
         const a = ghostLoop[gSeg];
         const b = ghostLoop[(gSeg + 1) % ghostLoop.length];
         ghostBase = { x: a.x + (b.x - a.x) * gT, y: a.y + (b.y - a.y) * gT };
       }
-      const bob = Math.sin(performance.now() / 300) * 3;
-      placeGhost(ghostBase.x, ghostBase.y + bob);
+      renderGhost(ghostBase.x, ghostBase.y);
       requestAnimationFrame(tickGhost);
     }
-    placeGhost(ghostBase.x, ghostBase.y);
+    renderGhost(ghostBase.x, ghostBase.y);
     requestAnimationFrame(tickGhost);
 
     // ── Blood splatter art (canvas → data URL) ──────────────────────────────────
@@ -1009,6 +1114,27 @@
       ctx.beginPath();
       ctx.moveTo(122, 22); ctx.lineTo(134, 28); ctx.lineTo(122, 34);
       ctx.closePath(); ctx.fillStyle = '#cc0000'; ctx.fill();
+    })();
+
+    // ── How-to-play intro overlay (first visit only) ────────────────────────────
+    (function introOverlay() {
+      const INTRO_KEY = 'aap_intro_seen_v1';
+      const overlay = $('intro-overlay');
+      if (!overlay) return;
+
+      let seen = false;
+      try { seen = localStorage.getItem(INTRO_KEY) === '1'; } catch (_) {}
+
+      function dismiss() {
+        overlay.classList.remove('show');
+        try { localStorage.setItem(INTRO_KEY, '1'); } catch (_) {}
+      }
+
+      if (!seen) overlay.classList.add('show');
+
+      $('intro-got').addEventListener('click', dismiss);
+      // Tapping the dark backdrop (outside the card) also dismisses.
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
     })();
   </script>
 </body>
