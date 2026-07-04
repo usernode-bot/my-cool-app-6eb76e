@@ -3,5 +3,6 @@
   "visibility": {
     "build": "private",
     "view": "public"
-  }
+  },
+  "name": "Awas Ada Pocong"
 }
