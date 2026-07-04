@@ -74,10 +74,21 @@
     }
     body.shaking { animation: shake 0.5s ease; }
 
-    canvas#game-canvas {
-      display: block; position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%; cursor: default;
+    /* 2D isometric map */
+    #map-wrap {
+      position: fixed; inset: 0; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 42%, #1a1a1a 0%, #0a0a0a 72%);
     }
+    #game-svg {
+      display: block; width: 100%; height: 100%;
+    }
+    .hotspot { fill: transparent; stroke: none; }
+    .hotspot.bettable { cursor: pointer; }
+    .hotspot.hovered { fill: rgba(255,255,255,0.14); }
+    .player-fig { transition: filter 0.4s ease; }
+    .player-fig.dim  { filter: grayscale(1) brightness(0.45); }
+    .player-fig.safe { filter: sepia(0.7) saturate(2.2) hue-rotate(2deg) brightness(1.05); }
 
     #title {
       position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
@@ -89,7 +100,7 @@
 
     #compass-hint {
       position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
-      font-family: monospace; font-size: 0.62rem; color: #444; line-height: 1.5;
+      font-family: monospace; font-size: 0.62rem; color: #555; line-height: 1.5;
     }
 
     /* Mascot */
@@ -282,9 +293,22 @@
   </style>
 </head>
 <body>
+  <div id="map-wrap">
+    <svg id="game-svg" viewBox="0 0 1376 768" preserveAspectRatio="xMidYMid meet"
+         xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <g id="layer-static"></g>
+      <g id="layer-tint"></g>
+      <g id="layer-blood"></g>
+      <g id="layer-figures"></g>
+      <g id="layer-ghost"></g>
+      <g id="layer-labels"></g>
+      <g id="layer-hotspots"></g>
+    </svg>
+  </div>
+
   <div id="title">👻 Awas Ada Pocong</div>
 
-  <div id="compass-hint">scroll / pinch to zoom</div>
+  <div id="compass-hint">👻 Ketuk ruangan untuk bertaruh</div>
 
   <canvas id="mascot-canvas" width="130" height="130"></canvas>
 
@@ -337,133 +361,29 @@
     <button id="confirm-no">✕</button>
   </div>
 
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-    }
-  }
-  </script>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-    import { RenderPass }    from 'three/addons/postprocessing/RenderPass.js';
-    import { OutlinePass }   from 'three/addons/postprocessing/OutlinePass.js';
-    import { ShaderPass }    from 'three/addons/postprocessing/ShaderPass.js';
-    import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
-
+  <script>
     // ── Auth ──────────────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || '';
     const authHeaders = token ? { 'x-usernode-token': token } : {};
 
-    // ── Renderer ──────────────────────────────────────────────────────────────
-    const canvas = document.getElementById('game-canvas') || (() => {
-      const c = document.createElement('canvas');
-      c.id = 'game-canvas';
-      document.body.appendChild(c);
-      return c;
-    })();
-
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.setClearColor(0x0a0a0a);
-
-    // ── Scene ─────────────────────────────────────────────────────────────────
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a0a);
-
-    // ── Camera ────────────────────────────────────────────────────────────────
-    const camState = {
-      target: new THREE.Vector3(6, 0, 6),
-      viewSize: 16,
-    };
-
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
-    const ISO_ELEV = 35.264 * Math.PI / 180;
-
-    function updateCamera() {
-      const aspect = window.innerWidth / window.innerHeight;
-      camera.left   = -camState.viewSize * aspect;
-      camera.right  =  camState.viewSize * aspect;
-      camera.top    =  camState.viewSize;
-      camera.bottom = -camState.viewSize;
-      // Fixed NE isometric angle: azimuth=0 → sin(0)=0, cos(0)=1
-      const r = camState.viewSize * 2.5;
-      camera.position.set(
-        camState.target.x,
-        camState.target.y + r * Math.sin(ISO_ELEV),
-        camState.target.z + r * Math.cos(ISO_ELEV)
-      );
-      camera.lookAt(camState.target);
-      camera.updateProjectionMatrix();
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const XLINK = 'http://www.w3.org/1999/xlink';
+    function svgEl(tag, attrs) {
+      const e = document.createElementNS(SVGNS, tag);
+      if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
     }
-    updateCamera();
+    const $ = (id) => document.getElementById(id);
 
-    // ── Lights ────────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.0);
-    dirLight1.position.set(10, 20, 10);
-    dirLight1.castShadow = true;
-    dirLight1.shadow.mapSize.width = 1024;
-    dirLight1.shadow.mapSize.height = 1024;
-    scene.add(dirLight1);
-    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
-    dirLight2.position.set(-10, 10, -10);
-    scene.add(dirLight2);
-
-    // ── Toon gradient ─────────────────────────────────────────────────────────
-    function makeToonGradient() {
-      const c = document.createElement('canvas');
-      c.width = 4; c.height = 1;
-      const ctx = c.getContext('2d');
-      const g = ctx.createLinearGradient(0, 0, 4, 0);
-      g.addColorStop(0,   '#1a1a1a');
-      g.addColorStop(0.35,'#777');
-      g.addColorStop(0.65,'#ddd');
-      g.addColorStop(1,   '#fff');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, 4, 1);
-      const tex = new THREE.CanvasTexture(c);
-      tex.minFilter = THREE.NearestFilter;
-      tex.magFilter = THREE.NearestFilter;
-      return tex;
-    }
-    const gradientMap = makeToonGradient();
-
-    function toonMat(color, opacity) {
-      const opts = { color: new THREE.Color(color), gradientMap };
-      if (opacity !== undefined && opacity < 1) { opts.transparent = true; opts.opacity = opacity; }
-      return new THREE.MeshToonMaterial(opts);
-    }
-
-    const matFloor = toonMat(0xe0e0e0);
-    const matWall  = toonMat(0xf0f0ea);
-    const matFurn  = toonMat(0x999999);
-    const matDark  = toonMat(0x444444);
-    const matCorr  = toonMat(0xb0b0b0);
-    const matCeil  = toonMat(0x888888);
-
-    // ── Constants ─────────────────────────────────────────────────────────────
-    const GRID_SPACING = 4.0;
-    const ROOM_W = 4.0, ROOM_D = 4.0, WALL_H = 2.8, WALL_T = 0.12;
-    const DOOR_GAP = 1.2, DOOR_H = 2.1;
-    const SEG_W = (ROOM_W - DOOR_GAP) / 2;   // 1.4
-    const LINTEL_H = WALL_H - DOOR_H;         // 0.7
-    const CEIL_DEPTH = 0.65;
-
-    // ── Room definitions ──────────────────────────────────────────────────────
+    // ── Room definitions (grid → isometric projection) ─────────────────────────
     const ROOMS = [
       { slug: 'kamar-utama',       label: 'Kamar Utama',       gridX: 0, gridZ: 0, type: 'bedroom'  },
       { slug: 'library',           label: 'Library',           gridX: 1, gridZ: 0, type: 'library'  },
       { slug: 'kamar-asisten',     label: 'Kamar Asisten',     gridX: 2, gridZ: 0, type: 'bedroom'  },
       { slug: 'laundry-area',      label: 'Laundry Area',      gridX: 3, gridZ: 0, type: 'laundry'  },
       { slug: 'kitchen-area',      label: 'Kitchen Area',      gridX: 0, gridZ: 1, type: 'kitchen'  },
-      { slug: 'kamar-anak',        label: 'Kamar Anak-Anak',   gridX: 1, gridZ: 1, type: 'bedroom'  },
+      { slug: 'kamar-anak',        label: 'Kamar Anak-Anak',   gridX: 1, gridZ: 1, type: 'playroom' },
       { slug: 'playing-room',      label: 'Playing Room',      gridX: 2, gridZ: 1, type: 'playroom' },
       { slug: 'living-room',       label: 'Living Room',       gridX: 3, gridZ: 1, type: 'living'   },
       { slug: 'kamar-mandi',       label: 'Kamar Mandi',       gridX: 0, gridZ: 2, type: 'bathroom' },
@@ -476,51 +396,265 @@
       { slug: null, label: null, gridX: 3, gridZ: 3, type: 'corridor' },
     ];
 
-    // ── Wall group builders ───────────────────────────────────────────────────
-    function solidWallGroup(w, h, d) {
-      const g = new THREE.Group();
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
-      m.position.y = h / 2;
-      m.castShadow = true; m.receiveShadow = true;
-      g.add(m); return g;
+    const ISO = { hw: 108, hh: 62, wallH: 72, ox: 688, oy: 172 };
+    function iso(gx, gz) {
+      return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh };
+    }
+    function ptsStr(arr) { return arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '); }
+
+    // Simple per-type furniture, expressed as small iso cuboids:
+    // [offsetX, offsetY(screen, negative = toward back), halfW, halfDepth, height]
+    const FURN = {
+      bedroom:  [[-46,-14,28,13,24],[36,-6,15,11,30],[8,-30,10,8,16]],
+      playroom: [[-40,-10,24,12,10],[36,-4,13,10,20],[2,6,9,9,9]],
+      library:  [[-44,-16,30,10,42],[36,-2,18,12,10],[-2,-30,8,8,14]],
+      reading:  [[-44,-16,30,10,42],[36,-4,17,12,11],[-2,-28,8,8,14]],
+      kitchen:  [[-42,-14,28,11,26],[36,-16,13,10,40],[8,-28,15,7,10]],
+      laundry:  [[-44,-12,16,12,30],[-10,-16,16,12,30],[38,-4,11,10,20]],
+      living:   [[-44,-6,30,14,14],[6,-4,20,12,7],[36,-26,17,4,24]],
+      bathroom: [[-44,-12,26,12,16],[36,-14,13,9,18],[8,-26,10,8,20]],
+      backyard: [[-42,-20,9,9,36],[-42,-44,20,20,4],[32,-2,20,6,8]],
+      storage:  [[-42,-14,30,12,46],[36,-6,17,12,26],[8,-28,12,8,16]],
+    };
+
+    function drawCuboid(g, cx, cy, hw, hd, h) {
+      // Right-front face
+      g.appendChild(svgEl('polygon', {
+        points: ptsStr([[cx, cy + hd - h], [cx + hw, cy - h], [cx + hw, cy], [cx, cy + hd]]),
+        fill: '#6a6a68', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+      }));
+      // Left-front face
+      g.appendChild(svgEl('polygon', {
+        points: ptsStr([[cx - hw, cy - h], [cx, cy + hd - h], [cx, cy + hd], [cx - hw, cy]]),
+        fill: '#8c8c8a', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+      }));
+      // Top face
+      g.appendChild(svgEl('polygon', {
+        points: ptsStr([[cx, cy - hd - h], [cx + hw, cy - h], [cx, cy + hd - h], [cx - hw, cy - h]]),
+        fill: '#c6c6c4', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+      }));
     }
 
-    function doorwayWallGroupX(totalLen) {
-      // Wall running along X (negZ / posZ face); doorway in center
-      const g = new THREE.Group();
-      const segW = (totalLen - DOOR_GAP) / 2;
-      function seg(w, h, d, x, yBot, z) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
-        m.position.set(x, yBot + h / 2, z);
-        m.castShadow = true; m.receiveShadow = true;
-        g.add(m);
+    // ── Build the static isometric mansion ──────────────────────────────────────
+    const roomGeo = {};          // slug → { cx, cy, floorPts, figureAnchor, ghostRest }
+    const hotspotEls = {};       // slug → <polygon>
+    const corridorCenters = [];
+
+    (function buildMap() {
+      const staticG   = $('layer-static');
+      const labelsG   = $('layer-labels');
+      const hotspotsG = $('layer-hotspots');
+      const hw = ISO.hw, hh = ISO.hh, wH = ISO.wallH;
+
+      // Painter's order: back (small gx+gz) to front (large gx+gz)
+      const ordered = ROOMS.slice().sort((a, b) => (a.gridX + a.gridZ) - (b.gridX + b.gridZ));
+
+      for (const r of ordered) {
+        const c = iso(r.gridX, r.gridZ);
+        const cx = c.x, cy = c.y;
+        const isCorr = r.type === 'corridor';
+
+        const top    = [cx, cy - hh];
+        const right  = [cx + hw, cy];
+        const bottom = [cx, cy + hh];
+        const left   = [cx - hw, cy];
+
+        // Back-left wall (rises from the left→top edge)
+        staticG.appendChild(svgEl('polygon', {
+          points: ptsStr([left, top, [cx, cy - hh - wH], [cx - hw, cy - wH]]),
+          fill: '#9a9a98', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+        }));
+        // Back-right wall (rises from the top→right edge)
+        staticG.appendChild(svgEl('polygon', {
+          points: ptsStr([top, right, [cx + hw, cy - wH], [cx, cy - hh - wH]]),
+          fill: '#7c7c7a', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+        }));
+        // Floor diamond
+        staticG.appendChild(svgEl('polygon', {
+          points: ptsStr([top, right, bottom, left]),
+          fill: isCorr ? '#b0b0ae' : '#dcdcda',
+          stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+        }));
+
+        if (isCorr) {
+          corridorCenters.push({ x: cx, y: cy - 6 });
+          continue;
+        }
+
+        // Furniture (decorative; never intercepts pointer events)
+        const set = FURN[r.type] || FURN.bedroom;
+        for (const f of set) drawCuboid(staticG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
+
+        // Label pill above the room
+        const lx = cx, ly = cy - hh - wH - 4;
+        const wpx = r.label.length * 6.6 + 14;
+        labelsG.appendChild(svgEl('rect', {
+          x: (lx - wpx / 2).toFixed(1), y: (ly - 15).toFixed(1),
+          width: wpx.toFixed(1), height: 17, rx: 5,
+          fill: 'rgba(10,10,10,0.82)', stroke: '#cfcfcf', 'stroke-width': 1,
+        }));
+        const t = svgEl('text', {
+          x: lx.toFixed(1), y: (ly - 3).toFixed(1),
+          'text-anchor': 'middle', 'font-family': 'sans-serif',
+          'font-size': 11, 'font-weight': 'bold', fill: '#f4f4f4',
+        });
+        t.textContent = r.label;
+        labelsG.appendChild(t);
+
+        // Hotspot = floor diamond
+        const hs = svgEl('polygon', {
+          points: ptsStr([top, right, bottom, left]),
+          class: 'hotspot',
+        });
+        hs.dataset.slug = r.slug;
+        hotspotsG.appendChild(hs);
+        hotspotEls[r.slug] = hs;
+
+        roomGeo[r.slug] = {
+          cx, cy,
+          floorPts: ptsStr([top, right, bottom, left]),
+          figureAnchor: { x: cx, y: cy + 12 },
+          ghostRest:    { x: cx, y: cy - 4 },
+        };
+
+        const room = r;
+        hs.addEventListener('pointerenter', () => {
+          if (canBet()) hs.classList.add('hovered');
+        });
+        hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
+        hs.addEventListener('click', () => { if (canBet()) showConfirmChip(room); });
       }
-      seg(segW, DOOR_H, WALL_T, -(DOOR_GAP / 2 + segW / 2), 0, 0);
-      seg(segW, DOOR_H, WALL_T,  (DOOR_GAP / 2 + segW / 2), 0, 0);
-      if (LINTEL_H > 0.01) seg(totalLen, LINTEL_H, WALL_T, 0, DOOR_H, 0);
-      return g;
+    })();
+
+    // ── Player token art (canvas → data URL, cached per initial) ─────────────────
+    const tokenCache = {};
+    function playerTokenURL(initial) {
+      const key = (initial || '?').toUpperCase().charAt(0);
+      if (tokenCache[key]) return tokenCache[key];
+      const c = document.createElement('canvas');
+      c.width = 68; c.height = 96;
+      const ctx = c.getContext('2d');
+      const cx = 34;
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath(); ctx.ellipse(cx, 90, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // Suit body
+      ctx.fillStyle = '#2a2a2a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 13, 88); ctx.lineTo(cx - 9, 52);
+      ctx.lineTo(cx + 9, 52);  ctx.lineTo(cx + 13, 88); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      // Red tie
+      ctx.fillStyle = '#cc1111';
+      ctx.beginPath(); ctx.moveTo(cx, 54); ctx.lineTo(cx - 3, 68);
+      ctx.lineTo(cx, 74); ctx.lineTo(cx + 3, 68); ctx.closePath(); ctx.fill();
+      // Head
+      ctx.fillStyle = '#e8d6bc';
+      ctx.beginPath(); ctx.arc(cx, 44, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+      // Eyes
+      ctx.fillStyle = '#222';
+      ctx.beginPath(); ctx.arc(cx - 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
+      // Hat brim + crown
+      ctx.fillStyle = '#141414';
+      ctx.beginPath(); ctx.ellipse(cx, 34, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillRect(cx - 10, 18, 20, 16);
+      ctx.fillStyle = '#cc1111'; ctx.fillRect(cx - 10, 30, 20, 3);
+      // Initial tag above hat
+      ctx.fillStyle = 'rgba(0,0,0,0.82)';
+      ctx.beginPath(); ctx.arc(cx, 9, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(key, cx, 10);
+      const url = c.toDataURL();
+      tokenCache[key] = url;
+      return url;
     }
 
-    function doorwayWallGroupZ(totalLen) {
-      // Wall running along Z (negX / posX face); doorway in center
-      const g = new THREE.Group();
-      const segD = (totalLen - DOOR_GAP) / 2;
-      function seg(w, h, d, x, yBot, z) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
-        m.position.set(x, yBot + h / 2, z);
-        m.castShadow = true; m.receiveShadow = true;
-        g.add(m);
+    // ── Player figures ──────────────────────────────────────────────────────────
+    const FIG_W = 26, FIG_H = 37;
+    const playerFigures = [];
+
+    function placePlayerTokens(players) {
+      const layer = $('layer-figures');
+      for (const el of playerFigures) el.remove();
+      playerFigures.length = 0;
+
+      const counts = {};
+      for (let i = 0; i < Math.min(players.length, 50); i++) {
+        const p = players[i];
+        const geo = roomGeo[p.room_slug];
+        if (!geo) continue;
+        counts[p.room_slug] = (counts[p.room_slug] || 0) + 1;
+        const n = counts[p.room_slug];
+        const ang = (n - 1) * 2.399963;
+        const r = Math.min(6 + (n - 1) * 12, 46);
+        const px = geo.figureAnchor.x + r * Math.cos(ang);
+        const py = geo.figureAnchor.y + r * Math.sin(ang) * 0.52;
+
+        const img = svgEl('image', {
+          class: 'player-fig',
+          x: (px - FIG_W / 2).toFixed(1),
+          y: (py - FIG_H).toFixed(1),
+          width: FIG_W, height: FIG_H,
+        });
+        img.setAttributeNS(XLINK, 'href', playerTokenURL(p.username ? p.username[0] : '?'));
+        img.setAttribute('href', playerTokenURL(p.username ? p.username[0] : '?'));
+        img.dataset.slug = p.room_slug;
+        img.dataset.username = p.username || '';
+        // Front-to-back stacking so lower figures overlap correctly
+        img.style.setProperty('--depth', py);
+        layer.appendChild(img);
+        playerFigures.push(img);
       }
-      seg(WALL_T, DOOR_H, segD, 0, 0, -(DOOR_GAP / 2 + segD / 2));
-      seg(WALL_T, DOOR_H, segD, 0, 0,  (DOOR_GAP / 2 + segD / 2));
-      if (LINTEL_H > 0.01) seg(WALL_T, LINTEL_H, totalLen, 0, DOOR_H, 0);
-      return g;
+      // Sort within layer by y so nearer figures paint on top
+      playerFigures
+        .slice()
+        .sort((a, b) => parseFloat(a.getAttribute('y')) - parseFloat(b.getAttribute('y')))
+        .forEach(el => layer.appendChild(el));
     }
 
-    // ── Blood splatter texture ────────────────────────────────────────────────
-    let sharedBloodTex = null;
-    function makeBloodSplatter() {
-      if (sharedBloodTex) return sharedBloodTex;
+    // ── Pocong ghost (2D sprite along the hallway) ──────────────────────────────
+    const GHOST_W = 42, GHOST_H = 58;
+    const ghostImg = svgEl('image', { width: GHOST_W, height: GHOST_H });
+    ghostImg.setAttributeNS(XLINK, 'href', '/assets/pocong.jpg');
+    ghostImg.setAttribute('href', '/assets/pocong.jpg');
+    $('layer-ghost').appendChild(ghostImg);
+
+    // Hallway path: the corridor tiles (fallback to a central point if none)
+    const ghostLoop = corridorCenters.length
+      ? corridorCenters.slice()
+      : [{ x: ISO.ox, y: ISO.oy + 300 }];
+    let ghostBase = { x: ghostLoop[0].x, y: ghostLoop[0].y };
+    let gSeg = 0, gT = 0;
+
+    function placeGhost(px, py) {
+      ghostImg.setAttribute('x', (px - GHOST_W / 2).toFixed(1));
+      ghostImg.setAttribute('y', (py - GHOST_H).toFixed(1));
+    }
+
+    function tickGhost() {
+      if (currentState.round?.status !== 'completed' && ghostLoop.length > 1) {
+        gT += 0.018;
+        if (gT >= 1) { gT = 0; gSeg = (gSeg + 1) % ghostLoop.length; }
+        const a = ghostLoop[gSeg];
+        const b = ghostLoop[(gSeg + 1) % ghostLoop.length];
+        ghostBase = { x: a.x + (b.x - a.x) * gT, y: a.y + (b.y - a.y) * gT };
+      }
+      const bob = Math.sin(performance.now() / 300) * 3;
+      placeGhost(ghostBase.x, ghostBase.y + bob);
+      requestAnimationFrame(tickGhost);
+    }
+    placeGhost(ghostBase.x, ghostBase.y);
+    requestAnimationFrame(tickGhost);
+
+    // ── Blood splatter art (canvas → data URL) ──────────────────────────────────
+    let sharedBloodURL = null;
+    function bloodURL() {
+      if (sharedBloodURL) return sharedBloodURL;
       const c = document.createElement('canvas');
       c.width = 256; c.height = 256;
       const ctx = c.getContext('2d');
@@ -540,12 +674,10 @@
         ctx.fill();
         ctx.restore();
       }
-      // center pool
       ctx.beginPath();
       ctx.ellipse(128, 128, 42, 36, 0.3, 0, Math.PI * 2);
       ctx.fillStyle = '#aa0000';
       ctx.fill();
-      // tiny secondary drops
       for (let i = 0; i < 6; i++) {
         const a = i * 1.05;
         const d = 70 + i * 10;
@@ -554,506 +686,77 @@
         ctx.fillStyle = '#cc0000';
         ctx.fill();
       }
-      sharedBloodTex = new THREE.CanvasTexture(c);
-      return sharedBloodTex;
+      sharedBloodURL = c.toDataURL();
+      return sharedBloodURL;
     }
 
-    // ── Label sprites ─────────────────────────────────────────────────────────
-    function makeLabelSprite(text) {
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = 64;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = 'rgba(0,0,0,0.68)';
-      if (ctx.roundRect) { ctx.roundRect(2, 2, 252, 60, 6); } else { ctx.rect(2, 2, 252, 60); }
-      ctx.fill();
-      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(2, 2, 252, 60);
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(text, 128, 32);
-      const tex = new THREE.CanvasTexture(c);
-      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
-      const sprite = new THREE.Sprite(mat);
-      sprite.scale.set(2.4, 0.6, 1);
-      return sprite;
-    }
-
-    // ── Furniture ─────────────────────────────────────────────────────────────
-    function addFurniture(group, type) {
-      const P = [];
-      const matPillow = toonMat(0xf0f0ee);
-      const matLampShade = toonMat(0xddddcc);
-      const matMid = toonMat(0x888888);
-      const matBook = toonMat(0x998877);
-
-      if (type === 'bedroom') {
-        // Bed against negZ wall
-        P.push({ geo: new THREE.BoxGeometry(1.75, 0.26, 1.0), mat: matFurn, x: -0.2, y: 0.13, z: -1.15 });
-        // Headboard
-        P.push({ geo: new THREE.BoxGeometry(1.75, 0.72, 0.09), mat: matDark, x: -0.2, y: 0.5, z: -1.63 });
-        // Pillow
-        P.push({ geo: new THREE.BoxGeometry(0.65, 0.1, 0.42), mat: matPillow, x: -0.55, y: 0.32, z: -1.25 });
-        // Wardrobe against negX wall (right of doorway — avoids z=0 doorway center)
-        P.push({ geo: new THREE.BoxGeometry(0.28, 1.62, 1.1), mat: matDark, x: -1.82, y: 0.81, z: -0.65 });
-        // Wardrobe door panels
-        P.push({ geo: new THREE.BoxGeometry(0.04, 1.35, 0.48), mat: matFurn, x: -1.68, y: 0.8, z: -0.44 });
-        P.push({ geo: new THREE.BoxGeometry(0.04, 1.35, 0.48), mat: matFurn, x: -1.68, y: 0.8, z: -0.92 });
-        // Nightstand
-        P.push({ geo: new THREE.BoxGeometry(0.44, 0.5, 0.4), mat: matFurn, x: 0.85, y: 0.25, z: -0.88 });
-        // Lamp on nightstand
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.05, 0.32, 6), mat: matDark, x: 0.85, y: 0.66, z: -0.88 });
-        P.push({ geo: new THREE.ConeGeometry(0.15, 0.18, 8), mat: matLampShade, x: 0.85, y: 0.82, z: -0.88 });
-
-      } else if (type === 'library') {
-        // 3 tall bookshelves along negZ wall (avoid doorway at x=0, ±0.6)
-        for (let i = 0; i < 3; i++) {
-          P.push({ geo: new THREE.BoxGeometry(0.65, 1.85, 0.26), mat: matDark, x: -1.15 + i * 0.72, y: 0.925, z: -1.77 });
-          // Book rows
-          for (let j = 0; j < 4; j++)
-            P.push({ geo: new THREE.BoxGeometry(0.6, 0.3, 0.16), mat: matBook, x: -1.15 + i * 0.72, y: 0.2 + j * 0.44, z: -1.66 });
-        }
-        // Reading desk
-        P.push({ geo: new THREE.BoxGeometry(1.1, 0.06, 0.62), mat: matFurn, x: 0.9, y: 0.68, z: -0.44 });
-        // Desk legs (4)
-        for (const [lx, lz] of [[-0.3,-0.2],[0.5,-0.2],[-0.3,-0.65],[0.5,-0.65]])
-          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.68, 6), mat: matDark, x: 0.9 + lx * 0.5, y: 0.34, z: lz });
-        // Chair
-        P.push({ geo: new THREE.BoxGeometry(0.44, 0.05, 0.4), mat: matDark, x: 0.9, y: 0.42, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.44, 0.48, 0.06), mat: matDark, x: 0.9, y: 0.66, z: -0.17 });
-        // Floor lamp
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.06, 1.65, 6), mat: matDark, x: -1.55, y: 0.825, z: 0.85 });
-        P.push({ geo: new THREE.ConeGeometry(0.22, 0.28, 8), mat: matLampShade, x: -1.55, y: 1.78, z: 0.85 });
-
-      } else if (type === 'laundry') {
-        // Washing machine (front-loader box)
-        P.push({ geo: new THREE.BoxGeometry(0.78, 0.82, 0.74), mat: matFurn, x: -1.42, y: 0.41, z: -1.42 });
-        P.push({ geo: new THREE.CylinderGeometry(0.27, 0.27, 0.04, 16), mat: matDark, x: -1.42, y: 0.83, z: -1.12 });
-        // Dryer stacked on top
-        P.push({ geo: new THREE.BoxGeometry(0.78, 0.82, 0.74), mat: matMid, x: -1.42, y: 1.23, z: -1.42 });
-        P.push({ geo: new THREE.CylinderGeometry(0.25, 0.25, 0.04, 16), mat: matDark, x: -1.42, y: 1.65, z: -1.12 });
-        // Laundry basket
-        P.push({ geo: new THREE.CylinderGeometry(0.27, 0.23, 0.52, 10), mat: matMid, x: 0.8, y: 0.26, z: -0.6 });
-        // Clothesline poles
-        P.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, 2.1, 6), mat: matDark, x: -0.3, y: 1.05, z: 1.0 });
-        P.push({ geo: new THREE.CylinderGeometry(0.025, 0.025, 2.1, 6), mat: matDark, x: 1.0, y: 1.05, z: 1.0 });
-        P.push({ geo: new THREE.BoxGeometry(1.35, 0.022, 0.022), mat: matDark, x: 0.35, y: 2.07, z: 1.0 });
-
-      } else if (type === 'kitchen') {
-        // Counter along negZ wall (left portion — right of doorway)
-        P.push({ geo: new THREE.BoxGeometry(1.1, 0.72, 0.44), mat: matFurn, x: 0.65, y: 0.36, z: -1.74 });
-        // Counter left side
-        P.push({ geo: new THREE.BoxGeometry(0.8, 0.72, 0.44), mat: matFurn, x: -1.5, y: 0.36, z: -1.74 });
-        // Counter top surface tint
-        P.push({ geo: new THREE.BoxGeometry(1.1, 0.04, 0.46), mat: matDark, x: 0.65, y: 0.74, z: -1.74 });
-        // Stove circles on right counter top
-        P.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.03, 12), mat: matDark, x: 0.45, y: 0.77, z: -1.65 });
-        P.push({ geo: new THREE.CylinderGeometry(0.1, 0.1, 0.03, 12), mat: matDark, x: 0.85, y: 0.77, z: -1.65 });
-        // Tall cabinet/fridge at negX-negZ corner
-        P.push({ geo: new THREE.BoxGeometry(0.42, 1.78, 0.44), mat: matMid, x: -1.75, y: 0.89, z: -1.72 });
-        // Upper wall cabinet
-        P.push({ geo: new THREE.BoxGeometry(1.55, 0.52, 0.32), mat: matFurn, x: 0.6, y: 1.52, z: -1.84 });
-        // Small kitchen stool
-        P.push({ geo: new THREE.CylinderGeometry(0.14, 0.14, 0.04, 8), mat: matDark, x: 0.7, y: 0.44, z: 0.8 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.44, 6), mat: matDark, x: 0.7, y: 0.22, z: 0.8 });
-
-      } else if (type === 'playroom') {
-        // Toy chest against negX wall (below doorway at z=0)
-        P.push({ geo: new THREE.BoxGeometry(0.28, 0.55, 1.1), mat: matDark, x: -1.82, y: 0.275, z: -0.65 });
-        P.push({ geo: new THREE.BoxGeometry(0.3, 0.07, 1.14), mat: matFurn, x: -1.82, y: 0.585, z: -0.65 });
-        // Toy shelf along negZ wall
-        P.push({ geo: new THREE.BoxGeometry(1.6, 1.1, 0.24), mat: matDark, x: -0.15, y: 0.55, z: -1.78 });
-        for (let j = 0; j < 2; j++)
-          P.push({ geo: new THREE.BoxGeometry(1.55, 0.05, 0.18), mat: matFurn, x: -0.15, y: 0.28 + j * 0.5, z: -1.67 });
-        // Play table center
-        P.push({ geo: new THREE.BoxGeometry(0.82, 0.05, 0.6), mat: matFurn, x: 0.55, y: 0.38, z: 0.0 });
-        for (const [lx, lz] of [[-0.35,-0.25],[0.35,-0.25],[-0.35,0.25],[0.35,0.25]])
-          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), mat: matDark, x: 0.55 + lx, y: 0.19, z: lz });
-        // Ball
-        P.push({ geo: new THREE.SphereGeometry(0.17, 8, 8), mat: matMid, x: 0.9, y: 0.17, z: 0.85 });
-        // Building blocks (3 small boxes)
-        P.push({ geo: new THREE.BoxGeometry(0.18, 0.18, 0.18), mat: matDark, x: -0.3, y: 0.09, z: 0.7 });
-        P.push({ geo: new THREE.BoxGeometry(0.18, 0.18, 0.18), mat: matFurn, x: -0.14, y: 0.27, z: 0.7 });
-
-      } else if (type === 'living') {
-        // Sofa against negZ wall (3-seat)
-        P.push({ geo: new THREE.BoxGeometry(1.9, 0.32, 0.64), mat: matDark, x: 0.0, y: 0.16, z: -1.3 });
-        P.push({ geo: new THREE.BoxGeometry(1.9, 0.52, 0.12), mat: matDark, x: 0.0, y: 0.48, z: -1.58 });
-        // Sofa armrests
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x: -1.0,  y: 0.3, z: -1.27 });
-        P.push({ geo: new THREE.BoxGeometry(0.12, 0.45, 0.65), mat: matDark, x:  1.0,  y: 0.3, z: -1.27 });
-        // Coffee table
-        P.push({ geo: new THREE.BoxGeometry(0.85, 0.05, 0.5), mat: matFurn, x: 0.0, y: 0.38, z: -0.35 });
-        for (const [lx, lz] of [[-0.36,-0.2],[0.36,-0.2],[-0.36,0.18],[0.36,0.18]])
-          P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), mat: matDark, x: lx, y: 0.19, z: lz });
-        // TV unit against negX wall
-        P.push({ geo: new THREE.BoxGeometry(0.22, 0.68, 1.3), mat: matDark, x: -1.82, y: 0.34, z: -0.45 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.48, 0.9), mat: matMid, x: -1.72, y: 0.5, z: -0.45 });
-
-      } else if (type === 'bathroom') {
-        // Bathtub against negX wall
-        P.push({ geo: new THREE.BoxGeometry(0.28, 0.42, 1.3), mat: matFurn, x: -1.79, y: 0.21, z: -0.55 });
-        P.push({ geo: new THREE.BoxGeometry(0.2, 0.3, 1.18), mat: toonMat(0xe8e8e8), x: -1.76, y: 0.32, z: -0.55 });
-        // Toilet against negZ wall (off-center)
-        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.25, 0.36, 10), mat: matFurn, x: 0.9, y: 0.18, z: -1.6 });
-        P.push({ geo: new THREE.BoxGeometry(0.46, 0.08, 0.33), mat: matFurn, x: 0.9, y: 0.4, z: -1.6 });
-        P.push({ geo: new THREE.BoxGeometry(0.42, 0.1, 0.14), mat: matFurn, x: 0.9, y: 0.44, z: -1.77 });
-        // Sink / vanity against negZ left side
-        P.push({ geo: new THREE.BoxGeometry(0.52, 0.62, 0.38), mat: matFurn, x: -0.6, y: 0.31, z: -1.74 });
-        P.push({ geo: new THREE.BoxGeometry(0.46, 0.06, 0.32), mat: toonMat(0xe8e8e8), x: -0.6, y: 0.65, z: -1.71 });
-        // Towel bar on negX wall
-        P.push({ geo: new THREE.BoxGeometry(0.022, 0.022, 0.65), mat: matDark, x: -1.87, y: 1.2, z: 0.3 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.06), mat: matDark, x: -1.87, y: 1.2, z: -0.02 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.06), mat: matDark, x: -1.87, y: 1.2, z: 0.62 });
-
-      } else if (type === 'backyard') {
-        // Tree trunk at negX-negZ corner
-        P.push({ geo: new THREE.CylinderGeometry(0.12, 0.16, 1.1, 8), mat: matDark, x: -1.45, y: 0.55, z: -1.45 });
-        // Tree foliage (layered spheres)
-        P.push({ geo: new THREE.SphereGeometry(0.46, 8, 8), mat: matMid, x: -1.45, y: 1.38, z: -1.45 });
-        P.push({ geo: new THREE.SphereGeometry(0.32, 8, 8), mat: matFurn, x: -1.2, y: 1.65, z: -1.2 });
-        // Garden bench along negZ
-        P.push({ geo: new THREE.BoxGeometry(1.1, 0.06, 0.3), mat: matFurn, x: 0.4, y: 0.42, z: -1.65 });
-        P.push({ geo: new THREE.BoxGeometry(1.1, 0.45, 0.06), mat: matDark, x: 0.4, y: 0.55, z: -1.78 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.3), mat: matDark, x: -0.1, y: 0.21, z: -1.65 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.3), mat: matDark, x:  0.9, y: 0.21, z: -1.65 });
-        // Plant pots
-        P.push({ geo: new THREE.CylinderGeometry(0.14, 0.1, 0.28, 8), mat: matDark, x: -0.5, y: 0.14, z: -1.65 });
-        P.push({ geo: new THREE.SphereGeometry(0.15, 6, 6), mat: matMid, x: -0.5, y: 0.37, z: -1.65 });
-
-      } else if (type === 'storage') {
-        // Heavy shelving unit 1 (left)
-        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 0.06, z: -1.62 });
-        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 0.54, z: -1.62 });
-        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 1.02, z: -1.62 });
-        P.push({ geo: new THREE.BoxGeometry(1.55, 0.06, 0.38), mat: matDark, x: -0.9, y: 1.5, z: -1.62 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 1.55, 0.38), mat: matDark, x: -1.68, y: 0.8, z: -1.62 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 1.55, 0.38), mat: matDark, x: -0.14, y: 0.8, z: -1.62 });
-        // Boxes on shelves
-        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matFurn, x: -1.4, y: 0.275, z: -1.6 });
-        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matMid, x: -1.0, y: 0.275, z: -1.6 });
-        P.push({ geo: new THREE.BoxGeometry(0.35, 0.35, 0.28), mat: matFurn, x: -0.62, y: 0.275, z: -1.6 });
-        // Barrel
-        P.push({ geo: new THREE.CylinderGeometry(0.2, 0.18, 0.55, 10), mat: matDark, x: 1.1, y: 0.275, z: -1.5 });
-        // Tall ladder against negX wall
-        P.push({ geo: new THREE.BoxGeometry(0.06, 1.8, 0.06), mat: matFurn, x: -1.72, y: 0.9, z: 0.2 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 1.8, 0.06), mat: matFurn, x: -1.72, y: 0.9, z: 0.55 });
-        for (let j = 0; j < 4; j++)
-          P.push({ geo: new THREE.BoxGeometry(0.06, 0.06, 0.38), mat: matFurn, x: -1.72, y: 0.25 + j * 0.45, z: 0.37 });
-
-      } else if (type === 'reading') {
-        // Full bookcase along negZ wall
-        P.push({ geo: new THREE.BoxGeometry(2.4, 1.9, 0.26), mat: matDark, x: 0.05, y: 0.95, z: -1.77 });
-        for (let j = 0; j < 4; j++) {
-          P.push({ geo: new THREE.BoxGeometry(2.3, 0.28, 0.16), mat: matBook, x: 0.05, y: 0.18 + j * 0.44, z: -1.66 });
-        }
-        // Armchair against negX wall
-        P.push({ geo: new THREE.BoxGeometry(0.28, 0.36, 0.7), mat: matDark, x: -1.79, y: 0.18, z: 0.45 });
-        P.push({ geo: new THREE.BoxGeometry(0.26, 0.55, 0.06), mat: matDark, x: -1.79, y: 0.44, z: 0.78 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.7), mat: matDark, x: -1.79, y: 0.35, z: 0.09 });
-        P.push({ geo: new THREE.BoxGeometry(0.06, 0.42, 0.7), mat: matDark, x: -1.79, y: 0.35, z: 0.81 });
-        // Floor lamp beside chair
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.06, 1.65, 6), mat: matDark, x: -1.2, y: 0.825, z: 1.3 });
-        P.push({ geo: new THREE.ConeGeometry(0.22, 0.27, 8), mat: matLampShade, x: -1.2, y: 1.775, z: 1.3 });
-        // Small side table
-        P.push({ geo: new THREE.CylinderGeometry(0.22, 0.22, 0.04, 12), mat: matFurn, x: -1.72, y: 0.42, z: 1.25 });
-        P.push({ geo: new THREE.CylinderGeometry(0.03, 0.03, 0.42, 6), mat: matDark, x: -1.72, y: 0.21, z: 1.25 });
-      }
-
-      for (const p of P) {
-        const m = new THREE.Mesh(p.geo, p.mat);
-        m.position.set(p.x, p.y, p.z);
-        m.castShadow = true; m.receiveShadow = true;
-        group.add(m);
-      }
-    }
-
-    // ── Room store ────────────────────────────────────────────────────────────
-    const roomGroups   = {};
-    const roomOverlays = {};
-    const roomBloods   = {};
-    const roomCenters  = {};
-
-    // ── Build rooms ───────────────────────────────────────────────────────────
-    function buildRoom(roomDef) {
-      const { slug, label, gridX, gridZ, type } = roomDef;
-      const group = new THREE.Group();
-      const ox = gridX * GRID_SPACING;
-      const oz = gridZ * GRID_SPACING;
-      group.position.set(ox, 0, oz);
-
-      const isCorr = type === 'corridor';
-
-      // Floor (slightly inset to avoid Z-fighting at shared edges)
-      const floorMat = isCorr ? matCorr : matFloor;
-      const floor = new THREE.Mesh(new THREE.BoxGeometry(ROOM_W - 0.005, 0.1, ROOM_D - 0.005), floorMat);
-      floor.position.y = -0.05;
-      floor.receiveShadow = true;
-      group.add(floor);
-      scene.add(group);
-
-      if (isCorr) return;
-
-      // Which walls to build
-      const hasCellNegZ = gridZ > 0;
-      const hasCellNegX = gridX > 0;
-      const buildPosX   = (gridX === 3);
-      const buildPosZ   = (gridZ === 3);
-
-      const walls = {};
-
-      // negZ wall (north face)
-      {
-        const wg = hasCellNegZ
-          ? doorwayWallGroupX(ROOM_W)
-          : solidWallGroup(ROOM_W, WALL_H, WALL_T);
-        wg.position.set(0, 0, -ROOM_D / 2);
-        group.add(wg);
-        walls.negZ = wg;
-      }
-
-      // negX wall (west face)
-      {
-        const wg = hasCellNegX
-          ? doorwayWallGroupZ(ROOM_D)
-          : solidWallGroup(WALL_T, WALL_H, ROOM_D);
-        wg.position.set(-ROOM_W / 2, 0, 0);
-        group.add(wg);
-        walls.negX = wg;
-      }
-
-      // posX wall (east face) — only right boundary
-      if (buildPosX) {
-        const wg = solidWallGroup(WALL_T, WALL_H, ROOM_D);
-        wg.position.set(ROOM_W / 2, 0, 0);
-        wg.visible = false;
-        group.add(wg);
-        walls.posX = wg;
-      } else { walls.posX = null; }
-
-      // posZ wall (south face) — only bottom row
-      if (buildPosZ) {
-        const wg = solidWallGroup(ROOM_W, WALL_H, WALL_T);
-        wg.position.set(0, 0, ROOM_D / 2);
-        wg.visible = false;
-        group.add(wg);
-        walls.posZ = wg;
-      } else { walls.posZ = null; }
-
-      // Ceiling panels (one per wall side, match visibility)
-      const ceilings = {};
-      function makeCeilMesh(w, d) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), matCeil);
-        m.receiveShadow = true;
-        return m;
-      }
-
-      const cN = makeCeilMesh(ROOM_W, CEIL_DEPTH);
-      cN.position.set(0, WALL_H + 0.045, -ROOM_D / 2 + CEIL_DEPTH / 2);
-      group.add(cN); ceilings.negZ = cN;
-
-      const cX = makeCeilMesh(CEIL_DEPTH, ROOM_D);
-      cX.position.set(-ROOM_W / 2 + CEIL_DEPTH / 2, WALL_H + 0.045, 0);
-      group.add(cX); ceilings.negX = cX;
-
-      const cPN = makeCeilMesh(ROOM_W, CEIL_DEPTH);
-      cPN.position.set(0, WALL_H + 0.045, ROOM_D / 2 - CEIL_DEPTH / 2);
-      cPN.visible = false;
-      group.add(cPN); ceilings.posZ = buildPosZ ? cPN : null;
-      if (!buildPosZ) { group.remove(cPN); ceilings.posZ = null; }
-
-      const cPX = makeCeilMesh(CEIL_DEPTH, ROOM_D);
-      cPX.position.set(ROOM_W / 2 - CEIL_DEPTH / 2, WALL_H + 0.045, 0);
-      cPX.visible = false;
-      group.add(cPX); ceilings.posX = buildPosX ? cPX : null;
-      if (!buildPosX) { group.remove(cPX); ceilings.posX = null; }
-
-      group.userData.walls    = walls;
-      group.userData.ceilings = ceilings;
-
-      addFurniture(group, type);
-
-      // Red overlay (plain, for general win state)
-      const overlay = new THREE.Mesh(
-        new THREE.PlaneGeometry(ROOM_W - 0.18, ROOM_D - 0.18),
-        new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0, depthWrite: false, depthTest: false })
-      );
-      overlay.rotation.x = -Math.PI / 2;
-      overlay.position.y = 0.06;
-      overlay.renderOrder = 10;
-      group.add(overlay);
-      if (slug) roomOverlays[slug] = overlay;
-
-      // Blood splatter overlay
-      const blood = new THREE.Mesh(
-        new THREE.PlaneGeometry(ROOM_W - 0.12, ROOM_D - 0.12),
-        new THREE.MeshBasicMaterial({ map: makeBloodSplatter(), transparent: true, opacity: 0, depthWrite: false, depthTest: false })
-      );
-      blood.rotation.x = -Math.PI / 2;
-      blood.position.y = 0.065;
-      blood.renderOrder = 11;
-      group.add(blood);
-      if (slug) roomBloods[slug] = blood;
-
-      // Label sprite
-      if (label) {
-        const sprite = makeLabelSprite(label);
-        sprite.position.set(0, WALL_H + 0.85, 0);
-        group.add(sprite);
-      }
-
-      if (slug) {
-        roomGroups[slug]  = group;
-        roomCenters[slug] = { x: ox, z: oz };
-      }
-    }
-
-    for (const r of ROOMS) buildRoom(r);
-
-    // ── Hover overlay ─────────────────────────────────────────────────────────
-    const hoverOverlay = new THREE.Mesh(
-      new THREE.PlaneGeometry(ROOM_W - 0.3, ROOM_D - 0.3),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.13, depthWrite: false })
-    );
-    hoverOverlay.rotation.x = -Math.PI / 2;
-    hoverOverlay.position.y = 0.07;
-    hoverOverlay.visible = false;
-    hoverOverlay.renderOrder = 2;
-    scene.add(hoverOverlay);
-    let hoveredRoomSlug = null;
-
-    // ── 3D player figure ─────────────────────────────────────────────────────
-    function makePlayerFigure(initial) {
-      const g = new THREE.Group();
-      const bodyMat  = new THREE.MeshToonMaterial({ color: 0x2a2a2a, gradientMap });
-      const headMat  = new THREE.MeshToonMaterial({ color: 0xc89060, gradientMap });
-      const hatMat   = new THREE.MeshToonMaterial({ color: 0x111111, gradientMap });
-      const tieMat   = new THREE.MeshToonMaterial({ color: 0xcc1111, gradientMap });
-
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.5, 8), bodyMat);
-      body.position.y = 0.25; body.castShadow = true; g.add(body);
-
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), headMat);
-      head.position.y = 0.59; head.castShadow = true; g.add(head);
-
-      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.03, 12), hatMat);
-      brim.position.y = 0.7; g.add(brim);
-
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.18, 12), hatMat);
-      crown.position.y = 0.8; g.add(crown);
-
-      const tie = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.04), tieMat);
-      tie.position.set(0, 0.36, 0.12); g.add(tie);
-
-      // Initial letter sprite floating above hat
-      const lc = document.createElement('canvas');
-      lc.width = 64; lc.height = 64;
-      const lctx = lc.getContext('2d');
-      lctx.fillStyle = 'rgba(0,0,0,0.75)';
-      lctx.beginPath(); lctx.arc(32, 32, 26, 0, Math.PI * 2); lctx.fill();
-      lctx.strokeStyle = '#aaa'; lctx.lineWidth = 2; lctx.stroke();
-      lctx.fillStyle = '#fff'; lctx.font = 'bold 26px sans-serif';
-      lctx.textAlign = 'center'; lctx.textBaseline = 'middle';
-      lctx.fillText((initial || '?').toUpperCase().charAt(0), 32, 33);
-      const lblSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: new THREE.CanvasTexture(lc), depthTest: false
-      }));
-      lblSprite.scale.set(0.28, 0.28, 1);
-      lblSprite.position.y = 1.1;
-      g.add(lblSprite);
-
-      return g;
-    }
-
-    // ── 3D Pocong figure ──────────────────────────────────────────────────────
-    function makePocongFigure() {
-      const g = new THREE.Group();
-      const clothMat = new THREE.MeshToonMaterial({ color: 0xf0f0ec, gradientMap });
-      const knotMat  = new THREE.MeshToonMaterial({ color: 0xe4e4e0, gradientMap });
-      const eyeMat   = new THREE.MeshBasicMaterial({ color: 0x111111 });
-
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.24, 0.78, 10), clothMat);
-      body.position.y = 0.39; body.castShadow = true; g.add(body);
-
-      const hd = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), clothMat);
-      hd.position.y = 0.95; hd.castShadow = true; g.add(hd);
-
-      const knot = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 8), knotMat);
-      knot.position.y = 1.3; g.add(knot);
-
-      const eyeGeo = new THREE.SphereGeometry(0.045, 6, 6);
-      const eL = new THREE.Mesh(eyeGeo, eyeMat); eL.position.set(-0.08, 0.97, 0.2); g.add(eL);
-      const eR = new THREE.Mesh(eyeGeo, eyeMat); eR.position.set( 0.08, 0.97, 0.2); g.add(eR);
-
-      return g;
-    }
-
-    // ── Player figures ────────────────────────────────────────────────────────
-    const playerFigures = [];
-
-    function placePlayerTokens(players) {
-      for (const fig of playerFigures) scene.remove(fig);
-      playerFigures.length = 0;
-      const offsets = {};
-      for (let i = 0; i < Math.min(players.length, 50); i++) {
-        const p = players[i];
-        const center = roomCenters[p.room_slug];
-        if (!center) continue;
-        offsets[p.room_slug] = (offsets[p.room_slug] || 0) + 1;
-        const n = offsets[p.room_slug];
-        const ang = (n - 1) * 2.41;
-        const r = Math.min(0.22 + (n - 1) * 0.24, 1.2);
-        const fig = makePlayerFigure(p.username[0]);
-        fig.position.set(center.x + r * Math.cos(ang), 0, center.z + r * Math.sin(ang));
-        fig.userData.slug = p.room_slug;
-        fig.userData.username = p.username;
-        scene.add(fig);
-        playerFigures.push(fig);
-      }
-    }
-
-    // ── Pocong 3D figure in scene ─────────────────────────────────────────────
-    const pocongGroup = makePocongFigure();
-    pocongGroup.position.set(4, 0, 12);
-    scene.add(pocongGroup);
-
-    // ── Post-processing ───────────────────────────────────────────────────────
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-
-    const outlinePass = new OutlinePass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera
-    );
-    outlinePass.edgeStrength  = 6.0;
-    outlinePass.edgeGlow      = 0;
-    outlinePass.edgeThickness = 2.5;
-    outlinePass.visibleEdgeColor.set('#000000');
-    outlinePass.hiddenEdgeColor.set('#000000');
-    composer.addPass(outlinePass);
-    composer.addPass(new ShaderPass(GammaCorrectionShader));
-
-    function refreshOutlineObjects() {
-      const objs = [];
-      scene.traverse(o => { if (o.isMesh) objs.push(o); });
-      outlinePass.selectedObjects = objs;
-    }
-    refreshOutlineObjects();
-
-    // ── Game state ────────────────────────────────────────────────────────────
-    let currentState   = { round: null, bet: null, players: [] };
-    let selectedRoom   = null;
-    let lastRoundId    = null;
-    let lastStatus     = null;
-    let lastPlayersJson = '';
+    // ── Game state ──────────────────────────────────────────────────────────────
+    let currentState    = { round: null, bet: null, players: [] };
+    let selectedRoom     = null;
+    let lastRoundId      = null;
+    let lastStatus       = null;
+    let lastPlayersJson  = '';
     let selectedBetAmount = 1000;
     const BET_TIERS = [100, 200, 500, 1000, 5000];
 
-    // ── Bet chip UI ───────────────────────────────────────────────────────────
+    function canBet() {
+      return currentState.round?.status === 'active' && !currentState.bet;
+    }
+    function refreshHotspotState() {
+      const on = canBet();
+      for (const slug in hotspotEls) {
+        const hs = hotspotEls[slug];
+        hs.classList.toggle('bettable', on);
+        if (!on) hs.classList.remove('hovered');
+      }
+    }
+
+    // ── HUD ───────────────────────────────────────────────────────────────────
+    function updateHUD(state) {
+      const { round, bet } = state;
+      if (round) $('status-round').textContent = `round: ${round.round_number}`;
+
+      const outcomeEl = $('status-outcome');
+      outcomeEl.className = '';
+
+      if (bet) {
+        $('status-bet').textContent = `bet: ${bet.amount_tkn} TKN`;
+        if (bet.outcome === 'won') {
+          outcomeEl.textContent = 'status: won 🎉';
+          outcomeEl.classList.add('outcome-won');
+          const wEl = $('tkn-winnings');
+          wEl.style.display = 'block';
+          wEl.textContent = `+${bet.amount_tkn} TKN`;
+          $('win-calc').style.display = 'block';
+        } else if (bet.outcome === 'lost') {
+          outcomeEl.textContent = 'status: lost 💀';
+          outcomeEl.classList.add('outcome-lost');
+          $('win-calc').style.display = 'none';
+        } else {
+          outcomeEl.textContent = 'status: bet placed';
+          $('win-calc').style.display = 'none';
+        }
+      } else {
+        $('status-bet').textContent = 'bet: — TKN';
+        outcomeEl.textContent = 'status: watching';
+        $('win-calc').style.display = 'none';
+      }
+
+      const tutStart = $('tutorial-start');
+      if (tutStart) tutStart.style.display = (bet || round?.status !== 'active') ? 'none' : 'block';
+
+      const devPanel = $('dev-controls');
+      if (devPanel.style.display !== 'none') {
+        $('btn-newround').classList.toggle('hidden', round?.status !== 'completed');
+      }
+
+      updateBetChipStates();
+    }
+
+    // ── Bet chips ───────────────────────────────────────────────────────────────
     function updateBetChipStates() {
       const off = !currentState.round || currentState.round.status !== 'active' || !!currentState.bet;
-      document.querySelectorAll('.bet-chip, .bet-adj').forEach(btn => {
-        btn.disabled = off;
-      });
+      document.querySelectorAll('.bet-chip, .bet-adj').forEach(btn => { btn.disabled = off; });
       document.querySelectorAll('.bet-chip').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.amount) === selectedBetAmount);
       });
@@ -1066,11 +769,11 @@
         if (selectedRoom) showConfirmChip(selectedRoom);
       });
     });
-    document.getElementById('btn-decrement').addEventListener('click', () => {
+    $('btn-decrement').addEventListener('click', () => {
       const idx = BET_TIERS.indexOf(selectedBetAmount);
       if (idx > 0) { selectedBetAmount = BET_TIERS[idx - 1]; updateBetChipStates(); }
     });
-    document.getElementById('btn-increment').addEventListener('click', () => {
+    $('btn-increment').addEventListener('click', () => {
       const idx = BET_TIERS.indexOf(selectedBetAmount);
       if (idx < BET_TIERS.length - 1) { selectedBetAmount = BET_TIERS[idx + 1]; updateBetChipStates(); }
     });
@@ -1078,16 +781,15 @@
     // ── Confirm chip ──────────────────────────────────────────────────────────
     function showConfirmChip(room) {
       selectedRoom = room;
-      document.getElementById('confirm-text').textContent =
-        `Bet ${selectedBetAmount} TKN on ${room.label}?`;
-      document.getElementById('confirm-chip').classList.add('visible');
+      $('confirm-text').textContent = `Bet ${selectedBetAmount} TKN on ${room.label}?`;
+      $('confirm-chip').classList.add('visible');
     }
     function hideConfirmChip() {
-      document.getElementById('confirm-chip').classList.remove('visible');
+      $('confirm-chip').classList.remove('visible');
       selectedRoom = null;
     }
 
-    document.getElementById('confirm-yes').addEventListener('click', async () => {
+    $('confirm-yes').addEventListener('click', async () => {
       if (!selectedRoom) return;
       const room = selectedRoom;
       hideConfirmChip();
@@ -1101,82 +803,47 @@
         else { const err = await res.json(); alert(err.error || 'Bet failed'); }
       } catch (e) { console.error(e); }
     });
-    document.getElementById('confirm-no').addEventListener('click', hideConfirmChip);
+    $('confirm-no').addEventListener('click', hideConfirmChip);
 
-    // ── HUD ───────────────────────────────────────────────────────────────────
-    function updateHUD(state) {
-      const { round, bet } = state;
-      if (round) document.getElementById('status-round').textContent = `round: ${round.round_number}`;
-
-      const outcomeEl = document.getElementById('status-outcome');
-      outcomeEl.className = '';
-
-      if (bet) {
-        document.getElementById('status-bet').textContent = `bet: ${bet.amount_tkn} TKN`;
-        if (bet.outcome === 'won') {
-          outcomeEl.textContent = 'status: won 🎉';
-          outcomeEl.classList.add('outcome-won');
-          const wEl = document.getElementById('tkn-winnings');
-          wEl.style.display = 'block';
-          wEl.textContent = `+${bet.amount_tkn} TKN`;
-          document.getElementById('win-calc').style.display = 'block';
-        } else if (bet.outcome === 'lost') {
-          outcomeEl.textContent = 'status: lost 💀';
-          outcomeEl.classList.add('outcome-lost');
-          document.getElementById('win-calc').style.display = 'none';
-        } else {
-          outcomeEl.textContent = 'status: bet placed';
-          document.getElementById('win-calc').style.display = 'none';
-        }
-      } else {
-        document.getElementById('status-bet').textContent = 'bet: — TKN';
-        outcomeEl.textContent = 'status: watching';
-        document.getElementById('win-calc').style.display = 'none';
-      }
-
-      // Tutorial start label
-      const tutStart = document.getElementById('tutorial-start');
-      if (tutStart) tutStart.style.display = (bet || round?.status !== 'active') ? 'none' : 'block';
-
-      // Dev controls new-round button
-      const devPanel = document.getElementById('dev-controls');
-      if (devPanel.style.display !== 'none') {
-        document.getElementById('btn-newround').classList.toggle('hidden', round?.status !== 'completed');
-      }
-
-      updateBetChipStates();
-    }
-
+    // ── Win state ───────────────────────────────────────────────────────────────
     function applyWinState(state) {
       const { round, bet } = state;
       if (!round || round.status !== 'completed' || !round.winner_room) return;
+      const geo = roomGeo[round.winner_room];
 
-      // Blood splatter on winner room
-      const blood = roomBloods[round.winner_room];
-      if (blood) blood.material.opacity = 1.0;
-      const overlay = roomOverlays[round.winner_room];
-      if (overlay) overlay.material.opacity = 0.28;
-
-      // Tint 3D player figures
-      for (const fig of playerFigures) {
-        const tint = fig.userData.slug === round.winner_room ? 0x444444 : 0xddddaa;
-        fig.traverse(child => {
-          if (child.isMesh && child.material && child.material.color) {
-            child.material = child.material.clone();
-            child.material.color.set(tint);
-          }
+      // Red tint + blood splatter on the winner room floor
+      const tintLayer = $('layer-tint');
+      const bloodLayer = $('layer-blood');
+      tintLayer.innerHTML = '';
+      bloodLayer.innerHTML = '';
+      if (geo) {
+        tintLayer.appendChild(svgEl('polygon', {
+          points: geo.floorPts, fill: 'rgba(255,0,0,0.28)',
+        }));
+        const bw = 150, bh = 130;
+        const blood = svgEl('image', {
+          x: (geo.cx - bw / 2).toFixed(1),
+          y: (geo.cy - bh / 2 + 6).toFixed(1),
+          width: bw, height: bh, opacity: 0.92,
         });
+        blood.setAttributeNS(XLINK, 'href', bloodURL());
+        blood.setAttribute('href', bloodURL());
+        bloodLayer.appendChild(blood);
       }
 
-      // Move Pocong to winner room
-      if (roomCenters[round.winner_room]) {
-        const c = roomCenters[round.winner_room];
-        pocongGroup.position.set(c.x, 0, c.z);
+      // Tint player figures: grey in winner room, gold elsewhere
+      for (const el of playerFigures) {
+        el.classList.remove('dim', 'safe');
+        el.classList.add(el.dataset.slug === round.winner_room ? 'dim' : 'safe');
       }
 
-      const banner  = document.getElementById('win-banner');
-      const winText = document.getElementById('win-text');
-      const winSub  = document.getElementById('win-sub');
+      // Park the ghost in the winner room
+      if (geo) ghostBase = { x: geo.ghostRest.x, y: geo.ghostRest.y };
+
+      // Banner
+      const winText = $('win-text');
+      const winSub  = $('win-sub');
+      const banner  = $('win-banner');
 
       if (bet?.outcome === 'won') {
         winText.textContent = 'You Win! 🎉';
@@ -1202,12 +869,13 @@
     }
 
     function clearWinState() {
-      for (const slug of Object.keys(roomOverlays)) roomOverlays[slug].material.opacity = 0;
-      for (const slug of Object.keys(roomBloods))   roomBloods[slug].material.opacity   = 0;
-      document.getElementById('win-banner').style.display = 'none';
-      document.getElementById('win-calc').style.display   = 'none';
-      document.getElementById('tkn-winnings').style.display = 'none';
-      const wt = document.getElementById('win-text');
+      $('layer-tint').innerHTML = '';
+      $('layer-blood').innerHTML = '';
+      for (const el of playerFigures) el.classList.remove('dim', 'safe');
+      $('win-banner').style.display = 'none';
+      $('win-calc').style.display = 'none';
+      $('tkn-winnings').style.display = 'none';
+      const wt = $('win-text');
       if (wt) { wt.style.color = ''; }
     }
 
@@ -1232,131 +900,12 @@
           lastRoundId     = state.round?.id;
           lastStatus      = state.round?.status;
           lastPlayersJson = pJson;
-          refreshOutlineObjects();
         }
+        refreshHotspotState();
       } catch (e) { console.warn('Poll error:', e.message); }
     }
     pollState();
     setInterval(pollState, 3000);
-
-    // ── Input ─────────────────────────────────────────────────────────────────
-    const raycaster = new THREE.Raycaster();
-    const mouseNDC  = new THREE.Vector2();
-    const xzPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-
-    function getPlanePoint(sx, sy) {
-      mouseNDC.x =  (sx / window.innerWidth)  * 2 - 1;
-      mouseNDC.y = -(sy / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouseNDC, camera);
-      const pt = new THREE.Vector3();
-      return raycaster.ray.intersectPlane(xzPlane, pt) ? pt : null;
-    }
-
-    let clickStart = null, didDrag = false;
-
-    canvas.addEventListener('mousedown', e => {
-      if (e.button === 0) { clickStart = { x: e.clientX, y: e.clientY }; didDrag = false; }
-    });
-
-    window.addEventListener('mousemove', e => {
-      if (clickStart && Math.hypot(e.clientX - clickStart.x, e.clientY - clickStart.y) > 4) didDrag = true;
-
-      const canBet = currentState.round?.status === 'active' && !currentState.bet;
-      if (canBet) {
-        const pt = getPlanePoint(e.clientX, e.clientY);
-        const hit = pt ? ROOMS.find(r => {
-          if (!r.slug) return false;
-          const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
-          return Math.abs(pt.x - cx) < ROOM_W / 2 - 0.05 && Math.abs(pt.z - cz) < ROOM_D / 2 - 0.05;
-        }) : null;
-        if (hit && hit.slug) {
-          hoveredRoomSlug = hit.slug;
-          const c = roomCenters[hit.slug];
-          hoverOverlay.position.set(c.x, 0.07, c.z);
-          hoverOverlay.visible = true;
-          canvas.style.cursor = 'pointer';
-        } else {
-          hoveredRoomSlug = null;
-          hoverOverlay.visible = false;
-          canvas.style.cursor = 'default';
-        }
-      } else {
-        hoveredRoomSlug = null;
-        hoverOverlay.visible = false;
-        canvas.style.cursor = 'default';
-      }
-    });
-
-    window.addEventListener('mouseup', e => {
-      if (e.button === 0) {
-        if (!didDrag) handleClick(e);
-        clickStart = null; didDrag = false;
-      }
-    });
-
-    canvas.addEventListener('wheel', e => {
-      e.preventDefault();
-      camState.viewSize = Math.max(10, Math.min(40, camState.viewSize + e.deltaY * 0.05));
-      updateCamera();
-    }, { passive: false });
-
-    // ── Touch (pinch-zoom + tap) ───────────────────────────────────────────────
-    let lastPinchDist = null, touchTapStart = null;
-
-    canvas.addEventListener('touchstart', e => {
-      e.preventDefault();
-      const ta = Array.from(e.touches);
-      if (ta.length === 1) {
-        touchTapStart = { x: ta[0].clientX, y: ta[0].clientY };
-        lastPinchDist = null;
-      } else if (ta.length === 2) {
-        touchTapStart = null;
-        lastPinchDist = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
-      }
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', e => {
-      e.preventDefault();
-      const ta = Array.from(e.touches);
-      if (ta.length === 2) {
-        touchTapStart = null;
-        const dist = Math.hypot(ta[0].clientX - ta[1].clientX, ta[0].clientY - ta[1].clientY);
-        if (lastPinchDist && dist > 0) {
-          camState.viewSize = Math.max(10, Math.min(40, camState.viewSize * (lastPinchDist / dist)));
-          updateCamera();
-        }
-        lastPinchDist = dist;
-      } else if (ta.length === 1 && touchTapStart) {
-        if (Math.hypot(ta[0].clientX - touchTapStart.x, ta[0].clientY - touchTapStart.y) > 10)
-          touchTapStart = null;
-      }
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', e => {
-      e.preventDefault();
-      if (Array.from(e.touches).length < 2) lastPinchDist = null;
-      if (Array.from(e.touches).length === 0 && touchTapStart) {
-        const t = e.changedTouches[0];
-        handleClick({ clientX: t.clientX, clientY: t.clientY });
-        touchTapStart = null;
-      }
-    }, { passive: false });
-
-    // ── Room click ────────────────────────────────────────────────────────────
-    function handleClick(e) {
-      if (!currentState.round || currentState.round.status !== 'active') return;
-      if (currentState.bet) return;
-
-      const pt = getPlanePoint(e.clientX, e.clientY);
-      if (!pt) return;
-
-      const hit = ROOMS.find(r => {
-        if (!r.slug) return false;
-        const cx = r.gridX * GRID_SPACING, cz = r.gridZ * GRID_SPACING;
-        return Math.abs(pt.x - cx) < ROOM_W / 2 && Math.abs(pt.z - cz) < ROOM_D / 2;
-      });
-      if (hit && hit.slug) showConfirmChip(hit);
-    }
 
     // ── Dev controls ──────────────────────────────────────────────────────────
     async function callAdvance() {
@@ -1369,11 +918,11 @@
       return res.json();
     }
 
-    document.getElementById('btn-resolve').addEventListener('click', async () => {
+    $('btn-resolve').addEventListener('click', async () => {
       try { await callAdvance(); await callAdvance(); await pollState(); }
       catch (e) { alert(e.message); }
     });
-    document.getElementById('btn-newround').addEventListener('click', async () => {
+    $('btn-newround').addEventListener('click', async () => {
       try { await callAdvance(); await pollState(); }
       catch (e) { alert(e.message); }
     });
@@ -1381,61 +930,25 @@
     fetch('/api/game/env')
       .then(r => r.json())
       .then(({ isStaging }) => {
-        if (isStaging) document.getElementById('dev-controls').style.display = 'block';
+        if (isStaging) $('dev-controls').style.display = 'block';
       })
       .catch(() => {});
 
-    // ── Animation loop ────────────────────────────────────────────────────────
-    let t = 0;
-    const corridorPath = [
-      { x: 4, z: 12 }, { x: 8, z: 12 }, { x: 12, z: 12 },
-      { x: 12, z: 8 }, { x: 12, z: 4 }, { x: 12, z: 0 },
-    ];
-    let pathIdx = 0, pathProgress = 0;
-
-    function animate() {
-      requestAnimationFrame(animate);
-      t += 0.016;
-
-      if (currentState.round?.status !== 'completed') {
-        const a = corridorPath[pathIdx];
-        const b = corridorPath[(pathIdx + 1) % corridorPath.length];
-        pathProgress += 0.003;
-        if (pathProgress >= 1) { pathProgress = 0; pathIdx = (pathIdx + 1) % corridorPath.length; }
-        pocongGroup.position.x = a.x + (b.x - a.x) * pathProgress;
-        pocongGroup.position.z = a.z + (b.z - a.z) * pathProgress;
-      }
-      pocongGroup.position.y = Math.sin(t * 2) * 0.07;
-
-      composer.render();
-    }
-    animate();
-
-    // ── Resize ────────────────────────────────────────────────────────────────
-    window.addEventListener('resize', () => {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight);
-      updateCamera();
-    });
-
     // ── Mascot drawing ────────────────────────────────────────────────────────
     (function drawMascot() {
-      const mc = document.getElementById('mascot-canvas');
+      const mc = $('mascot-canvas');
       if (!mc) return;
       const ctx = mc.getContext('2d');
-      const W = 130, H = 130, cx = 65, cy = 65;
+      const cx = 65, cy = 65;
 
-      // Background circle
       ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2);
       ctx.fillStyle = '#111'; ctx.fill();
       ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.stroke();
 
-      // Body (burial cloth oval)
       ctx.beginPath(); ctx.ellipse(cx, cy + 18, 28, 34, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#f0f0f0'; ctx.fill();
       ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
 
-      // Cloth lines
       for (let i = 0; i < 4; i++) {
         ctx.beginPath();
         ctx.moveTo(cx - 26, cy + 4 + i * 10);
@@ -1443,39 +956,33 @@
         ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.stroke();
       }
 
-      // Head
       ctx.beginPath(); ctx.ellipse(cx, cy - 12, 20, 23, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#f0f0f0'; ctx.fill();
       ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
 
-      // Hat body
       ctx.beginPath();
       ctx.rect(cx - 18, cy - 48, 36, 20);
       ctx.fillStyle = '#1a1a1a'; ctx.fill();
       ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
 
-      // Hat brim
       ctx.beginPath(); ctx.ellipse(cx, cy - 28, 26, 5, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#1a1a1a'; ctx.fill();
       ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
 
-      // Hat band (red accent)
       ctx.beginPath(); ctx.rect(cx - 18, cy - 30, 36, 4);
       ctx.fillStyle = '#cc0000'; ctx.fill();
 
-      // Eyes
       ctx.fillStyle = '#222';
       ctx.beginPath(); ctx.arc(cx - 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
 
-      // Sly smile
       ctx.beginPath(); ctx.arc(cx, cy - 8, 8, 0.1, Math.PI - 0.1);
       ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
     })();
 
     // ── Tutorial illustration ─────────────────────────────────────────────────
     (function drawTutorial() {
-      const tc = document.getElementById('tut-canvas');
+      const tc = $('tut-canvas');
       if (!tc) return;
       const ctx = tc.getContext('2d');
 
@@ -1497,14 +1004,12 @@
       pocong(22, 28);
       pocong(150, 28);
 
-      // Arrow
       ctx.beginPath(); ctx.moveTo(38, 28); ctx.lineTo(128, 28);
       ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2; ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(122, 22); ctx.lineTo(134, 28); ctx.lineTo(122, 34);
       ctx.closePath(); ctx.fillStyle = '#cc0000'; ctx.fill();
     })();
-
   </script>
 </body>
 </html>
