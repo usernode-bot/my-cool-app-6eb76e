@@ -20,6 +20,9 @@ const PUBLIC_PREFIXES = ['/explorer-api/'];
 // ── Phase timing (ms). Hiding 60s, Pocong walk 6s. ───────────────────────────
 const HIDING_MS = 60 * 1000;
 const HUNT_MS = 6 * 1000;
+// How long a resolved round stays on screen (result banner, jump-scare, lit
+// target room) before the next hiding round opens.
+const RESULT_MS = 8 * 1000;
 
 // The 11 hiding rooms. Single source of truth on the server side.
 const HIDING_ROOMS = [
@@ -114,11 +117,18 @@ async function runTransitions(now) {
       );
       if (!upd.rows.length) continue;
       await resolveRound(round.id, round.target_room);
-      await pool.query(
+      continue;
+    }
+
+    // The resolved round is shown for RESULT_MS, then the next round opens.
+    if (round.status === 'resolved' && round.resolved_at && now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS) {
+      const ins = await pool.query(
         `INSERT INTO rounds (round_number, status, hiding_ends_at)
-         VALUES ($1, 'hiding', $2)`,
-        [round.round_number + 1, new Date(now.getTime() + HIDING_MS)]
+         SELECT $1, 'hiding', $2
+         WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
+        [round.round_number + 1, new Date(now.getTime() + HIDING_MS), round.round_number]
       );
+      if (!ins.rowCount) continue;
       continue;
     }
     return;
@@ -127,7 +137,7 @@ async function runTransitions(now) {
 
 async function resolveRound(roundId, targetRoom) {
   const hides = await pool.query(
-    `SELECT id, user_id, username, room_slug FROM hides WHERE round_id=$1 AND outcome='pending'`,
+    `SELECT id, user_id, username, room_slug, daring_room_slug FROM hides WHERE round_id=$1 AND outcome='pending'`,
     [roundId]
   );
   const counts = {};
@@ -135,7 +145,9 @@ async function resolveRound(roundId, targetRoom) {
   const total = hides.rows.length;
 
   for (const h of hides.rows) {
-    const survived = h.room_slug !== targetRoom;
+    // A daring second pick doubles the exposure: the Pocong entering either
+    // room is an elimination. Surviving both earns x1.5 on the round.
+    const survived = h.room_slug !== targetRoom && h.daring_room_slug !== targetRoom;
     let points = 0;
     if (survived) {
       const stats = await pool.query(`SELECT current_streak FROM player_stats WHERE user_id=$1`, [h.user_id]);
@@ -144,6 +156,7 @@ async function resolveRound(roundId, targetRoom) {
       const distance = 25 * (STEP_BY_SLUG[h.room_slug] || 1);
       const scarcity = Math.min(300, Math.round(50 * total / Math.max(1, counts[h.room_slug] || 1)));
       points = Math.round((base + distance + scarcity) * Math.min(3, 1 + 0.1 * streakBefore));
+      if (h.daring_room_slug) points = Math.round(points * 1.5);
     }
     const outcome = survived ? 'survived' : 'eliminated';
     await pool.query(`UPDATE hides SET outcome=$1, points_awarded=$2 WHERE id=$3`, [outcome, points, h.id]);
@@ -192,14 +205,14 @@ app.get('/api/game/state', async (req, res) => {
     let stats = null;
     if (req.user) {
       const mh = await pool.query(
-        `SELECT room_slug, outcome, points_awarded FROM hides WHERE round_id=$1 AND user_id=$2`,
+        `SELECT room_slug, daring_room_slug, outcome, points_awarded FROM hides WHERE round_id=$1 AND user_id=$2`,
         [round.id, req.user.id]
       );
       myHide = mh.rows[0] || null;
       if (!myHide && round.status !== 'hiding') {
         // No lock before the countdown ended: the player watched from the
         // Spectator Lounge. Reported here rather than as a stored row.
-        myHide = { room_slug: null, outcome: 'disqualified', points_awarded: 0 };
+        myHide = { room_slug: null, daring_room_slug: null, outcome: 'disqualified', points_awarded: 0 };
       }
       const st = await pool.query(`SELECT * FROM player_stats WHERE user_id=$1`, [req.user.id]);
       stats = st.rows[0] || null;
@@ -249,6 +262,42 @@ app.post('/api/game/hide', async (req, res) => {
   }
 });
 
+// ── Daring second pick (authenticated) ───────────────────────────────────────
+// The restyled "double down": after locking a room, the player may also dare a
+// second room. If the Pocong enters either, they are found; surviving both
+// multiplies the round's points by 1.5. One daring pick per round, hiding
+// phase only, never the locked room itself.
+
+app.post('/api/game/daring', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'dare a second room' });
+  const { room_slug } = req.body || {};
+  if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
+  try {
+    const roundRes = await pool.query(`SELECT * FROM rounds WHERE status='hiding' ORDER BY round_number DESC LIMIT 1`);
+    if (!roundRes.rows.length) return res.status(409).json({ error: 'No hiding phase' });
+    const round = roundRes.rows[0];
+    if (req.now > new Date(round.hiding_ends_at)) {
+      return res.status(409).json({ error: 'Hiding phase ended' });
+    }
+    const mine = await pool.query(
+      `SELECT id, room_slug, daring_room_slug FROM hides WHERE round_id=$1 AND user_id=$2`,
+      [round.id, req.user.id]
+    );
+    if (!mine.rows.length) return res.status(409).json({ error: 'Lock a hiding room first' });
+    if (mine.rows[0].daring_room_slug) return res.status(409).json({ error: 'Already dared' });
+    if (mine.rows[0].room_slug === room_slug) return res.status(400).json({ error: 'Pick a different room' });
+    const upd = await pool.query(
+      `UPDATE hides SET daring_room_slug=$1 WHERE id=$2 AND daring_room_slug IS NULL
+       RETURNING room_slug, daring_room_slug, outcome`,
+      [room_slug, mine.rows[0].id]
+    );
+    if (!upd.rows.length) return res.status(409).json({ error: 'Already dared' });
+    res.json({ ok: true, hide: upd.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Advance round (staging or admin) — forces the next transition ────────────
 
 app.post('/api/game/advance', async (req, res) => {
@@ -277,10 +326,7 @@ app.post('/api/game/advance', async (req, res) => {
         [req.now, round.id]
       );
       if (upd.rows.length) await resolveRound(round.id, round.target_room);
-      await pool.query(
-        `INSERT INTO rounds (round_number, status, hiding_ends_at) VALUES ($1, 'hiding', $2)`,
-        [round.round_number + 1, new Date(req.now.getTime() + HIDING_MS)]
-      );
+      // The result stays on screen until the clock (RESULT_MS) or the next click.
       return res.json({ ok: true, status: 'resolved' });
     }
 
@@ -387,6 +433,7 @@ async function migrate() {
       UNIQUE(user_id, round_id)
     )
   `);
+  await pool.query(`ALTER TABLE hides ADD COLUMN IF NOT EXISTS daring_room_slug VARCHAR(100)`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS player_stats (

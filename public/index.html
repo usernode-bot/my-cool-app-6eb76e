@@ -78,7 +78,8 @@
   </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+    html, body { width: 100%; height: 100%; background: #0e0c0a; }
+    body { overflow: hidden; font-family: sans-serif; }
 
     @keyframes shake {
       0%,100%{transform:translate(0)}
@@ -89,83 +90,179 @@
     }
     body.shaking { animation: shake 0.5s ease; }
 
+    /* ── Two columns: the blueprint map and the parchment side panel ── */
+    #game { display: flex; width: 100%; height: 100%; }
+
     #map-wrap {
-      position: fixed; inset: 0; z-index: 1;
+      position: relative; flex: 1 1 auto; min-width: 0; height: 100%;
       display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(ellipse at 50% 42%, #1a1a1a 0%, #0a0a0a 72%);
+      background: radial-gradient(ellipse at 50% 45%, #2a2622 0%, #0e0c0a 75%);
       transition: background 0.6s ease;
     }
-    #map-wrap.hunt { background: radial-gradient(ellipse at 50% 45%, #141210 0%, #050506 78%); }
+    #map-wrap.hunt { background: radial-gradient(ellipse at 50% 45%, #1a1212 0%, #050405 78%); }
     #game-svg { display: block; width: 100%; height: 100%; }
+
+    /* Map tint: flat dim plus a vignette, faded in for the hunt. */
+    #layer-tint rect { opacity: 0; transition: opacity 0.8s ease; pointer-events: none; }
+    #map-wrap.hunt #layer-tint rect { opacity: 1; }
+    #map-wrap.hunt .pocong-glow { fill: #ff9d8a; }
 
     .hotspot { fill: transparent; stroke: none; }
     .hotspot.bettable { cursor: pointer; }
-    .hotspot.hovered { fill: rgba(180,20,20,0.16); }
-    .hotspot.locked { fill: rgba(124,58,237,0.30); }
-    .player-fig.dim { filter: grayscale(1) brightness(0.45); }
-    .player-fig.safe { filter: sepia(0.6) saturate(2) brightness(1.05); }
+    .hotspot.hovered { fill: rgba(180,20,20,0.14); }
+    .hotspot.selected { fill: rgba(180,20,20,0.22); }
+    .hotspot.locked { fill: rgba(124,58,237,0.32); }
+    .hotspot.daring { fill: rgba(224,140,24,0.30); }
+    .hotspot.target { fill: rgba(205,20,20,0.38); }
 
-    #title {
-      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-      font-family: 'Creepster', cursive; font-size: clamp(1.4rem, 3.2vw, 2.4rem);
-      color: #f0f0f0; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000,
-        1px -1px 0 #000, -1px 1px 0 #000, 3px 3px 6px rgba(0,0,0,0.8);
-      letter-spacing: 2px; z-index: 10; pointer-events: none; white-space: nowrap;
+    /* Frightened avatars tremble; faster once the Pocong is on the route. */
+    @keyframes tremble {
+      0%,100% { transform: translate(0,0); }
+      25% { transform: translate(-0.8px,0.4px); }
+      50% { transform: translate(0.7px,-0.3px); }
+      75% { transform: translate(-0.4px,-0.6px); }
     }
+    .fig-body { animation: tremble 0.26s infinite; }
+    #map-wrap.hunt .fig-body { animation-duration: 0.13s; }
+    #map-wrap.resolved .fig-body { animation: none; }
 
-    #compass-hint {
-      position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
-      font-family: monospace; font-size: 0.62rem; color: #555; line-height: 1.5;
+    /* Dark phase banner over the hallway */
+    #map-banner {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      z-index: 5; pointer-events: none; text-align: center;
+      background: rgba(14,12,10,0.94); color: #f3e9d2;
+      border: 2px solid #c8b48c; outline: 1px solid #1a1a1a; outline-offset: 3px;
+      border-radius: 6px; padding: 8px 18px 9px; min-width: 230px;
+      box-shadow: 0 6px 22px rgba(0,0,0,0.55);
     }
+    /* During the hunt the banner clears the hallway so the Pocong's walk stays visible. */
+    #map-wrap.hunt #map-banner { top: 9%; transform: translate(-50%, 0) scale(0.86); }
+    #map-banner { transition: top 0.5s ease, transform 0.5s ease; }
+    #map-banner-title {
+      font-family: 'Creepster', cursive; font-size: 1.35rem; letter-spacing: 3px; color: #ff4a3a;
+      text-shadow: 1px 1px 0 #000;
+    }
+    #map-banner-sub { font-size: 0.74rem; color: #d8ccb0; margin-top: 2px; }
+    #hiding-timer { font-family: monospace; font-size: 1.05rem; font-weight: bold; color: #fff; margin-left: 4px; }
 
     /* Sound toggle: fixed to the map's top-right corner, both phases */
     #btn-mute {
-      position: fixed; top: 12px; right: 16px; z-index: 15;
+      position: absolute; top: 12px; right: 12px; z-index: 15;
       font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
       color: #ffd700; background: rgba(10,10,10,0.9); border: 1px solid #c8a800;
-      border-radius: 7px; padding: 6px 12px; cursor: pointer;
-      transition: all 0.15s;
+      border-radius: 7px; padding: 6px 12px; cursor: pointer; transition: all 0.15s;
     }
     #btn-mute:hover { background: #2a2a2a; }
     #btn-mute.off { color: #888; border-color: #555; }
 
-    /* Phase panel */
+    #dev-controls {
+      display: none; position: absolute; bottom: 12px; left: 12px; z-index: 10;
+      background: rgba(10,10,10,0.85); border: 1px solid #ff4422;
+      border-radius: 8px; padding: 8px 12px; font-family: 'Creepster', cursive;
+    }
+    #dev-controls .dev-label { font-size: 0.72rem; color: #ff6644; letter-spacing: 1px; margin-bottom: 6px; }
+    #dev-controls button {
+      display: block; width: 100%; font-family: 'Creepster', cursive; font-size: 1rem;
+      padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
+      background: #7c1d0e; color: #ffbbaa;
+    }
+    #dev-controls button:hover { filter: brightness(1.2); }
+
+    /* ── Parchment-framed side panel ── */
     #phase-panel {
-      position: fixed; right: 16px; top: 78px; z-index: 12;
-      width: 240px;
-      background: rgba(240,240,235,0.95); border: 2px solid #333;
-      border-radius: 12px; padding: 12px 14px;
-      box-shadow: 3px 3px 12px rgba(0,0,0,0.7);
-      font-family: sans-serif; color: #1a1a1a;
+      flex: 0 0 332px; width: 332px; height: 100%; overflow-y: auto; z-index: 12;
+      background: #1a1613; color: #d9cdb4;
+      border-left: 3px double #c8b48c; box-shadow: inset 0 0 0 6px #110e0c, inset 0 0 0 7px #5a4b36;
+      padding: 16px 16px 18px;
     }
-    #phase-panel .phase-banner {
-      font-family: 'Creepster', cursive; font-size: 1.05rem; font-weight: normal;
-      color: #1a1a1a; letter-spacing: 1px; text-align: center; margin: 0;
+    #title {
+      font-family: 'Creepster', cursive; font-size: 1.75rem; letter-spacing: 2px; text-align: center;
+      color: #f3e9d2; text-shadow: 2px 2px 0 #000, 0 0 14px rgba(255,70,50,0.35);
+      padding-bottom: 8px; margin-bottom: 12px; border-bottom: 2px double #c8b48c;
     }
-    #hiding-timer {
-      font-family: monospace; font-size: 1.15rem; font-weight: bold;
-      color: #b3000f; text-align: center; margin: 8px 0 6px;
+    .pp-step {
+      background: #231e19; border: 1px solid #5a4b36; border-radius: 6px;
+      padding: 10px 12px 12px; margin-bottom: 10px;
     }
-    .phase-row { font-size: 0.76rem; line-height: 1.5; color: #333; }
-    .phase-row .lock-state { font-weight: bold; color: #5a2bb0; }
-    .phase-row .lock-state.none { color: #888; font-weight: normal; }
-    #phase-score { font-size: 0.76rem; color: #555; margin: 8px 0; }
-    #btn-confirm {
+    .pp-label {
+      font-family: 'Creepster', cursive; font-size: 1rem; letter-spacing: 1.5px; color: #e8d9b5;
+      margin-bottom: 7px;
+    }
+    .pp-label .pp-opt { font-family: sans-serif; font-size: 0.68rem; letter-spacing: 0; color: #9b8f78; }
+    .pp-banner {
+      font-family: monospace; font-size: 1.05rem; font-weight: bold; color: #ff4a3a;
+      background: #110e0c; border: 1px solid #5a4b36; border-radius: 4px; padding: 7px 10px; text-align: center;
+    }
+    .pp-banner.hunt { color: #ffb347; }
+    .pp-banner.over { color: #b574ff; }
+    .pp-field { display: block; font-size: 0.72rem; color: #9b8f78; margin-bottom: 8px; }
+    .pp-field select {
+      display: block; width: 100%; margin-top: 4px; padding: 6px 8px;
+      font-size: 0.82rem; color: #f3e9d2; background: #110e0c; border: 1px solid #6b5a42; border-radius: 4px;
+    }
+    .pp-field select:disabled { opacity: 0.5; }
+    #room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 9px; }
+    #room-grid button {
+      font-family: sans-serif; font-size: 0.68rem; line-height: 1.2; padding: 6px 3px; min-height: 36px;
+      color: #e8d9b5; background: #2e2721; border: 1px solid #6b5a42; border-radius: 4px; cursor: pointer;
+    }
+    #room-grid button:hover:not(:disabled) { background: #3a3129; }
+    #room-grid button:focus-visible, #btn-confirm:focus-visible, #btn-daring:focus-visible,
+    #btn-leaderboard:focus-visible, #btn-mute:focus-visible, select:focus-visible {
+      outline: 2px solid #ffd700; outline-offset: 2px;
+    }
+    #room-grid button:disabled { cursor: default; opacity: 0.55; }
+    #room-grid button.selected { background: #7c3aed; border-color: #b574ff; color: #fff; opacity: 1; }
+    #room-grid button.locked { background: #3f2a73; border-color: #b574ff; color: #fff; opacity: 1; }
+    #room-grid button.daring { border-color: #e08c18; color: #ffc46b; opacity: 1; }
+    .pp-row { font-size: 0.76rem; color: #c9bda4; line-height: 1.5; }
+    .pp-row .lock-state { font-weight: bold; color: #b574ff; letter-spacing: 0.5px; }
+    .pp-row .lock-state.none { color: #9b8f78; font-weight: normal; letter-spacing: 0; }
+    .pp-row .lock-state.lounge { color: #ff6a5a; }
+
+    #signature {
+      background: #f1e8d2; color: #1a1a1a; border: 1px solid #c8b48c; border-radius: 4px;
+      padding: 8px 12px 6px; margin-bottom: 9px;
+      background-image: repeating-linear-gradient(0deg, transparent 0 22px, rgba(60,40,20,0.08) 22px 23px);
+    }
+    #sig-initials {
+      font-family: 'Creepster', cursive; font-size: 2rem; line-height: 1; color: #2a1a10;
+      transform: skewX(-12deg); display: inline-block; padding: 2px 6px 0;
+    }
+    #sig-line { border-bottom: 1.5px solid #2a1a10; margin: 2px 0 4px; }
+    #sig-caption { font-size: 0.66rem; color: #5a4b36; }
+    #sig-caption b { color: #2a1a10; }
+
+    #btn-confirm, #btn-daring {
       display: block; width: 100%;
-      font-family: 'Creepster', cursive; font-size: 1rem; letter-spacing: 1px;
-      color: #fff; background: #7c3aed; border: none; border-radius: 8px;
-      padding: 7px 0; cursor: pointer; transition: filter 0.15s;
+      font-family: 'Creepster', cursive; font-size: 1.05rem; letter-spacing: 1px;
+      color: #fff; background: #7c3aed; border: none; border-radius: 6px;
+      padding: 8px 0; cursor: pointer; transition: filter 0.15s;
     }
-    #btn-confirm:hover:not(:disabled) { filter: brightness(1.18); }
-    #btn-confirm:disabled { opacity: 0.45; cursor: default; }
-    #phase-note { font-size: 0.68rem; color: #777; text-align: center; margin-top: 6px; }
+    #btn-daring { background: #2e2721; border: 1px solid #e08c18; color: #ffc46b; font-size: 0.95rem; }
+    #btn-confirm:hover:not(:disabled), #btn-daring:hover:not(:disabled) { filter: brightness(1.18); }
+    #btn-confirm:disabled, #btn-daring:disabled { opacity: 0.45; cursor: default; }
+    #phase-note, #daring-note { font-size: 0.68rem; color: #9b8f78; margin-top: 6px; line-height: 1.4; }
+    .pp-help { font-size: 0.7rem; color: #b5a88c; line-height: 1.45; margin-bottom: 8px; }
+
+    .pp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 9px; }
+    .pp-stat { background: #110e0c; border: 1px solid #5a4b36; border-radius: 4px; padding: 6px 8px; }
+    .pp-stat span { display: block; font-size: 0.62rem; color: #9b8f78; }
+    .pp-stat b { display: block; font-family: monospace; font-size: 1rem; color: #f3e9d2; }
+    #status-line { display: flex; align-items: center; gap: 8px; font-size: 0.74rem; color: #d9cdb4; line-height: 1.35; }
+    .light {
+      flex: 0 0 11px; width: 11px; height: 11px; border-radius: 50%; border: 1px solid #000;
+      background: #e0a21b; box-shadow: 0 0 7px #e0a21b;
+    }
+    .light.green { background: #3dbb6d; box-shadow: 0 0 7px #3dbb6d; }
+    .light.red { background: #e03030; box-shadow: 0 0 7px #e03030; }
     #btn-leaderboard {
-      display: block; width: 100%; margin-top: 8px;
-      font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
-      color: #444; background: #e2ded4; border: 1px solid #999; border-radius: 8px;
-      padding: 5px 0; cursor: pointer;
+      display: block; width: 100%; margin-top: 10px;
+      font-family: 'Creepster', cursive; font-size: 0.95rem; letter-spacing: 1px;
+      color: #e8d9b5; background: #2e2721; border: 1px solid #6b5a42; border-radius: 6px;
+      padding: 6px 0; cursor: pointer;
     }
-    #btn-leaderboard:hover { background: #d6d2c8; }
+    #btn-leaderboard:hover { background: #3a3129; }
 
     /* Leaderboard sheet */
     #leaderboard-overlay {
@@ -183,17 +280,16 @@
       font-family: 'Creepster', cursive; font-size: 1.6rem; color: #ffd700;
       letter-spacing: 2px; text-align: center; margin-bottom: 4px;
     }
-    #leaderboard-card .lb-sub { font-family: sans-serif; font-size: 0.72rem; color: #999; text-align: center; margin-bottom: 12px; }
+    #leaderboard-card .lb-sub { font-size: 0.72rem; color: #999; text-align: center; margin-bottom: 12px; }
     #leaderboard-list { list-style: none; }
     #leaderboard-list li {
       display: flex; justify-content: space-between; gap: 10px;
-      font-family: sans-serif; font-size: 0.85rem; padding: 7px 2px;
-      border-bottom: 1px solid #2a2a2a;
+      font-size: 0.85rem; padding: 7px 2px; border-bottom: 1px solid #2a2a2a;
     }
     #leaderboard-list li .lb-name { color: #ddd; }
     #leaderboard-list li .lb-score { color: #ffd700; font-weight: bold; }
     #leaderboard-list li .lb-streak { color: #888; font-size: 0.72rem; }
-    #leaderboard-empty { font-family: sans-serif; font-size: 0.82rem; color: #999; text-align: center; padding: 12px 0; }
+    #leaderboard-empty { font-size: 0.82rem; color: #999; text-align: center; padding: 12px 0; }
     #leaderboard-close {
       display: block; width: 100%; margin-top: 14px;
       font-family: 'Creepster', cursive; font-size: 1rem; color: #fff;
@@ -201,10 +297,7 @@
     }
 
     /* Jump-scare flash + overlay */
-    #flash {
-      position: fixed; inset: 0; z-index: 60; pointer-events: none;
-      background: #fff; opacity: 0;
-    }
+    #flash { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: #fff; opacity: 0; }
     #flash.on { animation: flashHit 0.9s ease-out; }
     @keyframes flashHit {
       0% { opacity: 0.95; } 14% { opacity: 0; } 30% { opacity: 0.7; } 48% { opacity: 0; } 100% { opacity: 0; }
@@ -215,8 +308,7 @@
     }
     #jumpscare.on { display: flex; }
     #jumpscare img {
-      width: min(46vw, 320px); image-rendering: auto;
-      filter: drop-shadow(0 0 30px rgba(255,0,0,0.6));
+      width: min(46vw, 320px); filter: drop-shadow(0 0 30px rgba(255,0,0,0.6));
       animation: lunge 0.9s cubic-bezier(.2,.8,.3,1);
     }
     @keyframes lunge {
@@ -230,8 +322,7 @@
       display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
       z-index: 30; text-align: center;
       background: rgba(0,0,0,0.9); border: 3px solid #ff2222;
-      border-radius: 12px; padding: 20px 34px;
-      box-shadow: 0 0 40px rgba(255,0,0,0.5);
+      border-radius: 12px; padding: 20px 34px; box-shadow: 0 0 40px rgba(255,0,0,0.5);
     }
     #result-banner.safe { border-color: #7c3aed; box-shadow: 0 0 40px rgba(124,58,237,0.5); }
     #result-banner h2 {
@@ -239,25 +330,9 @@
       color: #ff2222; letter-spacing: 3px; text-shadow: 2px 2px 0 #000;
     }
     #result-banner.safe h2 { color: #b574ff; }
-    #result-banner p { font-family: sans-serif; font-size: 0.85rem; color: #ccc; margin-top: 8px; }
+    #result-banner p { font-size: 0.85rem; color: #ccc; margin-top: 8px; }
     #result-slash { display: none; margin: 0 auto 6px; }
     #result-banner.found #result-slash { display: block; }
-
-    #dev-controls {
-      display: none;
-      position: fixed; bottom: 16px; left: 16px; z-index: 10;
-      background: rgba(10,10,10,0.85); border: 1px solid #ff4422;
-      border-radius: 8px; padding: 10px 14px;
-      font-family: 'Creepster', cursive;
-    }
-    #dev-controls .dev-label { font-size: 0.72rem; color: #ff6644; letter-spacing: 1px; margin-bottom: 8px; }
-    #dev-controls button {
-      display: block; width: 100%; margin-top: 6px;
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
-    }
-    #dev-controls button:hover { filter: brightness(1.2); }
-    #btn-advance { background: #7c1d0e; color: #ffbbaa; }
 
     /* How-to-play intro overlay */
     #intro-overlay {
@@ -275,19 +350,17 @@
     }
     #intro-card h2 {
       font-family: 'Creepster', cursive; font-size: 2rem; color: #ff3030;
-      letter-spacing: 2px; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6);
-      margin-bottom: 4px;
+      letter-spacing: 2px; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6); margin-bottom: 4px;
     }
-    #intro-card .intro-sub { font-family: sans-serif; font-size: 0.78rem; color: #9a9a9a; margin-bottom: 14px; }
+    #intro-card .intro-sub { font-size: 0.78rem; color: #9a9a9a; margin-bottom: 14px; }
     #intro-card ol { text-align: left; margin: 0 0 14px; list-style: none; counter-reset: step; }
     #intro-card ol li {
-      font-family: sans-serif; font-size: 0.9rem; line-height: 1.45; color: #dcdcdc;
+      font-size: 0.9rem; line-height: 1.45; color: #dcdcdc;
       margin-bottom: 10px; padding-left: 34px; position: relative; counter-increment: step;
     }
     #intro-card ol li::before {
       content: counter(step); position: absolute; left: 0; top: 0;
-      width: 24px; height: 24px; border-radius: 50%;
-      background: #7c1d0e; color: #ffd0c4;
+      width: 24px; height: 24px; border-radius: 50%; background: #7c1d0e; color: #ffd0c4;
       font-family: 'Creepster', cursive; font-size: 0.95rem;
       display: flex; align-items: center; justify-content: center;
     }
@@ -295,66 +368,141 @@
     #intro-card ol li .lose { color: #ff5555; font-weight: bold; }
     #intro-card ol li .win  { color: #b574ff; font-weight: bold; }
     #intro-note {
-      font-family: sans-serif; font-size: 0.74rem; color: #b98;
-      background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
+      font-size: 0.74rem; color: #b98; background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
       border-radius: 8px; padding: 8px 10px; margin-bottom: 16px; line-height: 1.4;
     }
     #intro-got {
       font-family: 'Creepster', cursive; font-size: 1.3rem; letter-spacing: 1px;
-      color: #fff; background: #7c3aed; border: none; border-radius: 10px;
-      padding: 9px 30px; cursor: pointer;
+      color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 30px; cursor: pointer;
     }
     #intro-got:hover { filter: brightness(1.18); }
 
     @media (max-width: 768px) {
+      body { overflow: auto; }
+      #game { flex-direction: column; height: auto; min-height: 100%; }
+      /* The map keeps its own proportions instead of letterboxing in a tall box. */
+      #map-wrap { flex: none; height: auto; aspect-ratio: 1100 / 760; min-height: 0; }
       #phase-panel {
-        left: 0; right: 0; top: auto; bottom: 0; width: auto;
-        border-radius: 14px 14px 0 0; border-left: none; border-right: none; border-bottom: none;
+        flex: none; width: auto; height: auto; overflow: visible;
+        border-left: none; border-top: 3px double #c8b48c;
       }
-      #compass-hint { display: none; }
-      #phase-panel .phase-banner { font-size: 1rem; }
-      /* Keep the title clear of the sound button on a narrow screen. */
-      #title {
-        left: 12px; transform: none; text-align: left;
-        font-size: 1.15rem; letter-spacing: 1px;
-      }
+      #map-banner { min-width: 0; padding: 5px 10px 6px; }
+      #map-banner-title { font-size: 1rem; letter-spacing: 2px; }
+      #map-banner-sub { font-size: 0.62rem; }
+      #hiding-timer { font-size: 0.85rem; }
+      #btn-mute { font-size: 0.78rem; padding: 5px 9px; }
+      #dev-controls { bottom: 8px; left: auto; right: 8px; padding: 6px 8px; }
+      #dev-controls button { font-size: 0.85rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       body.shaking { animation: none; }
       #jumpscare img { animation: none; opacity: 1; transform: scale(1); }
       #flash.on { animation: none; opacity: 0.35; }
+      .fig-body, #map-wrap.hunt .fig-body { animation: none; }
     }
   </style>
 </head>
 <body>
-  <div id="map-wrap">
-    <svg id="game-svg" viewBox="0 0 1376 768" preserveAspectRatio="xMidYMid meet"
-         xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-      <g id="layer-rooms"></g>
-      <g id="layer-furn"></g>
-      <g id="layer-route"></g>
-      <g id="layer-tint"></g>
-      <g id="layer-figures"></g>
-      <g id="layer-ghost"></g>
-      <g id="layer-labels"></g>
-      <g id="layer-hotspots"></g>
-    </svg>
-  </div>
+  <div id="game">
+    <div id="map-wrap">
+      <svg id="game-svg" viewBox="0 0 1100 680" preserveAspectRatio="xMidYMid meet"
+           xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img"
+           aria-label="Mansion Level 1 Hallway Map">
+        <defs>
+          <pattern id="grid-minor" width="22" height="22" patternUnits="userSpaceOnUse">
+            <path d="M22 0H0V22" fill="none" stroke="#b7c6d2" stroke-width="0.7"/>
+          </pattern>
+          <pattern id="grid-major" width="110" height="110" patternUnits="userSpaceOnUse">
+            <path d="M110 0H0V110" fill="none" stroke="#9db0c0" stroke-width="1"/>
+          </pattern>
+          <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#8d8673" stroke-width="1"/>
+          </pattern>
+          <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="6"/>
+          </filter>
+          <radialGradient id="vignette" cx="50%" cy="50%" r="62%">
+            <stop offset="0" stop-color="#000" stop-opacity="0"/>
+            <stop offset="0.6" stop-color="#000" stop-opacity="0.25"/>
+            <stop offset="1" stop-color="#000" stop-opacity="0.82"/>
+          </radialGradient>
+        </defs>
+        <g id="layer-paper"></g>
+        <g id="layer-rooms"></g>
+        <g id="layer-route"></g>
+        <g id="layer-tint">
+          <rect x="0" y="0" width="1100" height="680" fill="rgba(10,6,20,0.42)"/>
+          <rect x="0" y="0" width="1100" height="680" fill="url(#vignette)"/>
+        </g>
+        <g id="layer-figures"></g>
+        <g id="layer-ghost"></g>
+        <g id="layer-labels"></g>
+        <g id="layer-hotspots"></g>
+      </svg>
 
-  <div id="title">👻 Awas Ada Pocong</div>
-  <div id="compass-hint">👻 Ketuk ruangan untuk bersembunyi</div>
+      <div id="map-banner" aria-live="polite">
+        <div id="map-banner-title">HIDING PHASE</div>
+        <div id="map-banner-sub"><span id="map-banner-label">Remaining Hiding Time</span><span id="hiding-timer">01:00</span></div>
+      </div>
 
-  <button id="btn-mute" aria-pressed="true">🔊 Suara: Nyala</button>
+      <button id="btn-mute" aria-pressed="true">🔊 Suara: Nyala</button>
 
-  <div id="phase-panel">
-    <h2 class="phase-banner" id="phase-banner">FASE 1 · SEMBUNYI</h2>
-    <div id="hiding-timer">Hiding Phase: 01:00</div>
-    <div class="phase-row">User Location: <span id="location-state" class="lock-state none">—</span></div>
-    <div class="phase-row">Player: <span id="player-name">—</span></div>
-    <div id="phase-score">Skor ronde ini: 0 · Streak: 0</div>
-    <button id="btn-confirm" disabled>CONFIRM &amp; PLACE</button>
-    <div id="phase-note">Ketuk ruangan di peta, lalu tekan tombol.</div>
-    <button id="btn-leaderboard">🏆 Leaderboard</button>
+      <div id="dev-controls">
+        <div class="dev-label">🛠 Dev Controls (staging)</div>
+        <button id="btn-advance">⏭ Next Phase</button>
+      </div>
+    </div>
+
+    <aside id="phase-panel" aria-label="Game panel">
+      <div id="title">Awas Ada Pocong</div>
+
+      <section class="pp-step">
+        <div class="pp-label">Current Game Phase</div>
+        <div id="phase-banner" class="pp-banner">Hiding Phase: 01:00</div>
+      </section>
+
+      <section class="pp-step">
+        <div class="pp-label">Player Setup: Select &amp; Confirm</div>
+        <label class="pp-field" for="room-select">Hiding room
+          <select id="room-select"><option value="">Choose a room</option></select>
+        </label>
+        <div id="room-grid" role="group" aria-label="Hiding rooms"></div>
+        <div class="pp-row">User Location: <span id="location-state" class="lock-state none">NOT LOCKED</span></div>
+      </section>
+
+      <section class="pp-step">
+        <div class="pp-label">Confirm &amp; Place</div>
+        <div id="signature" aria-label="Signature">
+          <div id="sig-initials">—</div>
+          <div id="sig-line"></div>
+          <div id="sig-caption">Signed as <b id="player-name">—</b></div>
+        </div>
+        <button id="btn-confirm" disabled>CONFIRM &amp; PLACE</button>
+        <div id="phase-note">Tap a room on the map or in the grid, then confirm.</div>
+      </section>
+
+      <section class="pp-step" id="daring-step">
+        <div class="pp-label">Double Down: Daring Pick <span class="pp-opt">(optional)</span></div>
+        <p class="pp-help">Also sneak through a second room. If the Pocong enters either room you are found. Survive both and this round's score is x1.5.</p>
+        <label class="pp-field" for="daring-select">Second room
+          <select id="daring-select"><option value="">Choose a second room</option></select>
+        </label>
+        <button id="btn-daring" disabled>DARE A SECOND ROOM</button>
+        <div id="daring-note">Lock your hiding room first.</div>
+      </section>
+
+      <section class="pp-step">
+        <div class="pp-label">Status</div>
+        <div class="pp-stats">
+          <div class="pp-stat"><span>Score</span><b id="stat-score">0</b></div>
+          <div class="pp-stat"><span>This round</span><b id="stat-round">0</b></div>
+          <div class="pp-stat"><span>Best round</span><b id="stat-best">0</b></div>
+          <div class="pp-stat"><span>Streak (multiplier)</span><b id="stat-streak">0 (x1.0)</b></div>
+        </div>
+        <div id="status-line"><span id="status-light" class="light"></span><span id="status-text">Hiding Phase. Pick a room and confirm it.</span></div>
+        <button id="btn-leaderboard">Leaderboard</button>
+      </section>
+    </aside>
   </div>
 
   <div id="result-banner">
@@ -369,11 +517,6 @@
 
   <div id="jumpscare"><img src="/assets/pocong.jpg" alt=""></div>
   <div id="flash"></div>
-
-  <div id="dev-controls">
-    <div class="dev-label">🛠 Dev Controls (staging)</div>
-    <button id="btn-advance">⏭ Next Phase</button>
-  </div>
 
   <div id="leaderboard-overlay">
     <div id="leaderboard-card">
@@ -405,136 +548,300 @@
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || '';
     const authHeaders = token ? { 'x-usernode-token': token } : {};
+    let myUsername = null;
+    try {
+      const part = token ? token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/') : '';
+      const payload = part ? JSON.parse(atob(part)) : null;
+      if (payload && payload.username) myUsername = String(payload.username);
+    } catch (_) {}
 
     const SVGNS = 'http://www.w3.org/2000/svg';
-    const XLINK = 'http://www.w3.org/1999/xlink';
     function svgEl(tag, attrs) {
       const e = document.createElementNS(SVGNS, tag);
       if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
       return e;
     }
+    function svgText(x, y, str, attrs) {
+      const t = svgEl('text', Object.assign({ x: x, y: y, 'font-family': 'sans-serif' }, attrs || {}));
+      t.textContent = str;
+      return t;
+    }
     const $ = (id) => document.getElementById(id);
 
-    // ── Rooms: 11 hiding rooms + hall tiles ────────────────────────────────────
+    // ── Rooms: 11 hiding rooms on either side of the diagonal main hallway ──
+    // gridX 1 = the upper-left side of the hallway, gridX 3 = the lower-right
+    // side; the hallway runs along gridX 2 from top-right to bottom-left.
+    const HALL = { gridX: 2, from: -1, to: 5 };
     const ROOMS = [
-      { slug: 'kamar-utama',       label: 'Kamar Utama',       gridX: 0, gridZ: 0, type: 'bedroom'  },
-      { slug: 'library',           label: 'Library',           gridX: 1, gridZ: 0, type: 'library'  },
-      { slug: 'kamar-asisten',     label: 'Kamar Asisten',     gridX: 2, gridZ: 0, type: 'bedroom'  },
-      { slug: null, label: null,   gridX: 3, gridZ: 0, type: 'corridor' },
-      { slug: 'kitchen-area',      label: 'Kitchen Area',      gridX: 0, gridZ: 1, type: 'kitchen'  },
-      { slug: 'kamar-anak',        label: 'Kamar Anak-Anak',   gridX: 1, gridZ: 1, type: 'playroom' },
-      { slug: null, label: null,   gridX: 2, gridZ: 1, type: 'corridor' },
-      { slug: 'living-room',       label: 'Living Room',       gridX: 3, gridZ: 1, type: 'living'   },
-      { slug: 'kamar-mandi',       label: 'Kamar Mandi',       gridX: 0, gridZ: 2, type: 'bathroom' },
-      { slug: 'kamar-mandi-kedua', label: 'Kamar Mandi Kedua', gridX: 1, gridZ: 2, type: 'bathroom' },
-      { slug: 'backyard',          label: 'Backyard',          gridX: 2, gridZ: 2, type: 'backyard' },
-      { slug: 'gudang',            label: 'Gudang',            gridX: 3, gridZ: 2, type: 'storage'  },
-      { slug: 'ruang-baca',        label: 'Ruang Baca',        gridX: 0, gridZ: 3, type: 'reading'  },
-      { slug: null, label: null,   gridX: 1, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null,   gridX: 2, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null,   gridX: 3, gridZ: 3, type: 'corridor' },
+      { slug: 'kitchen-area',      label: 'Kitchen',            gridX: 1, gridZ: 0, type: 'kitchen'   },
+      { slug: 'kamar-anak',        label: "Kids' Bedroom",      gridX: 1, gridZ: 1, type: 'kids'      },
+      { slug: 'kamar-utama',       label: 'Master Bedroom',     gridX: 1, gridZ: 2, type: 'bedroom'   },
+      { slug: 'library',           label: 'Library',            gridX: 1, gridZ: 3, type: 'library'   },
+      { slug: 'kamar-asisten',     label: "Assistant's Room",   gridX: 1, gridZ: 4, type: 'assistant' },
+      { slug: 'gudang',            label: 'Gudang (Storage)',   gridX: 1, gridZ: 5, type: 'storage'   },
+      { slug: 'kamar-mandi-kedua', label: 'Secondary Bathroom', gridX: 3, gridZ: 0, type: 'bathroom'  },
+      { slug: 'kamar-mandi',       label: 'Bathroom',           gridX: 3, gridZ: 1, type: 'bathroom'  },
+      { slug: 'backyard',          label: 'Backyard',           gridX: 3, gridZ: 2, type: 'backyard'  },
+      { slug: 'ruang-baca',        label: 'Reading Room',       gridX: 3, gridZ: 3, type: 'reading'   },
+      { slug: 'living-room',       label: 'Living Room',        gridX: 3, gridZ: 4, type: 'living'    },
     ];
-    const HIDING_SLUGS = ROOMS.filter(r => r.slug).map(r => r.slug);
+    const ROOM_BY_SLUG = Object.fromEntries(ROOMS.map(r => [r.slug, r]));
+    function roomLabel(slug) { return (ROOM_BY_SLUG[slug] || {}).label || slug || '—'; }
 
-    const ISO = { hw: 108, hh: 62, wallH: 72, ox: 688, oy: 172 };
-    function iso(gx, gz) {
-      return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh };
-    }
+    const ISO = { hw: 96, hh: 55, wallH: 18, ox: 585, oy: 140 };
+    function iso(gx, gz) { return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh }; }
+    function P(gx, gz) { const p = iso(gx, gz); return [p.x, p.y]; }
     function ptsStr(arr) { return arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '); }
+    function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+    const INK = '#1a1a1a';
 
-    // Per-type furniture as small iso cuboids [offX, offY, halfW, halfDepth, height]
+    // ── Hand-drawn furniture: small iso cuboids with detail lines ──────────────
+    const FACE = { top: '#f7f4ea', left: '#e6e1d1', right: '#d3cdbb' };
+    function cub(g, cx, cy, hw, hd, h, faces) {
+      const f = Object.assign({}, FACE, faces || {});
+      const base = { stroke: INK, 'stroke-width': 1.3, 'stroke-linejoin': 'round' };
+      g.appendChild(svgEl('polygon', Object.assign({ points: ptsStr([[cx, cy + hd - h], [cx + hw, cy - h], [cx + hw, cy], [cx, cy + hd]]), fill: f.right }, base)));
+      g.appendChild(svgEl('polygon', Object.assign({ points: ptsStr([[cx - hw, cy - h], [cx, cy + hd - h], [cx, cy + hd], [cx - hw, cy]]), fill: f.left }, base)));
+      g.appendChild(svgEl('polygon', Object.assign({ points: ptsStr([[cx, cy - hd - h], [cx + hw, cy - h], [cx, cy + hd - h], [cx - hw, cy - h]]), fill: f.top }, base)));
+    }
+    function ln(g, x1, y1, x2, y2, w) {
+      g.appendChild(svgEl('line', { x1: x1.toFixed(1), y1: y1.toFixed(1), x2: x2.toFixed(1), y2: y2.toFixed(1), stroke: INK, 'stroke-width': w || 1, 'stroke-linecap': 'round' }));
+    }
+    function ell(g, cx, cy, rx, ry, attrs) {
+      g.appendChild(svgEl('ellipse', Object.assign({ cx: cx.toFixed(1), cy: cy.toFixed(1), rx: rx, ry: ry, fill: 'none', stroke: INK, 'stroke-width': 1.1 }, attrs || {})));
+    }
+    // Shelf lines across a cuboid's left (long) face, plus book ticks.
+    function shelves(g, cx, cy, hw, hd, h, rows) {
+      for (let i = 1; i <= rows; i++) {
+        const y = -h + (h * i) / (rows + 1);
+        ln(g, cx - hw, cy + y, cx, cy + hd + y, 0.9);
+        for (let k = 1; k < 6; k++) {
+          const t = k / 6;
+          const bx = cx - hw + hw * t, by = cy + y + hd * t;
+          ln(g, bx, by - 1.5, bx, by - h / (rows + 1) + 2.5, 0.8);
+        }
+      }
+    }
+    function crateX(g, cx, cy, hw, hd, h) {
+      ln(g, cx - hw, cy - h, cx, cy + hd, 0.9); ln(g, cx, cy + hd - h, cx - hw, cy, 0.9);
+      ln(g, cx, cy + hd - h, cx + hw, cy, 0.9); ln(g, cx + hw, cy - h, cx, cy + hd, 0.9);
+    }
+    function lamp(g, x, y) {
+      ln(g, x, y, x, y - 22, 1.4);
+      g.appendChild(svgEl('polygon', { points: ptsStr([[x - 8, y - 22], [x + 8, y - 22], [x + 5, y - 32], [x - 5, y - 32]]), fill: FACE.top, stroke: INK, 'stroke-width': 1.2 }));
+      ell(g, x, y, 5, 2.2, { fill: FACE.right });
+    }
+    function bedPiece(g, cx, cy, hw, hd, h) {
+      cub(g, cx, cy, hw, hd, h);
+      // pillow at the far (upper-left) end, blanket line across the top face
+      cub(g, cx - hw * 0.55, cy - hd * 0.55 - h, hw * 0.28, hd * 0.42, 4, { top: '#fff' });
+      ln(g, cx - hw * 0.25, cy - h - hd * 0.25, cx + hw * 0.25, cy - h + hd * 0.25, 1);
+    }
     const FURN = {
-      bedroom:  [[-46,-14,28,13,24],[36,-6,15,11,30],[8,-30,10,8,16]],
-      playroom: [[-40,-10,24,12,10],[36,-4,13,10,20],[2,6,9,9,9]],
-      library:  [[-44,-16,30,10,42],[36,-2,18,12,10],[-2,-30,8,8,14]],
-      reading:  [[-44,-16,30,10,42],[36,-4,17,12,11],[-2,-28,8,8,14]],
-      kitchen:  [[-42,-14,28,11,26],[36,-16,13,10,40],[8,-28,15,7,10]],
-      living:   [[-44,-6,30,14,14],[6,-4,20,12,7],[36,-26,17,4,24]],
-      bathroom: [[-44,-12,26,12,16],[36,-14,13,9,18],[8,-26,10,8,20]],
-      backyard: [[-42,-20,9,9,36],[-42,-44,20,20,4],[32,-2,20,6,8]],
-      storage:  [[-42,-14,30,12,46],[36,-6,17,12,26],[8,-28,12,8,16]],
+      bedroom(g, cx, cy) {
+        bedPiece(g, cx - 28, cy - 4, 32, 17, 14);
+        cub(g, cx + 36, cy - 22, 17, 9, 36);                       // wardrobe
+        ln(g, cx + 27.5, cy - 44, cx + 27.5, cy - 8, 0.9);          // wardrobe door split
+        g.appendChild(svgEl('circle', { cx: cx + 24, cy: cy - 26, r: 1.3, fill: INK }));
+        cub(g, cx + 6, cy - 30, 7, 6, 12); lamp(g, cx + 6, cy - 42); // nightstand + lamp
+        cub(g, cx + 30, cy + 8, 7, 6, 12);                          // second nightstand
+        ell(g, cx + 8, cy + 24, 24, 10, { 'stroke-dasharray': '3 3' });
+      },
+      assistant(g, cx, cy) {
+        bedPiece(g, cx - 30, cy - 6, 24, 13, 12);
+        cub(g, cx + 26, cy - 20, 16, 8, 16);                        // desk
+        cub(g, cx + 30, cy - 36, 5, 4, 8, { top: '#fff' });         // papers / laptop
+        cub(g, cx + 14, cy, 5, 5, 9); cub(g, cx + 17, cy - 6, 5, 2, 17); // chair + back
+        cub(g, cx + 40, cy + 6, 8, 7, 26);                          // small wardrobe
+        ell(g, cx - 10, cy + 24, 18, 8, { 'stroke-dasharray': '3 3' });
+      },
+      kids(g, cx, cy) {
+        cub(g, cx - 32, cy - 6, 28, 13, 10);                        // lower bunk
+        cub(g, cx - 32, cy - 26, 28, 13, 10);                       // upper bunk
+        ln(g, cx - 4, cy - 2, cx - 4, cy - 30, 1.2); ln(g, cx - 10, cy + 1, cx - 10, cy - 27, 1.2);
+        ln(g, cx - 10, cy - 8, cx - 4, cy - 11, 0.9); ln(g, cx - 10, cy - 16, cx - 4, cy - 19, 0.9);
+        cub(g, cx + 30, cy - 16, 12, 9, 12); ln(g, cx + 18, cy - 28, cx + 42, cy - 28, 0.9); // toy box
+        g.appendChild(svgEl('circle', { cx: cx + 14, cy: cy + 20, r: 15, fill: '#fff', stroke: INK, 'stroke-width': 1.1 }));
+        g.appendChild(svgEl('circle', { cx: cx + 14, cy: cy + 20, r: 8, fill: 'none', stroke: INK, 'stroke-width': 0.9, 'stroke-dasharray': '2 2' }));
+        g.appendChild(svgEl('circle', { cx: cx + 38, cy: cy + 12, r: 5, fill: '#fff', stroke: INK, 'stroke-width': 1.1 }));
+        ln(g, cx + 33, cy + 12, cx + 43, cy + 12, 0.9);
+      },
+      library(g, cx, cy) {
+        cub(g, cx - 40, cy - 20, 34, 8, 44); shelves(g, cx - 40, cy - 20, 34, 8, 44, 4);
+        cub(g, cx + 42, cy - 10, 9, 24, 40);                        // second tall shelf
+        for (let i = 1; i <= 4; i++) { const y = -40 + 40 * i / 5; ln(g, cx + 42, cy + 24 + y, cx + 51, cy + y, 0.9); }
+        cub(g, cx - 2, cy + 14, 20, 10, 10);                        // reading table
+        cub(g, cx - 24, cy + 24, 5, 5, 9); cub(g, cx + 18, cy + 26, 5, 5, 9);
+        cub(g, cx, cy + 2, 4, 3, 2, { top: '#fff' });               // open book
+      },
+      reading(g, cx, cy) {
+        cub(g, cx - 40, cy - 18, 30, 8, 40); shelves(g, cx - 40, cy - 18, 30, 8, 40, 3);
+        cub(g, cx + 12, cy + 4, 12, 10, 12); cub(g, cx + 18, cy - 4, 4, 10, 22); // armchair + back
+        cub(g, cx + 38, cy + 6, 7, 7, 10); lamp(g, cx + 38, cy - 4);
+        ell(g, cx + 6, cy + 26, 24, 9, { 'stroke-dasharray': '3 3' });
+        cub(g, cx - 6, cy + 10, 3, 2.5, 2, { top: '#fff' });
+      },
+      kitchen(g, cx, cy) {
+        cub(g, cx - 36, cy - 10, 36, 9, 20);                        // counter
+        ell(g, cx - 46, cy - 36, 9, 4.5, { fill: FACE.right });      // sink
+        cub(g, cx + 30, cy - 22, 11, 9, 20);                        // stove
+        for (const [dx, dy] of [[-4, -3], [4, -3], [-4, 2], [4, 2]]) ell(g, cx + 30 + dx, cy - 42 + dy, 3, 1.6, {});
+        cub(g, cx + 40, cy + 6, 9, 9, 36); ln(g, cx + 31, cy - 14, cx + 40, cy - 9, 0.9); // fridge
+        cub(g, cx - 2, cy + 22, 14, 8, 11);                         // table
+      },
+      living(g, cx, cy) {
+        cub(g, cx - 18, cy - 2, 30, 4, 20);                          // sofa back
+        cub(g, cx - 24, cy + 6, 30, 10, 11);                         // sofa seat
+        ln(g, cx - 34, cy + 2, cx - 14, cy + 13, 0.9);
+        cub(g, cx + 8, cy + 24, 14, 7, 8);                           // coffee table
+        cub(g, cx + 38, cy - 20, 14, 8, 30);                         // fireplace
+        g.appendChild(svgEl('path', { d: 'M' + (cx + 27) + ' ' + (cy - 12) + ' a7 9 0 0 1 14 -4 v10 l-14 7 z', fill: '#3a3530', stroke: INK, 'stroke-width': 1 }));
+        lamp(g, cx - 52, cy - 8); lamp(g, cx + 8, cy - 20);
+        ell(g, cx - 4, cy + 30, 28, 9, { 'stroke-dasharray': '3 3' });
+      },
+      bathroom(g, cx, cy) {
+        cub(g, cx - 30, cy - 4, 28, 11, 12); ell(g, cx - 30, cy - 16, 20, 7, { fill: '#fff' }); // tub
+        cub(g, cx + 30, cy - 20, 7, 7, 12); ell(g, cx + 30, cy - 32, 6, 3.5, { fill: '#fff' });   // toilet
+        cub(g, cx + 38, cy - 24, 4, 6, 18);                                                   // tank
+        cub(g, cx + 36, cy + 8, 8, 6, 18); ell(g, cx + 36, cy - 10, 6, 3, { fill: '#fff' });     // sink
+        ell(g, cx - 4, cy + 26, 14, 6, { 'stroke-dasharray': '2 3' });                        // mat
+      },
+      backyard(g, cx, cy) {
+        for (let i = 0; i < 14; i++) {
+          const gx = cx - 70 + (i * 37) % 140, gy = cy - 20 + ((i * 23) % 44);
+          ln(g, gx, gy, gx - 2, gy - 4, 0.8); ln(g, gx, gy, gx + 2, gy - 4, 0.8);
+        }
+        cub(g, cx - 30, cy - 10, 5, 4, 24);                                                   // trunk
+        for (const [dx, dy, r] of [[-12, -34, 14], [8, -38, 13], [-2, -48, 12]]) {
+          g.appendChild(svgEl('circle', { cx: cx - 30 + dx, cy: cy - 10 + dy, r: r, fill: '#e9efd6', stroke: INK, 'stroke-width': 1.2 }));
+        }
+        cub(g, cx + 24, cy + 6, 16, 5, 7); cub(g, cx + 28, cy, 16, 2, 14);                   // bench
+        for (const [dx, dy, r] of [[42, -18, 8], [30, -28, 6]]) {
+          g.appendChild(svgEl('circle', { cx: cx + dx, cy: cy + dy, r: r, fill: '#e9efd6', stroke: INK, 'stroke-width': 1.1 }));
+        }
+      },
+      storage(g, cx, cy) {
+        cub(g, cx - 30, cy - 6, 13, 10, 20); crateX(g, cx - 30, cy - 6, 13, 10, 20);
+        cub(g, cx - 34, cy - 10 - 20, 9, 7, 14); crateX(g, cx - 34, cy - 30, 9, 7, 14);
+        cub(g, cx + 6, cy - 18, 12, 9, 18); crateX(g, cx + 6, cy - 18, 12, 9, 18);
+        cub(g, cx + 38, cy - 2, 8, 22, 36);
+        for (let i = 1; i <= 3; i++) { const y = -36 + 36 * i / 4; ln(g, cx + 38, cy + 22 + y, cx + 46, cy + y, 0.9); }
+        ell(g, cx + 10, cy + 22, 8, 4, { fill: FACE.right }); ln(g, cx + 2, cy + 22, cx + 2, cy + 8, 1.1); ln(g, cx + 18, cy + 22, cx + 18, cy + 8, 1.1);
+        ell(g, cx + 10, cy + 8, 8, 4, { fill: FACE.top });
+      },
+    };
+    // Where the frightened avatar crouches in each room type.
+    const SPOT = {
+      bedroom: [-4, 24], assistant: [-2, 26], kids: [2, 30], library: [-30, 18], reading: [-8, 28],
+      kitchen: [12, 32], living: [-44, 24], bathroom: [-2, 26], backyard: [-4, 28], storage: [-6, 28],
     };
 
-    function drawCuboid(g, cx, cy, hw, hd, h) {
-      g.appendChild(svgEl('polygon', {
-        points: ptsStr([[cx, cy + hd - h], [cx + hw, cy - h], [cx + hw, cy], [cx, cy + hd]]),
-        fill: '#9b968a', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
-      }));
-      g.appendChild(svgEl('polygon', {
-        points: ptsStr([[cx - hw, cy - h], [cx, cy + hd - h], [cx, cy + hd], [cx - hw, cy]]),
-        fill: '#c3bdae', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
-      }));
-      g.appendChild(svgEl('polygon', {
-        points: ptsStr([[cx, cy - hd - h], [cx + hw, cy - h], [cx, cy + hd - h], [cx - hw, cy - h]]),
-        fill: '#efeadd', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
-      }));
-    }
-
-    // ── Build the isometric blueprint ──────────────────────────────────────────
-    const roomGeo = {};   // slug → { cx, cy, floorPts, figureAnchor, ghostRest }
+    // ── Build the blueprint ────────────────────────────────────────────────────
+    const roomGeo = {};   // slug → { cx, cy, door, inside, spot }
     const hotspotEls = {};
+    const DOOR_GAP = [0.34, 0.66];
+
+    function wall(g, p0, p1, gap, fill) {
+      const h = ISO.wallH;
+      const segs = gap ? [[0, gap[0]], [gap[1], 1]] : [[0, 1]];
+      for (const [a, b] of segs) {
+        const A = lerp(p0, p1, a), B = lerp(p0, p1, b);
+        g.appendChild(svgEl('polygon', {
+          points: ptsStr([A, B, [B[0], B[1] - h], [A[0], A[1] - h]]),
+          fill: fill, stroke: INK, 'stroke-width': 1.8, 'stroke-linejoin': 'round',
+        }));
+      }
+    }
+    function hasRoom(gx, gz) { return ROOMS.some(r => r.gridX === gx && r.gridZ === gz); }
 
     (function buildMap() {
-      const roomsG  = $('layer-rooms');
-      const furnG   = $('layer-furn');
+      const paperG = $('layer-paper');
+      const roomsG = $('layer-rooms');
       const labelsG = $('layer-labels');
       const hotspotsG = $('layer-hotspots');
-      const hw = ISO.hw, hh = ISO.hh, wH = ISO.wallH;
 
+      // Pale grid paper with a hand-drawn double frame.
+      paperG.appendChild(svgEl('rect', { x: 0, y: 0, width: 1100, height: 680, fill: '#f3efe3' }));
+      paperG.appendChild(svgEl('rect', { x: 0, y: 0, width: 1100, height: 680, fill: 'url(#grid-minor)' }));
+      paperG.appendChild(svgEl('rect', { x: 0, y: 0, width: 1100, height: 680, fill: 'url(#grid-major)' }));
+      paperG.appendChild(svgEl('rect', { x: 9, y: 9, width: 1082, height: 662, fill: 'none', stroke: INK, 'stroke-width': 2.2 }));
+      paperG.appendChild(svgEl('rect', { x: 15, y: 15, width: 1070, height: 650, fill: 'none', stroke: INK, 'stroke-width': 0.9 }));
+
+      // Title block (top-left).
+      paperG.appendChild(svgText(34, 52, 'Mansion Level 1 Hallway Map', { 'font-size': 21, 'font-weight': 'bold', fill: INK, 'letter-spacing': 1 }));
+      paperG.appendChild(svgText(35, 70, 'Blueprint · 11 hiding rooms · 1 Pocong', { 'font-size': 11, fill: '#4a4640' }));
+      paperG.appendChild(svgEl('line', { x1: 34, y1: 78, x2: 330, y2: 78, stroke: INK, 'stroke-width': 1.2 }));
+
+      // Main hallway: one diagonal strip along gridX 2, from top-right to bottom-left.
+      const hx = HALL.gridX;
+      const hallPts = [P(hx - 0.5, HALL.from - 0.5), P(hx + 0.5, HALL.from - 0.5), P(hx + 0.5, HALL.to + 0.5), P(hx - 0.5, HALL.to + 0.5)];
+      roomsG.appendChild(svgEl('polygon', { points: ptsStr(hallPts), fill: '#e7e2d3', stroke: INK, 'stroke-width': 2.2, 'stroke-linejoin': 'round' }));
+      roomsG.appendChild(svgEl('polygon', { points: ptsStr(hallPts), fill: 'url(#hatch)', opacity: 0.22 }));
+      // Entrance at the top-right end of the hallway.
+      const e0 = P(hx - 0.5, HALL.from - 0.5), e1 = P(hx + 0.5, HALL.from - 0.5);
+      roomsG.appendChild(svgEl('line', { x1: e0[0], y1: e0[1], x2: e1[0], y2: e1[1], stroke: INK, 'stroke-width': 5, 'stroke-linecap': 'round' }));
+      const em = lerp(e0, e1, 0.5);
+      labelsG.appendChild(svgText(em[0] + 8, em[1] - 10, 'Main Entrance', { 'font-size': 10, 'font-weight': 'bold', fill: INK }));
+      labelsG.appendChild(svgText(em[0] + 8, em[1] + 2, 'START', { 'font-size': 9, fill: '#b3000f', 'font-weight': 'bold' }));
+
+      // Rooms, painter order back to front.
       const ordered = ROOMS.slice().sort((a, b) => (a.gridX + a.gridZ) - (b.gridX + b.gridZ));
-
       for (const r of ordered) {
-        const c = iso(r.gridX, r.gridZ);
-        const cx = c.x, cy = c.y;
-        const isCorr = r.type === 'corridor';
+        const gx = r.gridX, gz = r.gridZ;
+        const top = P(gx - 0.5, gz - 0.5), right = P(gx + 0.5, gz - 0.5), bottom = P(gx + 0.5, gz + 0.5), left = P(gx - 0.5, gz + 0.5);
+        const c = iso(gx, gz);
+        const onPlusX = gx < HALL.gridX;   // hallway is on this room's +gx side
 
-        const top    = [cx, cy - hh];
-        const right  = [cx + hw, cy];
-        const bottom = [cx, cy + hh];
-        const left   = [cx - hw, cy];
-
-        roomsG.appendChild(svgEl('polygon', {
-          points: ptsStr([left, top, [cx, cy - hh - wH], [cx - hw, cy - wH]]),
-          fill: '#e4dfd0', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
-        }));
-        roomsG.appendChild(svgEl('polygon', {
-          points: ptsStr([top, right, [cx + hw, cy - wH], [cx, cy - hh - wH]]),
-          fill: '#d6d0bf', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
-        }));
         roomsG.appendChild(svgEl('polygon', {
           points: ptsStr([top, right, bottom, left]),
-          fill: isCorr ? '#cfc9b8' : '#fbf9f1', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: r.type === 'backyard' ? '#edf0dc' : '#fbf9f1', stroke: INK, 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
+        // Far walls (-gx, -gz), then furniture, then near walls (+gx, +gz).
+        wall(roomsG, left, top, onPlusX ? null : DOOR_GAP, '#ebe6d6');
+        wall(roomsG, top, right, null, '#dfd9c8');
+        FURN[r.type](roomsG, c.x, c.y);
+        wall(roomsG, right, bottom, onPlusX ? DOOR_GAP : null, '#d6cfbd');
+        if (!hasRoom(gx, gz + 1)) wall(roomsG, bottom, left, null, '#cdc6b3');
 
-        if (isCorr) continue;
+        // Door: a gap in the hallway-facing wall, a leaf and a swing arc.
+        const d0 = onPlusX ? right : left, d1 = onPlusX ? bottom : top;
+        const hinge = lerp(d0, d1, DOOR_GAP[0]), end = lerp(d0, d1, DOOR_GAP[1]);
+        const inward = onPlusX ? [-ISO.hw * 0.3, -ISO.hh * 0.3] : [ISO.hw * 0.3, ISO.hh * 0.3];
+        const along = [end[0] - hinge[0], end[1] - hinge[1]];
+        const arc = [];
+        for (let i = 0; i <= 10; i++) {
+          const th = (Math.PI / 2) * (i / 10);
+          arc.push([hinge[0] + inward[0] * Math.cos(th) + along[0] * Math.sin(th), hinge[1] + inward[1] * Math.cos(th) + along[1] * Math.sin(th)]);
+        }
+        roomsG.appendChild(svgEl('line', { x1: hinge[0], y1: hinge[1], x2: hinge[0] + inward[0], y2: hinge[1] + inward[1], stroke: INK, 'stroke-width': 2 }));
+        roomsG.appendChild(svgEl('polyline', { points: ptsStr(arc), fill: 'none', stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '3 2' }));
+        const mid = lerp(hinge, end, 0.5);
+        const outward = onPlusX ? [ISO.hw * 0.13, ISO.hh * 0.13] : [-ISO.hw * 0.13, -ISO.hh * 0.13];
+        labelsG.appendChild(svgText(mid[0] + outward[0], mid[1] + outward[1] + 3, 'Door', { 'font-size': 8.5, fill: '#3a3530', 'text-anchor': 'middle', 'font-style': 'italic' }));
 
-        const set = FURN[r.type] || FURN.bedroom;
-        for (const f of set) drawCuboid(furnG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
-
-        const lx = cx, ly = cy - hh - wH - 4;
-        labelsG.appendChild(svgEl('rect', {
-          x: (lx - (r.label.length * 6.6 + 14) / 2).toFixed(1), y: (ly - 15).toFixed(1),
-          width: (r.label.length * 6.6 + 14).toFixed(1), height: 17, rx: 5,
-          fill: 'rgba(15,14,11,0.86)', stroke: '#8b8578', 'stroke-width': 1,
+        // Label tag outside the map, with a leader to the outer wall.
+        const m = onPlusX ? iso(gx - 0.5, gz) : iso(gx + 0.5, gz);
+        const w = r.label.length * 6.4 + 14;
+        const tx = onPlusX ? m.x - 16 - w : m.x + 16;
+        const ty = onPlusX ? m.y - ISO.wallH - 22 : m.y - 24;
+        labelsG.appendChild(svgEl('line', {
+          x1: onPlusX ? tx + w : tx, y1: ty + 9, x2: m.x, y2: onPlusX ? m.y - ISO.wallH : m.y - 6,
+          stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '2 2',
         }));
-        const t = svgEl('text', {
-          x: lx.toFixed(1), y: (ly - 3).toFixed(1),
-          'text-anchor': 'middle', 'font-family': 'sans-serif',
-          'font-size': 11, 'font-weight': 'bold', fill: '#f4f4f4',
-        });
-        t.textContent = r.label;
-        labelsG.appendChild(t);
+        labelsG.appendChild(svgEl('rect', { x: tx.toFixed(1), y: ty.toFixed(1), width: w.toFixed(1), height: 18, rx: 3, fill: '#fff', stroke: INK, 'stroke-width': 1.3 }));
+        labelsG.appendChild(svgText((tx + w / 2).toFixed(1), (ty + 12.5).toFixed(1), r.label, { 'font-size': 11, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' }));
 
         const hs = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'hotspot' });
         hs.dataset.slug = r.slug;
         hotspotsG.appendChild(hs);
         hotspotEls[r.slug] = hs;
 
+        const spot = SPOT[r.type] || [0, 24];
         roomGeo[r.slug] = {
-          cx, cy,
-          floorPts: ptsStr([top, right, bottom, left]),
-          figureAnchor: { x: cx, y: cy + 12 },
-          ghostRest:    { x: cx, y: cy - 4 },
+          cx: c.x, cy: c.y,
+          door: { x: mid[0], y: mid[1] },
+          inside: { x: mid[0] + inward[0] * 0.9, y: mid[1] + inward[1] * 0.9 },
+          spot: { x: c.x + spot[0], y: c.y + spot[1] },
         };
 
         const room = r;
@@ -542,104 +849,107 @@
         hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
         hs.addEventListener('click', () => { if (canHide()) selectRoom(room); });
       }
+
+      // North arrow (bottom-left) and legend (bottom-right).
+      const nx = 72, ny = 598;
+      paperG.appendChild(svgEl('circle', { cx: nx, cy: ny, r: 26, fill: '#fff', stroke: INK, 'stroke-width': 1.6 }));
+      paperG.appendChild(svgEl('polygon', { points: ptsStr([[nx, ny - 20], [nx + 7, ny + 6], [nx, ny + 1], [nx - 7, ny + 6]]), fill: INK }));
+      paperG.appendChild(svgEl('polygon', { points: ptsStr([[nx, ny + 1], [nx + 7, ny + 6], [nx, ny + 18], [nx - 7, ny + 6]]), fill: '#fff', stroke: INK, 'stroke-width': 1 }));
+      paperG.appendChild(svgText(nx, ny - 30, 'N', { 'font-size': 14, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' }));
+      paperG.appendChild(svgText(nx, ny + 44, 'North', { 'font-size': 9, fill: '#4a4640', 'text-anchor': 'middle' }));
+
+      const lg = svgEl('g', {});
+      lg.appendChild(svgEl('rect', { x: 858, y: 556, width: 214, height: 104, rx: 4, fill: '#fff', stroke: INK, 'stroke-width': 1.3 }));
+      lg.appendChild(svgText(870, 574, 'Legend', { 'font-size': 11, 'font-weight': 'bold', fill: INK }));
+      const rows = [
+        ['route', 'Pocong Route (main hallway)'], ['foot', 'Footprints'], ['door', 'Door onto the hallway'],
+        ['you', 'Your locked room'], ['dare', 'Daring second room'], ['target', "Pocong's target"],
+      ];
+      rows.forEach(([kind, text], i) => {
+        const y = 590 + i * 13;
+        if (kind === 'route') lg.appendChild(svgEl('line', { x1: 870, y1: y, x2: 896, y2: y, stroke: '#b3000f', 'stroke-width': 2.4, 'stroke-dasharray': '6 4' }));
+        else if (kind === 'foot') { lg.appendChild(svgEl('ellipse', { cx: 878, cy: y, rx: 2.4, ry: 3.6, fill: '#6b6456' })); lg.appendChild(svgEl('ellipse', { cx: 888, cy: y - 1, rx: 2.4, ry: 3.6, fill: '#6b6456' })); }
+        else if (kind === 'door') lg.appendChild(svgEl('path', { d: 'M870 ' + (y + 4) + ' h12 a12 12 0 0 1 12 -12', fill: 'none', stroke: INK, 'stroke-width': 1.2, 'stroke-dasharray': '3 2' }));
+        else {
+          const fill = kind === 'you' ? 'rgba(124,58,237,0.45)' : kind === 'dare' ? 'rgba(224,140,24,0.45)' : 'rgba(205,20,20,0.5)';
+          lg.appendChild(svgEl('polygon', { points: ptsStr([[883, y - 5], [895, y], [883, y + 5], [871, y]]), fill: fill, stroke: INK, 'stroke-width': 1 }));
+        }
+        lg.appendChild(svgText(904, y + 3.5, text, { 'font-size': 9.5, fill: '#2a2824' }));
+      });
+      paperG.appendChild(lg);
     })();
 
     // ── Pocong Route: the drawn hallway path, visible in both phases ────────────
-    const ROUTE = [
-      { x: 688, y: 150 }, { x: 702, y: 198 }, { x: 714, y: 246 }, { x: 706, y: 300 },
-      { x: 678, y: 352 }, { x: 662, y: 398 }, { x: 676, y: 446 }, { x: 704, y: 486 },
-      { x: 714, y: 516 }, { x: 700, y: 566 }, { x: 672, y: 610 }, { x: 668, y: 628 },
-      { x: 680, y: 662 }, { x: 688, y: 690 },
-    ];
+    const ROUTE = [];
+    (function makeRoute() {
+      let i = 0;
+      for (let gz = HALL.from; gz <= HALL.to + 0.01; gz += 0.5, i++) {
+        const p = iso(HALL.gridX, gz);
+        ROUTE.push({ x: p.x + (i % 2 ? 6 : -5), y: p.y });
+      }
+    })();
     (function drawRoute() {
       const g = $('layer-route');
-      // A light halo keeps the route legible on the pale hiding map, and the
-      // mid-tone dashed line keeps it legible on the dark hunt map. Visible in
-      // both phases, always.
-      g.appendChild(svgEl('polyline', {
-        points: ROUTE.map(p => p.x + ',' + p.y).join(' '),
-        fill: 'none', stroke: 'rgba(120,102,72,0.45)', 'stroke-width': 9,
-        'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-      }));
-      g.appendChild(svgEl('polyline', {
-        points: ROUTE.map(p => p.x + ',' + p.y).join(' '),
-        fill: 'none', stroke: '#5c5449', 'stroke-width': 3.4, 'stroke-dasharray': '10 7',
-        'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.9,
-      }));
-      for (const p of [ROUTE[3], ROUTE[8]]) {
-        g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 4.5, fill: '#5c5449' }));
+      const pts = ROUTE.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+      g.appendChild(svgEl('polyline', { points: pts, fill: 'none', stroke: 'rgba(255,255,255,0.7)', 'stroke-width': 9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      g.appendChild(svgEl('polyline', { points: pts, fill: 'none', stroke: '#b3000f', 'stroke-width': 3, 'stroke-dasharray': '10 7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+      // Faint footprints along the route, alternating sides.
+      let side = 1, acc = 0;
+      for (let i = 0; i < ROUTE.length - 1; i++) {
+        const a = ROUTE[i], b = ROUTE[i + 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI + 90;
+        const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+        for (let d = acc; d < len; d += 30) {
+          const t = d / len;
+          const x = a.x + (b.x - a.x) * t + nx * 7 * side, y = a.y + (b.y - a.y) * t + ny * 7 * side;
+          g.appendChild(svgEl('ellipse', { cx: x.toFixed(1), cy: y.toFixed(1), rx: 2.6, ry: 4.2, fill: '#6b6456', opacity: 0.5, transform: 'rotate(' + ang.toFixed(1) + ' ' + x.toFixed(1) + ' ' + y.toFixed(1) + ')' }));
+          side = -side;
+          acc = d + 30 - len;
+        }
       }
-      const lbl = svgEl('text', {
-        x: 726, y: 386, 'font-family': 'sans-serif', 'font-size': 12,
-        'font-weight': 'bold', fill: '#b3000f',
-      });
-      lbl.textContent = 'Pocong Route';
-      g.appendChild(lbl);
-      // North arrow + level title, on a pale chip so both read in either phase.
-      const north = svgEl('g', {});
-      north.appendChild(svgEl('rect', {
-        x: 104, y: 70, width: 52, height: 60, rx: 8,
-        fill: 'rgba(251,249,241,0.92)', stroke: '#1a1a1a', 'stroke-width': 1.5,
-      }));
-      north.appendChild(svgEl('polygon', { points: '120,104 128,130 136,104 128,110', fill: '#14140f' }));
-      const nt = svgEl('text', { x: 130, y: 96, 'text-anchor': 'middle', 'font-family': 'sans-serif', 'font-size': 13, 'font-weight': 'bold', fill: '#14140f' });
-      nt.textContent = 'N';
-      north.appendChild(nt);
-      $('layer-rooms').appendChild(north);
-      const chip = svgEl('rect', {
-        x: 132, y: 624, width: 150, height: 22, rx: 6,
-        fill: 'rgba(251,249,241,0.92)', stroke: '#1a1a1a', 'stroke-width': 1.2,
-      });
-      $('layer-rooms').appendChild(chip);
-      const lvl = svgEl('text', { x: 207, y: 640, 'text-anchor': 'middle', 'font-family': 'sans-serif', 'font-size': 12, 'font-weight': 'bold', fill: '#14140f' });
-      lvl.textContent = 'MANSION LEVEL 1';
-      $('layer-rooms').appendChild(lvl);
+      // Hallway name along the diagonal, near the entrance and near the far end.
+      const ang = Math.atan2(ISO.hh, -ISO.hw) * 180 / Math.PI + 180; // reads bottom-left → top-right
+      const nrm = [ISO.hh, ISO.hw].map(v => v / Math.hypot(ISO.hh, ISO.hw));
+      for (const [gz, text] of [[-0.35, 'Main Hallway (Pocong Route)'], [4.55, 'Pocong Route']]) {
+        const p = iso(HALL.gridX, gz);
+        const x = p.x + nrm[0] * 24, y = p.y + nrm[1] * 24;
+        g.appendChild(svgText(x.toFixed(1), y.toFixed(1), text, {
+          'font-size': 11.5, 'font-weight': 'bold', fill: '#b3000f', 'text-anchor': 'middle',
+          transform: 'rotate(' + ang.toFixed(1) + ' ' + x.toFixed(1) + ' ' + y.toFixed(1) + ')',
+        }));
+      }
     })();
 
-    // ── Player token art ───────────────────────────────────────────────────────
-    const tokenCache = {};
-    function playerTokenURL(initial) {
-      const key = (initial || '?').toUpperCase().charAt(0);
-      if (tokenCache[key]) return tokenCache[key];
-      const c = document.createElement('canvas');
-      c.width = 68; c.height = 96;
-      const ctx = c.getContext('2d');
-      const cx = 34;
-      ctx.fillStyle = 'rgba(0,0,0,0.32)';
-      ctx.beginPath(); ctx.ellipse(cx, 90, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#2a2a2a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 13, 88); ctx.lineTo(cx - 9, 52);
-      ctx.lineTo(cx + 9, 52);  ctx.lineTo(cx + 13, 88); ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#cc1111';
-      ctx.beginPath(); ctx.moveTo(cx, 54); ctx.lineTo(cx - 3, 68);
-      ctx.lineTo(cx, 74); ctx.lineTo(cx + 3, 68); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#e8d6bc';
-      ctx.beginPath(); ctx.arc(cx, 44, 11, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = '#222';
-      ctx.beginPath(); ctx.arc(cx - 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#141414';
-      ctx.beginPath(); ctx.ellipse(cx, 34, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillRect(cx - 10, 18, 20, 16);
-      ctx.fillStyle = '#cc1111'; ctx.fillRect(cx - 10, 30, 20, 3);
-      ctx.fillStyle = 'rgba(0,0,0,0.82)';
-      ctx.beginPath(); ctx.arc(cx, 9, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.4; ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(key, cx, 10);
-      const url = c.toDataURL();
-      tokenCache[key] = url;
-      return url;
+    // ── Frightened cartoon avatars ─────────────────────────────────────────────
+    function makeAvatar(tag, isMe) {
+      const g = svgEl('g', { class: 'player-fig' });
+      const body = svgEl('g', { class: 'fig-body' });
+      const st = { stroke: INK, 'stroke-width': 1.4, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+      g.appendChild(svgEl('ellipse', { cx: 0, cy: 1, rx: 9, ry: 2.8, fill: 'rgba(0,0,0,0.25)' }));
+      body.appendChild(svgEl('path', Object.assign({ d: 'M-3 -1 L-3 -9 M3 -1 L3 -9', fill: 'none' }, st, { 'stroke-width': 2.2 })));
+      body.appendChild(svgEl('rect', Object.assign({ x: -6.5, y: -22, width: 13, height: 14, rx: 4.5, fill: isMe ? '#e9dcff' : '#fff' }, st)));
+      body.appendChild(svgEl('path', Object.assign({ d: 'M-6 -17 L-11 -11 M6 -17 L11 -11', fill: 'none' }, st)));
+      body.appendChild(svgEl('circle', Object.assign({ cx: 0, cy: -29, r: 8.5, fill: '#fff' }, st)));
+      for (const sx of [-3.2, 3.2]) {
+        body.appendChild(svgEl('circle', { cx: sx, cy: -30, r: 2.5, fill: '#fff', stroke: INK, 'stroke-width': 1 }));
+        body.appendChild(svgEl('circle', { cx: sx, cy: -30, r: 1.1, fill: INK }));
+      }
+      body.appendChild(svgEl('path', Object.assign({ d: 'M-6.5 -35.5 L-1.5 -34 M6.5 -35.5 L1.5 -34', fill: 'none' }, st, { 'stroke-width': 1.3 })));
+      body.appendChild(svgEl('ellipse', { cx: 0, cy: -24.5, rx: 2, ry: 2.6, fill: INK }));
+      body.appendChild(svgEl('path', { d: 'M10 -36 c0 -3 2.2 -5.5 2.2 -5.5 c0 0 2.2 2.5 2.2 5.5 a2.2 2.2 0 0 1 -4.4 0 z', fill: '#fff', stroke: INK, 'stroke-width': 0.9 }));
+      if (tag) {
+        const w = tag.length * 5.6 + 8;
+        body.appendChild(svgEl('rect', { x: -w / 2, y: -50, width: w, height: 11, rx: 3, fill: isMe ? '#7c3aed' : '#1a1a1a', stroke: '#fff', 'stroke-width': 0.8 }));
+        body.appendChild(svgText(0, -41.8, tag, { 'font-size': 7.5, 'font-weight': 'bold', fill: '#fff', 'text-anchor': 'middle' }));
+      }
+      g.appendChild(body);
+      return g;
     }
 
     // ── Figures (other players + the viewer's own avatar) ──────────────────────
-    const FIG_W = 26, FIG_H = 37;
     const playerFigures = [];
+    let myAvatar = null;
 
     function placeFigures(hides, myHide) {
       const layer = $('layer-figures');
@@ -650,42 +960,35 @@
       hides.forEach((p) => {
         const geo = roomGeo[p.room_slug];
         if (!geo) return;
+        if (myUsername && p.username === myUsername && myHide && myHide.room_slug === p.room_slug) return;
         counts[p.room_slug] = (counts[p.room_slug] || 0) + 1;
         const n = counts[p.room_slug];
-        const ang = (n - 1) * 2.399963;
-        const r = Math.min(6 + (n - 1) * 12, 46);
-        const px = geo.figureAnchor.x + r * Math.cos(ang);
-        const py = geo.figureAnchor.y + r * Math.sin(ang) * 0.52;
-        const img = svgEl('image', {
-          class: 'player-fig',
-          x: (px - FIG_W / 2).toFixed(1), y: (py - FIG_H).toFixed(1),
-          width: FIG_W, height: FIG_H,
-        });
-        img.setAttributeNS(XLINK, 'href', playerTokenURL(p.username ? p.username[0] : '?'));
-        img.setAttribute('href', playerTokenURL(p.username ? p.username[0] : '?'));
-        img.dataset.slug = p.room_slug;
-        layer.appendChild(img);
-        playerFigures.push(img);
+        const ang = (n - 1) * 2.399963 + 0.9;
+        const rad = Math.min(14 + (n - 1) * 10, 44);
+        const px = geo.spot.x + rad * Math.cos(ang) + 18;
+        const py = geo.spot.y + rad * Math.sin(ang) * 0.5 - 4;
+        const fig = makeAvatar((p.username || '?').charAt(0).toUpperCase(), false);
+        fig.setAttribute('transform', 'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')');
+        fig.dataset.slug = p.room_slug;
+        layer.appendChild(fig);
+        playerFigures.push(fig);
       });
 
-      // Viewer's own avatar: a distinct red-ringed marker in the chosen room.
+      // The viewer's own avatar crouches at the room's hiding spot.
       if (myHide && roomGeo[myHide.room_slug]) {
         const geo = roomGeo[myHide.room_slug];
-        const ax = geo.cx, ay = geo.cy + 4;
-        const ring = svgEl('circle', {
-          cx: ax, cy: ay, r: 15, fill: 'rgba(124,58,237,0.35)',
-          stroke: '#7c3aed', 'stroke-width': 3, class: 'avatar-ring',
-        });
-        const dot = svgEl('circle', { cx: ax, cy: ay, r: 7, fill: '#7c3aed', stroke: '#000', 'stroke-width': 2, class: 'avatar-dot' });
-        layer.appendChild(ring); layer.appendChild(dot);
-        playerFigures.push(ring, dot);
-        myAvatar = { ring, dot, x: ax, y: ay };
+        const ax = geo.spot.x, ay = geo.spot.y;
+        const fig = makeAvatar('YOU', true);
+        fig.setAttribute('transform', 'translate(' + ax.toFixed(1) + ',' + ay.toFixed(1) + ')');
+        layer.appendChild(fig);
+        playerFigures.push(fig);
+        myAvatar = { el: fig, x: ax, y: ay };
         // Eliminated: slash the avatar so the marker survives a muted or
         // reduced-motion jump-scare.
         if (myHide.outcome === 'eliminated') {
           const slash = svgEl('g', { class: 'avatar-slash' });
-          slash.appendChild(svgEl('line', { x1: ax - 13, y1: ay - 13, x2: ax + 13, y2: ay + 13, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
-          slash.appendChild(svgEl('line', { x1: ax + 13, y1: ay - 13, x2: ax - 13, y2: ay + 13, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
+          slash.appendChild(svgEl('line', { x1: ax - 15, y1: ay - 40, x2: ax + 15, y2: ay - 4, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
+          slash.appendChild(svgEl('line', { x1: ax + 15, y1: ay - 40, x2: ax - 15, y2: ay - 4, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
           layer.appendChild(slash);
           playerFigures.push(slash);
         }
@@ -693,43 +996,50 @@
         myAvatar = null;
       }
     }
-    let myAvatar = null;
 
-    // ── Pocong ghost ───────────────────────────────────────────────────────────
-    const GHOST_W = 42, GHOST_H = 58;
-    const ghostShadow = svgEl('ellipse', { cx: 0, cy: 0, rx: 20, ry: 6, fill: 'rgba(0,0,0,0.34)' });
+    // ── Pocong ghost: a drawn, glowing figure on the route ─────────────────────
+    const ghostShadow = svgEl('ellipse', { cx: 0, cy: 0, rx: 18, ry: 5.5, fill: 'rgba(0,0,0,0.3)' });
     $('layer-ghost').appendChild(ghostShadow);
-    const ghostImg = svgEl('image', { x: 0, y: 0, width: GHOST_W, height: GHOST_H });
-    ghostImg.setAttributeNS(XLINK, 'href', '/assets/pocong.jpg');
-    ghostImg.setAttribute('href', '/assets/pocong.jpg');
-    $('layer-ghost').appendChild(ghostImg);
+    const ghostG = (function makePocong() {
+      const g = svgEl('g', { id: 'pocong' });
+      g.appendChild(svgEl('ellipse', { class: 'pocong-glow', cx: 0, cy: -26, rx: 20, ry: 30, fill: '#fff1b8', opacity: 0.9, filter: 'url(#glow)' }));
+      const st = { fill: 'none', stroke: INK, 'stroke-width': 1.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
+      g.appendChild(svgEl('path', Object.assign({}, st, { d: 'M-8 -1 C-14 6 -22 3 -27 10' })));
+      g.appendChild(svgEl('path', { d: 'M-12 -40 C-16 -28 -16 -12 -11 -2 C-6 3 6 3 11 -2 C16 -12 16 -28 12 -40 C8 -48 -8 -48 -12 -40 Z', fill: '#f6f2e4', stroke: INK, 'stroke-width': 1.8, 'stroke-linejoin': 'round' }));
+      g.appendChild(svgEl('path', Object.assign({}, st, { d: 'M-14 -32 Q0 -27 14 -32 M-15 -22 Q0 -17 15 -22 M-13 -11 Q0 -6 13 -11', 'stroke-width': 1.1 })));
+      g.appendChild(svgEl('path', { d: 'M-5 -46 C-4 -53 4 -53 5 -46 Z', fill: '#f6f2e4', stroke: INK, 'stroke-width': 1.4 }));
+      g.appendChild(svgEl('path', Object.assign({}, st, { d: 'M-5 -49 L-12 -55 M5 -49 L12 -55' })));
+      g.appendChild(svgEl('ellipse', { cx: -4.5, cy: -36, rx: 2.4, ry: 3, fill: INK }));
+      g.appendChild(svgEl('ellipse', { cx: 4.5, cy: -36, rx: 2.4, ry: 3, fill: INK }));
+      g.appendChild(svgEl('path', Object.assign({}, st, { d: 'M-8.5 -41.5 L-2 -39.5 M8.5 -41.5 L2 -39.5', 'stroke-width': 1.7 })));
+      g.appendChild(svgEl('ellipse', { cx: 0, cy: -29, rx: 3, ry: 3.8, fill: INK }));
+      $('layer-ghost').appendChild(g);
+      return g;
+    })();
 
     let ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y };
     const footprints = [];
 
     function renderGhost(gx, gy) {
       const t = performance.now();
-      const lift  = Math.abs(Math.sin(t / 300)) * 16;
-      const sway  = Math.sin(t / 620) * 6;
-      const pulse = 1 + Math.sin(t / 240) * 0.05;
-      const f     = 1 - (lift / 16) * 0.55;
+      const lift  = Math.abs(Math.sin(t / 300)) * 12;
+      const sway  = Math.sin(t / 620) * 5;
+      const pulse = 1 + Math.sin(t / 240) * 0.04;
+      const f     = 1 - (lift / 12) * 0.5;
       ghostShadow.setAttribute('cx', (gx + sway * 0.5).toFixed(1));
       ghostShadow.setAttribute('cy', gy.toFixed(1));
-      ghostShadow.setAttribute('rx', (20 * f).toFixed(1));
-      ghostShadow.setAttribute('ry', (6 * f).toFixed(1));
-      ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.34 * f).toFixed(3) + ')');
-      const px = gx + sway, py = gy - lift;
-      ghostImg.setAttribute('transform',
-        'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ') ' +
-        'scale(' + pulse.toFixed(3) + ') ' +
-        'translate(' + (-GHOST_W / 2) + ',' + (-GHOST_H) + ')');
+      ghostShadow.setAttribute('rx', (18 * f).toFixed(1));
+      ghostShadow.setAttribute('ry', (5.5 * f).toFixed(1));
+      ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.3 * f).toFixed(3) + ')');
+      ghostG.setAttribute('transform', 'translate(' + (gx + sway).toFixed(1) + ',' + (gy - lift).toFixed(1) + ') scale(' + pulse.toFixed(3) + ')');
     }
 
-    // The ghost walks the route from the start to the point nearest the target
-    // room's doorway, then steps into it. footprints fade in behind it.
-    let routeStopIndex = ROUTE.length - 1;
-    let gSeg = 0, gT = 0;
+    // The ghost walks the route from the entrance to the point nearest the
+    // target room's door, then steps into the doorway. Fading footprints follow.
+    const WALK_SECONDS = 4.6;
+    let walk = null;          // { pts, cum, total, start, dropped }
     let ghostWalking = false;
+    let lastTargetEnd = null;
 
     function nearestRouteIndex(px, py) {
       let best = 0, bestD = Infinity;
@@ -739,35 +1049,53 @@
       });
       return best;
     }
+    function startWalk(slug) {
+      const geo = roomGeo[slug];
+      if (!geo) return;
+      const stop = nearestRouteIndex(geo.door.x, geo.door.y);
+      const pts = ROUTE.slice(0, stop + 1).concat([geo.door, geo.inside]);
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+      walk = { pts, cum, total: cum[cum.length - 1], start: performance.now(), dropped: 0 };
+      lastTargetEnd = geo.door;
+      ghostWalking = true;
+    }
+    function walkPoint(dist) {
+      const { pts, cum } = walk;
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < dist) i++;
+      const a = pts[i - 1], b = pts[i];
+      const seg = cum[i] - cum[i - 1] || 1;
+      const t = Math.max(0, Math.min(1, (dist - cum[i - 1]) / seg));
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
 
     function dropFootprint(x, y) {
-      const fp = svgEl('ellipse', {
-        cx: x.toFixed(1), cy: y.toFixed(1), rx: 5, ry: 3,
-        fill: '#b3000f', opacity: 0.55,
-      });
+      const fp = svgEl('ellipse', { cx: x.toFixed(1), cy: y.toFixed(1), rx: 4.5, ry: 3, fill: '#d81a1a', opacity: 0.7 });
       $('layer-ghost').insertBefore(fp, ghostShadow);
       footprints.push({ el: fp, born: performance.now() });
     }
 
     function tickGhost() {
       const status = currentState.round && currentState.round.status;
-      if (ghostWalking && routeStopIndex > 0) {
-        gT += 0.02;
-        if (gT >= 1) { gT = 0; gSeg += 1; dropFootprint(ROUTE[gSeg].x, ROUTE[gSeg].y); }
-        if (gSeg >= routeStopIndex) { gSeg = routeStopIndex; gT = 0; ghostWalking = false; }
-        const a = ROUTE[gSeg];
-        const b = ROUTE[Math.min(gSeg + 1, routeStopIndex)];
-        ghostBase = { x: a.x + (b.x - a.x) * gT, y: a.y + (b.y - a.y) * gT };
-      } else if (status === 'hiding') {
-        // Rest at the start of the route while hiding.
-        ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y - 8 };
+      if (ghostWalking && walk) {
+        const dist = Math.min(walk.total, ((performance.now() - walk.start) / 1000) * (walk.total / WALK_SECONDS));
+        while (walk.dropped + 26 <= dist) {
+          walk.dropped += 26;
+          const fp = walkPoint(walk.dropped);
+          dropFootprint(fp.x, fp.y);
+        }
+        ghostBase = walkPoint(dist);
+        if (dist >= walk.total) { ghostWalking = false; refreshHotspotState(); }
+      } else if (status === 'hiding' || !status) {
+        ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y - 6 };
       }
       const now = performance.now();
       for (let i = footprints.length - 1; i >= 0; i--) {
         const fp = footprints[i];
-        const age = (now - fp.born) / 6000;
+        const age = (now - fp.born) / 7000;
         if (age >= 1) { fp.el.remove(); footprints.splice(i, 1); continue; }
-        fp.el.setAttribute('opacity', (0.55 * (1 - age)).toFixed(3));
+        fp.el.setAttribute('opacity', (0.7 * (1 - age)).toFixed(3));
       }
       renderGhost(ghostBase.x, ghostBase.y);
       requestAnimationFrame(tickGhost);
@@ -935,7 +1263,7 @@
     // ── Game state ──────────────────────────────────────────────────────────────
     let currentState = { round: null, my_hide: null, hides: [], stats: null };
     let selectedRoom = null;
-    let lastRoundId = null, lastStatus = null, lastHidesJson = '';
+    let lastRoundId = null, lastStatus = null;
     let serverSkewMs = 0;
     let jumpscareShown = false;
 
@@ -944,24 +1272,62 @@
       return local + serverSkewMs;
     }
     function canHide() {
-      return currentState.round && currentState.round.status === 'hiding' && !currentState.my_hide;
+      return !!(currentState.round && currentState.round.status === 'hiding' && !currentState.my_hide);
+    }
+    function canDare() {
+      const mh = currentState.my_hide;
+      return !!(currentState.round && currentState.round.status === 'hiding' && mh && mh.room_slug && !mh.daring_room_slug);
+    }
+    function targetLit() {
+      const r = currentState.round;
+      return !!(r && r.target_room && (r.status === 'resolved' || (r.status === 'hunt' && !ghostWalking)));
     }
     function refreshHotspotState() {
+      const mh = currentState.my_hide;
+      const r = currentState.round;
       for (const slug in hotspotEls) {
         const hs = hotspotEls[slug];
         hs.classList.toggle('bettable', canHide());
         if (!canHide()) hs.classList.remove('hovered');
-        hs.classList.toggle('locked', !!(currentState.my_hide && currentState.my_hide.room_slug === slug));
+        hs.classList.toggle('selected', !!(canHide() && selectedRoom && selectedRoom.slug === slug));
+        hs.classList.toggle('locked', !!(mh && mh.room_slug === slug));
+        hs.classList.toggle('daring', !!(mh && mh.daring_room_slug === slug));
+        hs.classList.toggle('target', !!(targetLit() && r.target_room === slug));
       }
     }
+
+    // ── Side panel: room dropdown + 3-column grid ───────────────────────────────
+    const roomButtons = {};
+    (function buildRoomControls() {
+      const sel = $('room-select');
+      const dare = $('daring-select');
+      const grid = $('room-grid');
+      for (const r of ROOMS) {
+        const o = document.createElement('option');
+        o.value = r.slug; o.textContent = r.label;
+        sel.appendChild(o);
+        const o2 = document.createElement('option');
+        o2.value = r.slug; o2.textContent = r.label;
+        dare.appendChild(o2);
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = r.label; b.dataset.slug = r.slug;
+        b.addEventListener('click', () => { if (canHide()) selectRoom(r); });
+        grid.appendChild(b);
+        roomButtons[r.slug] = b;
+      }
+      sel.addEventListener('change', () => {
+        const r = ROOM_BY_SLUG[sel.value];
+        if (r && canHide()) selectRoom(r);
+      });
+      dare.addEventListener('change', () => { $('btn-daring').disabled = !(canDare() && dare.value); });
+    })();
 
     function selectRoom(room) {
       if (!canHide()) return;
       selectedRoom = room;
-      $('location-state').textContent = room.label;
-      $('location-state').classList.remove('none');
-      $('btn-confirm').disabled = false;
-      $('phase-note').textContent = 'Tekan CONFIRM & PLACE untuk mengunci.';
+      $('room-select').value = room.slug;
+      updateHUD();
+      refreshHotspotState();
     }
 
     // ── Countdown: derived from an absolute end timestamp, every frame ──────────
@@ -978,15 +1344,20 @@
     }
     function tickTimer() {
       const r = currentState.round;
-      const el = $('hiding-timer');
-      if (!r) { el.textContent = 'Hiding Phase: —'; return; }
+      const timer = $('hiding-timer');
+      const banner = $('phase-banner');
+      if (!r) { timer.textContent = '--:--'; banner.textContent = 'Hiding Phase: --:--'; return; }
       if (r.status === 'hiding') {
-        el.textContent = 'Hiding Phase: ' + fmt(remainingMs());
+        const t = fmt(remainingMs());
+        timer.textContent = t;
+        banner.textContent = 'Hiding Phase: ' + t;
         if (remainingMs() <= 0) { pollState(); }
       } else if (r.status === 'hunt') {
-        el.textContent = 'Pocong Phase';
+        timer.textContent = '00:00';
+        banner.textContent = 'Pocong Phase: the hunt';
       } else {
-        el.textContent = 'Round over';
+        timer.textContent = roomLabel(r.target_room);
+        banner.textContent = 'Round ' + r.round_number + ' over';
       }
     }
     setInterval(tickTimer, 200);
@@ -994,54 +1365,100 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) pollState(); });
     window.addEventListener('pageshow', () => pollState());
 
-    // ── HUD + phase panel ──────────────────────────────────────────────────────
+    // ── HUD + side panel ───────────────────────────────────────────────────────
+    function multiplier(streak) { return Math.min(3, 1 + 0.1 * (streak || 0)); }
+    function statusInfo() {
+      const { round, my_hide } = currentState;
+      if (!round) return ['amber', 'Connecting to the mansion.'];
+      if (round.status === 'hiding') {
+        if (my_hide && my_hide.room_slug) return ['green', 'Location Locked. Waiting for the Pocong.'];
+        return ['amber', 'Hiding Phase. Pick a room and confirm it.'];
+      }
+      if (round.status === 'hunt') {
+        if (my_hide && my_hide.room_slug) return ['green', 'Hiding Phase Complete. Location Locked.'];
+        return ['red', 'Hiding Phase Complete. No lock: Spectator Lounge.'];
+      }
+      if (my_hide && my_hide.outcome === 'survived') return ['green', 'Survived. +' + (my_hide.points_awarded || 0) + ' points this round.'];
+      if (my_hide && my_hide.outcome === 'eliminated') return ['red', 'Found by the Pocong. Spectator Lounge.'];
+      if (my_hide && my_hide.outcome === 'disqualified') return ['red', 'Timed out without a lock. Spectator Lounge.'];
+      return ['amber', 'Round over. The next round opens shortly.'];
+    }
+
     function updateHUD() {
       const { round, my_hide, stats } = currentState;
-      const panel = $('phase-panel');
-      const banner = $('phase-banner');
       const loc = $('location-state');
       const confirm = $('btn-confirm');
+      const banner = $('phase-banner');
 
       if (round) {
-        banner.textContent = round.status === 'hiding' ? 'FASE 1 · SEMBUNYI'
-          : round.status === 'hunt' ? 'FASE 2 · POCONG'
-          : 'HASIL · RONDE ' + round.round_number;
-        $('map-wrap').classList.toggle('hunt', round.status === 'hunt' || round.status === 'resolved');
+        const hunt = round.status === 'hunt', over = round.status === 'resolved';
+        $('map-wrap').classList.toggle('hunt', hunt || over);
+        $('map-wrap').classList.toggle('resolved', over);
+        banner.classList.toggle('hunt', hunt);
+        banner.classList.toggle('over', over);
+        $('map-banner-title').textContent = hunt ? 'POCONG PHASE' : over ? 'ROUND OVER' : 'HIDING PHASE';
+        $('map-banner-label').textContent = over ? 'The Pocong entered:' : hunt ? 'Remaining Hiding Time' : 'Remaining Hiding Time';
       }
+      tickTimer();
 
+      loc.classList.remove('none', 'lounge');
       if (my_hide && my_hide.outcome === 'disqualified') {
-        loc.textContent = 'Spectator Lounge';
-        loc.classList.remove('none');
+        loc.textContent = 'SPECTATOR LOUNGE';
+        loc.classList.add('lounge');
       } else if (my_hide && my_hide.room_slug) {
-        loc.textContent = 'LOCKED IN — ' + (ROOMS.find(r => r.slug === my_hide.room_slug) || {}).label;
-        loc.classList.remove('none');
+        loc.textContent = 'LOCKED IN · ' + roomLabel(my_hide.room_slug);
       } else if (selectedRoom && canHide()) {
-        loc.textContent = selectedRoom.label;
-        loc.classList.remove('none');
+        loc.textContent = roomLabel(selectedRoom.slug) + ' (not locked yet)';
+        loc.classList.add('none');
       } else {
-        loc.textContent = '—';
+        loc.textContent = 'NOT LOCKED';
         loc.classList.add('none');
       }
 
-      confirm.disabled = !canHide();
+      confirm.disabled = !(canHide() && selectedRoom);
       confirm.textContent = (my_hide && my_hide.room_slug) ? 'LOCKED IN' : 'CONFIRM & PLACE';
       $('phase-note').textContent = canHide()
-        ? (selectedRoom ? 'Tekan CONFIRM & PLACE untuk mengunci.' : 'Ketuk ruangan di peta, lalu tekan tombol.')
-        : (my_hide && my_hide.room_slug ? 'Ruanganmu terkunci.' : '');
+        ? (selectedRoom ? 'Press CONFIRM & PLACE to lock ' + roomLabel(selectedRoom.slug) + '.' : 'Tap a room on the map or in the grid, then confirm.')
+        : (my_hide && my_hide.room_slug ? 'Your room is locked for this round.' : (round && round.status !== 'hiding' ? 'Wait for the next hiding phase.' : ''));
+
+      $('room-select').disabled = !canHide();
+      $('room-select').value = canHide() && selectedRoom ? selectedRoom.slug : (my_hide && my_hide.room_slug ? my_hide.room_slug : '');
+      for (const slug in roomButtons) {
+        const b = roomButtons[slug];
+        b.disabled = !canHide();
+        b.classList.toggle('selected', !!(canHide() && selectedRoom && selectedRoom.slug === slug));
+        b.classList.toggle('locked', !!(my_hide && my_hide.room_slug === slug));
+        b.classList.toggle('daring', !!(my_hide && my_hide.daring_room_slug === slug));
+      }
+
+      // Daring second pick (the restyled double down).
+      const dare = $('daring-select');
+      const dareBtn = $('btn-daring');
+      for (const o of dare.options) o.hidden = !!(o.value && my_hide && my_hide.room_slug === o.value);
+      dare.disabled = !canDare();
+      if (my_hide && my_hide.daring_room_slug) dare.value = my_hide.daring_room_slug;
+      else if (!canDare()) dare.value = '';
+      dareBtn.disabled = !(canDare() && dare.value);
+      dareBtn.textContent = (my_hide && my_hide.daring_room_slug) ? 'DARED' : 'DARE A SECOND ROOM';
+      $('daring-note').textContent = (my_hide && my_hide.daring_room_slug)
+        ? 'Daring pick: ' + roomLabel(my_hide.daring_room_slug) + '. Survive both rooms for x1.5.'
+        : canDare() ? 'Optional. Choose a second room, then dare it.' : 'Lock your hiding room first.';
 
       const s = stats || { total_score: 0, current_streak: 0, best_score: 0 };
-      $('phase-score').textContent = 'Skor: ' + (s.total_score || 0) + ' · Streak: ' + (s.current_streak || 0)
-        + ' · Terbaik: ' + (s.best_score || 0);
-
-      updateBetChipStates();
+      $('stat-score').textContent = String(s.total_score || 0);
+      $('stat-best').textContent = String(s.best_score || 0);
+      $('stat-round').textContent = String((my_hide && my_hide.points_awarded) || 0);
+      $('stat-streak').textContent = (s.current_streak || 0) + ' (x' + multiplier(s.current_streak).toFixed(1) + ')';
+      const [light, text] = statusInfo();
+      $('status-light').className = 'light ' + (light === 'amber' ? '' : light);
+      $('status-text').textContent = text;
     }
-    function updateBetChipStates() { /* retained hook for chip-era DOM; no chips now */ }
 
     // ── Result + jump-scare ────────────────────────────────────────────────────
     function showResult() {
       const { round, my_hide } = currentState;
       if (!round || round.status !== 'resolved' || !round.target_room) return;
-      const lbl = (ROOMS.find(r => r.slug === round.target_room) || {}).label || round.target_room;
+      const lbl = roomLabel(round.target_room);
       const banner = $('result-banner');
 
       if (my_hide && my_hide.outcome === 'eliminated') {
@@ -1145,7 +1562,23 @@
           body: JSON.stringify({ room_slug: selectedRoom.slug }),
         });
         if (res.ok) { await pollState(); }
-        else { const err = await res.json(); $('phase-note').textContent = err.error || 'Gagal mengunci.'; }
+        else { const err = await res.json(); $('phase-note').textContent = err.error || 'Could not lock the room.'; }
+      } catch (e) { console.warn(e); }
+    });
+
+    // ── Daring second pick ─────────────────────────────────────────────────────
+    $('btn-daring').addEventListener('click', async () => {
+      AUDIO.init();
+      const slug = $('daring-select').value;
+      if (!slug || !canDare()) return;
+      try {
+        const res = await fetch('/api/game/daring', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ room_slug: slug }),
+        });
+        if (res.ok) { await pollState(); }
+        else { const err = await res.json(); $('daring-note').textContent = err.error || 'Could not set the daring pick.'; }
       } catch (e) { console.warn(e); }
     });
 
@@ -1160,26 +1593,22 @@
 
         const roundChanged  = state.round && state.round.id !== lastRoundId;
         const statusChanged = (state.round && state.round.status) !== lastStatus;
-        const hidesJson     = JSON.stringify(state.hides || []);
 
         if (roundChanged || statusChanged) clearResult();
+        if (roundChanged) selectedRoom = null;
 
         if (state.round && state.round.status === 'hunt' && state.round.target_room) {
-          const geo = roomGeo[state.round.target_room];
-          if (geo) {
-            routeStopIndex = nearestRouteIndex(geo.cx, geo.cy);
-            if (statusChanged || roundChanged) { gSeg = 0; gT = 0; ghostWalking = true; }
-          }
+          if (statusChanged || roundChanged) startWalk(state.round.target_room);
           // Proximity drives the heartbeat and breathing.
-          const dist = my_hide_room_geo();
-          if (dist) {
-            const stop = ROUTE[routeStopIndex];
-            const d = Math.hypot(stop.x - dist.cx, stop.y - dist.cy);
+          const mine = my_hide_room_geo();
+          if (mine && lastTargetEnd) {
+            const d = Math.hypot(lastTargetEnd.x - mine.cx, lastTargetEnd.y - mine.cy);
             AUDIO.setIntensity(Math.max(0, 1 - d / 420));
           } else {
             AUDIO.setIntensity(0.2);
           }
         } else {
+          if (state.round && state.round.status !== 'resolved') { ghostWalking = false; walk = null; }
           AUDIO.setIntensity(0);
         }
 
@@ -1189,7 +1618,6 @@
 
         lastRoundId = state.round && state.round.id;
         lastStatus  = state.round && state.round.status;
-        lastHidesJson = hidesJson;
         refreshHotspotState();
       } catch (e) { console.warn('Poll error:', e.message); }
     }
@@ -1229,12 +1657,18 @@
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
     })();
 
-    // Player name in the panel, from the token payload when available.
+    // Player identity in the signature box, from the token payload.
     (function showName() {
-      try {
-        const payload = token ? JSON.parse(atob(token.split('.')[1])) : null;
-        if (payload && payload.username) $('player-name').textContent = payload.username;
-      } catch (_) {}
+      if (!myUsername) {
+        $('sig-caption').textContent = 'Open the app inside Homeroom to sign in.';
+        return;
+      }
+      $('player-name').textContent = myUsername;
+      const parts = myUsername.split(/[^a-z0-9]+/i).filter(Boolean);
+      const initials = parts.length >= 2
+        ? parts[0].charAt(0) + parts[1].charAt(0)
+        : myUsername.replace(/[^a-z0-9]/gi, '').slice(0, 2);
+      $('sig-initials').textContent = (initials || '?').toUpperCase();
     })();
   </script>
 </body>
