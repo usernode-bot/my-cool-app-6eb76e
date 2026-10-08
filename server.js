@@ -16,6 +16,9 @@ const PUBLIC_API_PATHS = new Set([
   '/api/game/leaderboard',
 ]);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
+// A party's state is readable like the open round's (a username, a room slug
+// and a score per row). Joining and playing need an account.
+const PUBLIC_API_PATTERNS = [/^\/api\/party\/[A-Za-z0-9]+\/state$/];
 
 // ── Phase timing (ms). Hiding 60s, Pocong walk 6s. ───────────────────────────
 const HIDING_MS = 60 * 1000;
@@ -65,6 +68,7 @@ app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api/')) {
     if (PUBLIC_API_PATHS.has(req.path)) return next();
     if (PUBLIC_PREFIXES.some((p) => req.path.startsWith(p))) return next();
+    if (req.method === 'GET' && PUBLIC_API_PATTERNS.some((re) => re.test(req.path))) return next();
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
   }
   next();
@@ -174,6 +178,16 @@ async function runTransitions(now) {
   }
 }
 
+// Points for surviving a round. Shared by the open round and party rounds.
+function survivalPoints(hide, total, counts, streakBefore) {
+  const base = 100;
+  const distance = 25 * (STEP_BY_SLUG[hide.room_slug] || 1);
+  const scarcity = Math.min(300, Math.round(50 * total / Math.max(1, counts[hide.room_slug] || 1)));
+  let points = Math.round((base + distance + scarcity) * Math.min(3, 1 + 0.1 * streakBefore));
+  if (hide.daring_room_slug) points = Math.round(points * 1.5);
+  return points;
+}
+
 async function resolveRound(roundId, targetRoom) {
   const hides = await pool.query(
     `SELECT id, user_id, username, room_slug, daring_room_slug FROM hides WHERE round_id=$1 AND outcome='pending'`,
@@ -191,11 +205,7 @@ async function resolveRound(roundId, targetRoom) {
     if (survived) {
       const stats = await pool.query(`SELECT current_streak FROM player_stats WHERE user_id=$1`, [h.user_id]);
       const streakBefore = stats.rows[0] ? stats.rows[0].current_streak : 0;
-      const base = 100;
-      const distance = 25 * (STEP_BY_SLUG[h.room_slug] || 1);
-      const scarcity = Math.min(300, Math.round(50 * total / Math.max(1, counts[h.room_slug] || 1)));
-      points = Math.round((base + distance + scarcity) * Math.min(3, 1 + 0.1 * streakBefore));
-      if (h.daring_room_slug) points = Math.round(points * 1.5);
+      points = survivalPoints(h, total, counts, streakBefore);
     }
     const outcome = survived ? 'survived' : 'eliminated';
     await pool.query(`UPDATE hides SET outcome=$1, points_awarded=$2 WHERE id=$3`, [outcome, points, h.id]);
@@ -383,6 +393,323 @@ app.post('/api/game/advance', async (req, res) => {
   }
 });
 
+// ── Party mode ───────────────────────────────────────────────────────────────
+// A party is a private group that shares its own rounds, apart from the open
+// round everyone plays. Any member starts a round; it then runs on the same
+// clock as the open round (60s hiding, 6s hunt) and is scored with the same
+// points formula into the party's own scoreboard. Points only, no stakes.
+
+const PARTY_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const PARTY_CODE_RE = /^[A-Z0-9]{4,8}$/;
+const PARTY_MAX_MEMBERS = 12;
+
+function newPartyCode() {
+  let c = '';
+  for (let i = 0; i < 5; i++) c += PARTY_CODE_CHARS[Math.floor(Math.random() * PARTY_CODE_CHARS.length)];
+  return c;
+}
+
+async function findParty(rawCode) {
+  const code = String(rawCode || '').toUpperCase();
+  if (!PARTY_CODE_RE.test(code)) return null;
+  const r = await pool.query(`SELECT * FROM parties WHERE code=$1`, [code]);
+  return r.rows[0] || null;
+}
+
+async function isPartyMember(partyId, userId) {
+  const r = await pool.query(`SELECT 1 FROM party_members WHERE party_id=$1 AND user_id=$2`, [partyId, userId]);
+  return r.rows.length > 0;
+}
+
+async function latestPartyRound(partyId) {
+  const r = await pool.query(
+    `SELECT * FROM party_rounds WHERE party_id=$1 ORDER BY round_number DESC LIMIT 1`, [partyId]);
+  return r.rows[0] || null;
+}
+
+// Opens the party's next hiding round unless one is already live. The
+// UNIQUE (party_id, round_number) key stops two concurrent starts.
+async function openPartyRound(partyId, now) {
+  try {
+    const ins = await pool.query(
+      `INSERT INTO party_rounds (party_id, round_number, status, hiding_ends_at)
+       SELECT $1::int, COALESCE(MAX(round_number), 0) + 1, 'hiding', $2::timestamptz
+       FROM party_rounds WHERE party_id=$1::int
+       HAVING NOT EXISTS (SELECT 1 FROM party_rounds WHERE party_id=$1::int AND status IN ('hiding','hunt'))`,
+      [partyId, new Date(now.getTime() + HIDING_MS)]
+    );
+    return ins.rowCount > 0;
+  } catch (err) {
+    if (err.code === '23505') return false;
+    throw err;
+  }
+}
+
+async function partyToHunt(round, now) {
+  const upd = await pool.query(
+    `UPDATE party_rounds SET status='hunt', target_room=$1, hunt_ends_at=$2
+     WHERE id=$3 AND status='hiding' RETURNING id`,
+    [pickTarget(), new Date(now.getTime() + HUNT_MS), round.id]
+  );
+  return upd.rows.length > 0;
+}
+
+async function partyToResolved(round, now) {
+  const upd = await pool.query(
+    `UPDATE party_rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt'
+     RETURNING id, party_id, target_room`,
+    [now, round.id]
+  );
+  if (upd.rows.length) await resolvePartyRound(upd.rows[0]);
+  return upd.rows.length > 0;
+}
+
+// Same lazy, time-gated pattern as runTransitions. A resolved party round
+// stays resolved until a member starts the next one.
+async function runPartyTransitions(partyId, now) {
+  for (let i = 0; i < 3; i++) {
+    const round = await latestPartyRound(partyId);
+    if (!round) return;
+    if (round.status === 'hiding' && now > new Date(round.hiding_ends_at)) { await partyToHunt(round, now); continue; }
+    if (round.status === 'hunt' && now > new Date(round.hunt_ends_at)) { await partyToResolved(round, now); continue; }
+    return;
+  }
+}
+
+async function resolvePartyRound(round) {
+  const hides = await pool.query(
+    `SELECT id, user_id, room_slug, daring_room_slug FROM party_hides WHERE party_round_id=$1 AND outcome='pending'`,
+    [round.id]
+  );
+  const counts = {};
+  for (const h of hides.rows) counts[h.room_slug] = (counts[h.room_slug] || 0) + 1;
+  const total = hides.rows.length;
+  for (const h of hides.rows) {
+    const survived = h.room_slug !== round.target_room && h.daring_room_slug !== round.target_room;
+    const m = await pool.query(
+      `SELECT streak FROM party_members WHERE party_id=$1 AND user_id=$2`, [round.party_id, h.user_id]);
+    const streakBefore = m.rows[0] ? m.rows[0].streak : 0;
+    const points = survived ? survivalPoints(h, total, counts, streakBefore) : 0;
+    await pool.query(
+      `UPDATE party_hides SET outcome=$1, points_awarded=$2 WHERE id=$3`,
+      [survived ? 'survived' : 'eliminated', points, h.id]
+    );
+    await pool.query(
+      `UPDATE party_members SET
+         score = score + $3,
+         best_round = GREATEST(best_round, $3),
+         streak = CASE WHEN $4 THEN streak + 1 ELSE 0 END,
+         rounds_survived = rounds_survived + CASE WHEN $4 THEN 1 ELSE 0 END
+       WHERE party_id=$1 AND user_id=$2`,
+      [round.party_id, h.user_id, points, survived]
+    );
+  }
+}
+
+app.post('/api/party', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'create a party' });
+  try {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = newPartyCode();
+      const ins = await pool.query(
+        `INSERT INTO parties (code, created_by_user_id, created_by_username)
+         VALUES ($1,$2,$3) ON CONFLICT (code) DO NOTHING RETURNING id, code`,
+        [code, req.user.id, req.user.username]
+      );
+      if (!ins.rows.length) continue;
+      await pool.query(
+        `INSERT INTO party_members (party_id, user_id, username) VALUES ($1,$2,$3)
+         ON CONFLICT (party_id, user_id) DO NOTHING`,
+        [ins.rows[0].id, req.user.id, req.user.username]
+      );
+      return res.json({ ok: true, code: ins.rows[0].code });
+    }
+    res.status(503).json({ error: 'Could not create a party. Try again.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/party/:code/join', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'join a party' });
+  try {
+    const party = await findParty(req.params.code);
+    if (!party) return res.status(404).json({ error: 'No party with that code' });
+    if (!(await isPartyMember(party.id, req.user.id))) {
+      const n = await pool.query(`SELECT COUNT(*)::int AS n FROM party_members WHERE party_id=$1`, [party.id]);
+      if (n.rows[0].n >= PARTY_MAX_MEMBERS) return res.status(409).json({ error: 'This party is full' });
+      await pool.query(
+        `INSERT INTO party_members (party_id, user_id, username) VALUES ($1,$2,$3)
+         ON CONFLICT (party_id, user_id) DO NOTHING`,
+        [party.id, req.user.id, req.user.username]
+      );
+    }
+    res.json({ ok: true, code: party.code });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/party/:code/state', async (req, res) => {
+  try {
+    const party = await findParty(req.params.code);
+    if (!party) return res.status(404).json({ error: 'No party with that code' });
+    await runPartyTransitions(party.id, req.now);
+
+    const membersRes = await pool.query(
+      `SELECT user_id, username, score, best_round, streak, rounds_survived, joined_at FROM party_members
+       WHERE party_id=$1 ORDER BY score DESC, joined_at ASC`,
+      [party.id]
+    );
+    const round = await latestPartyRound(party.id);
+    const hides = round ? (await pool.query(
+      `SELECT user_id, username, room_slug, outcome, points_awarded FROM party_hides WHERE party_round_id=$1`,
+      [round.id]
+    )).rows : [];
+    const lockedIds = new Set(hides.map((h) => h.user_id));
+    const me = req.user ? membersRes.rows.find((m) => m.user_id === req.user.id) : null;
+
+    let myHide = null;
+    if (me && round) {
+      const mh = await pool.query(
+        `SELECT room_slug, daring_room_slug, outcome, points_awarded FROM party_hides
+         WHERE party_round_id=$1 AND user_id=$2`,
+        [round.id, req.user.id]
+      );
+      myHide = mh.rows[0] || null;
+      // Only a member who was in the party while it was hiding timed out; one
+      // who joined later simply watched.
+      const joinedInTime = new Date(me.joined_at) <= new Date(round.hiding_ends_at);
+      if (!myHide && round.status !== 'hiding' && joinedInTime) {
+        myHide = { room_slug: null, daring_room_slug: null, outcome: 'disqualified', points_awarded: 0 };
+      }
+    }
+
+    res.json({
+      party: {
+        code: party.code,
+        created_by: party.created_by_username,
+        is_member: !!me,
+        max_members: PARTY_MAX_MEMBERS,
+        members: membersRes.rows.map((m) => ({
+          username: m.username,
+          score: Number(m.score),
+          streak: m.streak,
+          locked: !!(round && round.status === 'hiding' && lockedIds.has(m.user_id)),
+        })),
+      },
+      round: round ? {
+        id: round.id,
+        round_number: round.round_number,
+        status: round.status,
+        target_room: round.target_room,
+        hiding_ends_at: round.hiding_ends_at,
+        hunt_ends_at: round.hunt_ends_at,
+        resolved_at: round.resolved_at,
+      } : null,
+      my_hide: myHide,
+      hides: hides.map((h) => ({ username: h.username, room_slug: h.room_slug, outcome: h.outcome, points_awarded: h.points_awarded })),
+      stats: me ? { total_score: Number(me.score), best_score: me.best_round, current_streak: me.streak } : null,
+      result_ms: RESULT_MS,
+      server_now: req.now.toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Shared guard for party writes: the party exists and the caller is in it.
+async function partyForMember(req, res, action) {
+  if (!req.user) { res.status(401).json({ error: 'account_required', action }); return null; }
+  const party = await findParty(req.params.code);
+  if (!party) { res.status(404).json({ error: 'No party with that code' }); return null; }
+  if (!(await isPartyMember(party.id, req.user.id))) { res.status(403).json({ error: 'Join the party first' }); return null; }
+  return party;
+}
+
+app.post('/api/party/:code/start', async (req, res) => {
+  try {
+    const party = await partyForMember(req, res, 'start a party round');
+    if (!party) return;
+    await runPartyTransitions(party.id, req.now);
+    const opened = await openPartyRound(party.id, req.now);
+    if (!opened) return res.status(409).json({ error: 'A round is already running' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+async function livePartyHidingRound(partyId, now) {
+  await runPartyTransitions(partyId, now);
+  const round = await latestPartyRound(partyId);
+  if (!round || round.status !== 'hiding' || now > new Date(round.hiding_ends_at)) return null;
+  return round;
+}
+
+app.post('/api/party/:code/hide', async (req, res) => {
+  const { room_slug } = req.body || {};
+  try {
+    const party = await partyForMember(req, res, 'hide in a room');
+    if (!party) return;
+    if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
+    const round = await livePartyHidingRound(party.id, req.now);
+    if (!round) return res.status(409).json({ error: 'No hiding phase' });
+    const hide = await pool.query(
+      `INSERT INTO party_hides (party_round_id, user_id, username, room_slug, locked_at)
+       VALUES ($1,$2,$3,$4,$5) RETURNING room_slug, outcome`,
+      [round.id, req.user.id, req.user.username, room_slug, req.now]
+    );
+    res.json({ ok: true, hide: hide.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Already locked' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/party/:code/daring', async (req, res) => {
+  const { room_slug } = req.body || {};
+  try {
+    const party = await partyForMember(req, res, 'dare a second room');
+    if (!party) return;
+    if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
+    const round = await livePartyHidingRound(party.id, req.now);
+    if (!round) return res.status(409).json({ error: 'No hiding phase' });
+    const mine = await pool.query(
+      `SELECT id, room_slug, daring_room_slug FROM party_hides WHERE party_round_id=$1 AND user_id=$2`,
+      [round.id, req.user.id]
+    );
+    if (!mine.rows.length) return res.status(409).json({ error: 'Lock a hiding room first' });
+    if (mine.rows[0].room_slug === room_slug) return res.status(400).json({ error: 'Pick a different room' });
+    const upd = await pool.query(
+      `UPDATE party_hides SET daring_room_slug=$1 WHERE id=$2 AND daring_room_slug IS NULL
+       RETURNING room_slug, daring_room_slug, outcome`,
+      [room_slug, mine.rows[0].id]
+    );
+    if (!upd.rows.length) return res.status(409).json({ error: 'Already dared' });
+    res.json({ ok: true, hide: upd.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Staging only: step the party's round on one phase per click, like the open
+// round's Next Phase button. In production the clock does it.
+app.post('/api/party/:code/advance', async (req, res) => {
+  if (!IS_STAGING) return res.status(403).json({ error: 'Staging only' });
+  try {
+    const party = await partyForMember(req, res, 'advance the round');
+    if (!party) return;
+    const round = await latestPartyRound(party.id);
+    if (round && round.status === 'hiding') await partyToHunt(round, req.now);
+    else if (round && round.status === 'hunt') await partyToResolved(round, req.now);
+    else await openPartyRound(party.id, req.now);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Leaderboard (public) ─────────────────────────────────────────────────────
 
 app.get('/api/game/leaderboard', async (_req, res) => {
@@ -487,6 +814,59 @@ async function migrate() {
     )
   `);
 
+  // ── Party mode tables. All public: a party code, usernames, room slugs and
+  // scores, the same kind of rows as the open round.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS parties (
+      id SERIAL PRIMARY KEY,
+      code VARCHAR(8) NOT NULL UNIQUE,
+      created_by_user_id INTEGER NOT NULL,
+      created_by_username VARCHAR(255) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS party_members (
+      party_id INTEGER NOT NULL REFERENCES parties(id),
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      score BIGINT NOT NULL DEFAULT 0,
+      best_round INTEGER NOT NULL DEFAULT 0,
+      streak INTEGER NOT NULL DEFAULT 0,
+      rounds_survived INTEGER NOT NULL DEFAULT 0,
+      joined_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (party_id, user_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS party_rounds (
+      id SERIAL PRIMARY KEY,
+      party_id INTEGER NOT NULL REFERENCES parties(id),
+      round_number INTEGER NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'hiding',
+      target_room VARCHAR(100),
+      hiding_ends_at TIMESTAMPTZ NOT NULL,
+      hunt_ends_at TIMESTAMPTZ,
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (party_id, round_number)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS party_hides (
+      id SERIAL PRIMARY KEY,
+      party_round_id INTEGER NOT NULL REFERENCES party_rounds(id),
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      room_slug VARCHAR(100) NOT NULL,
+      daring_room_slug VARCHAR(100),
+      locked_at TIMESTAMPTZ DEFAULT NOW(),
+      outcome VARCHAR(20) NOT NULL DEFAULT 'pending',
+      points_awarded INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (party_round_id, user_id)
+    )
+  `);
+
   // ── Staging seed data ─────────────────────────────────────────────────────
   if (IS_STAGING) {
     const existing = await pool.query(`SELECT COUNT(*) FROM rounds`);
@@ -533,6 +913,50 @@ async function migrate() {
            VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id) DO NOTHING`,
           [uid, username, total, best, cur, bestStreak, survived]
         );
+      }
+    }
+    // A demo party, DEMO1, with fake members, scores and one finished round,
+    // so the party screen has a scoreboard and figures. Anyone opening the
+    // preview joins it like any other party; nobody real is seeded into it.
+    const demo = await pool.query(
+      `INSERT INTO parties (code, created_by_user_id, created_by_username)
+       VALUES ('DEMO1', 900001, 'staging-demo-user') ON CONFLICT (code) DO NOTHING RETURNING id`
+    );
+    if (demo.rows.length) {
+      const partyId = demo.rows[0].id;
+      const members = [
+        [900001, 'staging-demo-user', 860, 420, 2],
+        [900002, 'staging-user-01', 610, 380, 1],
+        [900003, 'staging-user-02', 340, 340, 0],
+        [900004, 'staging-user-03', 0, 0, 0],
+      ];
+      for (const [uid, username, score, best, streak] of members) {
+        await pool.query(
+          `INSERT INTO party_members (party_id, user_id, username, score, best_round, streak, rounds_survived)
+           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (party_id, user_id) DO NOTHING`,
+          [partyId, uid, username, score, best, streak, streak]
+        );
+      }
+      const now = new Date();
+      const pr = await pool.query(
+        `INSERT INTO party_rounds (party_id, round_number, status, target_room, hiding_ends_at, hunt_ends_at, resolved_at)
+         VALUES ($1, 1, 'resolved', 'gudang', $2, $3, $4) ON CONFLICT (party_id, round_number) DO NOTHING RETURNING id`,
+        [partyId, new Date(now.getTime() - 120000), new Date(now.getTime() - 114000), new Date(now.getTime() - 114000)]
+      );
+      if (pr.rows.length) {
+        const hides = [
+          [900001, 'staging-demo-user', 'library', 'survived', 420],
+          [900002, 'staging-user-01', 'kamar-utama', 'survived', 380],
+          [900003, 'staging-user-02', 'backyard', 'survived', 340],
+          [900004, 'staging-user-03', 'gudang', 'eliminated', 0],
+        ];
+        for (const [uid, username, room, outcome, pts] of hides) {
+          await pool.query(
+            `INSERT INTO party_hides (party_round_id, user_id, username, room_slug, outcome, points_awarded)
+             VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (party_round_id, user_id) DO NOTHING`,
+            [pr.rows[0].id, uid, username, room, outcome, pts]
+          );
+        }
       }
     }
   }

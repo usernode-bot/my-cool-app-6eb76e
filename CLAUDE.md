@@ -34,6 +34,19 @@ points-only replacement for the original x2 money double-down) lets a locked-in
 player also dare a second room. If the Pocong enters either room they are
 found; surviving both multiplies the round's points by 1.5.
 
+**Party mode** (multiplayer with friends). The panel's "Game Mode" step
+switches between the **Open round** (the shared round above, everyone in the
+app) and a **Party**: a private group with a 5-character code (max 12
+members). Any member starts a party round; it then runs on the same clock
+(60s hiding, 6s hunt), uses the same map, rooms, daring pick and points
+formula (`survivalPoints`), and scores into the party's own scoreboard
+(`party_members.score`), separate from `player_stats` and the leaderboard. A
+resolved party round stays resolved until a member starts the next one. The
+viewer's mode and party code persist in `localStorage` (`aap_mode_v1`,
+`aap_party_v1`); `/?party=CODE` opens a party directly. The request that
+asked for this mode also asked for gold-coin bets with a 2x payout; that part
+was left out (content rules: no simulated gambling).
+
 - Genre: Indonesian horror-comedy (Pocong is a traditional Indonesian ghost).
 - Visual tone: B&W cartoon isometric blueprint with red accents; Creepster
   horror font. The side panel is dark parchment (`#1a1613` on `#c8b48c`
@@ -237,6 +250,21 @@ footsteps, breathing). Its state persists in `localStorage` under
 `my_hide.outcome` may be `pending`, `survived`, `eliminated`, or
 `disqualified`. A player who never locked gets `disqualified` computed at read
 time in any post-hiding phase, so it works even though no row exists for them.
+
+### Party endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/party` | yes | Create a party, join it, return `{ code }` |
+| POST | `/api/party/:code/join` | yes | Join (404 unknown code, 409 full) |
+| GET | `/api/party/:code/state` | public | Same shape as `/api/game/state` plus `party { code, created_by, is_member, members[] }`, `round.resolved_at`, `result_ms`; `round` is null before the first round |
+| POST | `/api/party/:code/start` | member | Open the next hiding round (409 if one is live) |
+| POST | `/api/party/:code/hide` / `daring` | member | As the open-round versions |
+| POST | `/api/party/:code/advance` | member, staging only | Step the party round one phase |
+
+Tables (all public): `parties`, `party_members`, `party_rounds`
+(`UNIQUE(party_id, round_number)`), `party_hides`. Staging seeds party
+`DEMO1` with four fake members and one resolved round.
 
 ### Authenticated endpoints
 
