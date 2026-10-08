@@ -9,6 +9,14 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const USERNODE_JWT_PUBLIC_KEY = process.env.USERNODE_JWT_PUBLIC_KEY;
 const IS_STAGING = process.env.USERNODE_ENV === 'staging';
 
+// The 11 hiding locations for the hide-and-seek game. Shared by the scores
+// endpoint below; the client's ROOMS array must stay in sync with this list.
+const HIDE_ROOM_SLUGS = [
+  'master-bedroom', 'kids-bedroom', 'library', 'living-room', 'kitchen',
+  'reading-room', 'bathroom', 'storage-room', 'assistants-room',
+  'second-bathroom', 'backyard',
+];
+
 const PUBLIC_API_PATHS = new Set(['/health', '/api/game/state', '/api/game/env']);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
 
@@ -183,6 +191,61 @@ app.post('/api/game/advance', async (req, res) => {
   }
 });
 
+// ── Hide-and-seek scores (authenticated) ─────────────────────────────────────
+
+app.post('/api/game/scores', async (req, res) => {
+  const { room_slug, daring_slug = null, caught = false, caught_room = null,
+          points = 0, streak = 0 } = req.body || {};
+  if (!HIDE_ROOM_SLUGS.includes(room_slug)) {
+    return res.status(400).json({ error: 'Invalid room' });
+  }
+  if (daring_slug !== null && daring_slug !== undefined && !HIDE_ROOM_SLUGS.includes(daring_slug)) {
+    return res.status(400).json({ error: 'Invalid daring room' });
+  }
+  if (typeof caught !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid caught flag' });
+  }
+  if (!Number.isInteger(points) || points < 0 || points > 1000000) {
+    return res.status(400).json({ error: 'Invalid points' });
+  }
+  if (!Number.isInteger(streak) || streak < 0 || streak > 10000) {
+    return res.status(400).json({ error: 'Invalid streak' });
+  }
+  try {
+    await pool.query(`
+      INSERT INTO game_scores (user_id, username, room_slug, daring_slug, caught, caught_room, points, streak)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [req.user.id, req.user.username, room_slug, daring_slug || null,
+        caught, caught_room || null, points, streak]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/game/scores', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT username,
+             SUM(points)::INTEGER AS total_points,
+             COUNT(*)::INTEGER AS rounds,
+             MAX(streak)::INTEGER AS best_streak
+      FROM game_scores
+      GROUP BY username
+      ORDER BY total_points DESC
+      LIMIT 50
+    `);
+    const mine = await pool.query(`
+      SELECT COALESCE(SUM(points), 0)::INTEGER AS total_points,
+             COALESCE(MAX(streak), 0)::INTEGER AS best_streak
+      FROM game_scores WHERE user_id = $1
+    `, [req.user.id]);
+    res.json({ leaderboard: rows, me: mine.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Legacy press endpoints (kept, unused by new UI) ──────────────────────────
 
 app.post('/api/press', async (req, res) => {
@@ -237,6 +300,21 @@ async function start() {
       winner_room VARCHAR(100),
       created_at TIMESTAMPTZ DEFAULT NOW(),
       completed_at TIMESTAMPTZ
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS game_scores (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      room_slug VARCHAR(100) NOT NULL,
+      daring_slug VARCHAR(100),
+      caught BOOLEAN NOT NULL,
+      caught_room VARCHAR(100),
+      points INTEGER NOT NULL DEFAULT 0,
+      streak INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 

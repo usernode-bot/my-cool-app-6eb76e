@@ -13,6 +13,12 @@
       "expectSelector": "#title"
     },
     {
+      "name": "Blueprint map and hiding phase render",
+      "path": "/",
+      "expectSelector": "#lock-btn",
+      "expectText": "Hiding Phase"
+    },
+    {
       "name": "Game state API returns round data",
       "path": "/api/game/state",
       "expectText": "round"
