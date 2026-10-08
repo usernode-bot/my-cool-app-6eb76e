@@ -26,7 +26,7 @@
             seen.add(val);
           }
           if (typeof val === 'function') return '[Function ' + (val.name || 'anonymous') + ']';
-          if (val instanceof Error) return val.stack || (val.name + ': ' + val.message);
+          if (val instanceof Error) return val.stack || val.name + ': ' + val.message;
           return val;
         });
       } catch (e) { try { return String(v); } catch (_) { return '[unserializable]'; } }
@@ -64,7 +64,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #f1ede0; }
 
     @keyframes shake {
       0%,100%{transform:translate(0)}
@@ -75,284 +75,235 @@
     }
     body.shaking { animation: shake 0.5s ease; }
 
-    /* 2D isometric map */
+    /* Blueprint map */
     #map-wrap {
       position: fixed; inset: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(ellipse at 50% 42%, #1a1a1a 0%, #0a0a0a 72%);
+      background: #f1ede0;
+      background-image: linear-gradient(#e2dccb 1px, transparent 1px),
+        linear-gradient(90deg, #e2dccb 1px, transparent 1px);
+      background-size: 32px 32px;
+      transition: filter 1.5s ease;
     }
-    #game-svg {
-      display: block; width: 100%; height: 100%;
+    #game-svg { display: block; width: 100%; height: 100%; }
+    .hotspot { fill: transparent; stroke: none; outline: none; }
+    .hotspot.pickable { cursor: pointer; }
+    .hotspot.pickable:hover, .hotspot.pickable:focus { fill: rgba(200,168,0,0.18); }
+    .room-outline { fill: none; stroke: transparent; stroke-width: 3.5; stroke-linejoin: round; pointer-events: none; }
+    .room-outline.sel  { stroke: #c8a800; }
+    .room-outline.dare { stroke: #b01818; stroke-dasharray: 8 6; }
+    @keyframes roomPulse { 0%,100% { stroke-opacity: 0.55; } 50% { stroke-opacity: 1; } }
+    .phase-hunt .room-outline.mine { stroke: #ffcc33; animation: roomPulse 1.2s ease-in-out infinite; }
+    .lamp { opacity: 0; transition: opacity 1.5s ease; pointer-events: none; }
+    .phase-hunt .lamp { opacity: 0.32; }
+    .fp-glow { animation: fpFade 4s linear forwards; }
+    @keyframes fpFade { from { opacity: 1; } to { opacity: 0; } }
+    .avatar-g { transform-box: fill-box; transform-origin: 50% 100%; }
+    @keyframes tremble {
+      0% { transform: translate(0,0); } 25% { transform: translate(2px,-1px); }
+      50% { transform: translate(-2px,1px); } 75% { transform: translate(1px,2px); }
+      100% { transform: translate(0,0); }
     }
-    .hotspot { fill: transparent; stroke: none; }
-    .hotspot.bettable { cursor: pointer; }
-    .hotspot.hovered { fill: rgba(255,255,255,0.14); }
-    .player-fig { transition: filter 0.4s ease; }
-    .player-fig.dim  { filter: grayscale(1) brightness(0.45); }
-    .player-fig.safe { filter: sepia(0.7) saturate(2.2) hue-rotate(2deg) brightness(1.05); }
+    .avatar-g.tremble { animation: tremble 80ms linear infinite; }
+    @keyframes peek {
+      0%,72%,100% { transform: translate(0,0) rotate(0deg); }
+      80%,90% { transform: translate(7px,-4px) rotate(-5deg); }
+    }
+    .avatar-g.peek { animation: peek 3s ease-in-out infinite; }
+    @keyframes reliefWipe {
+      0% { transform: rotate(0deg); } 25% { transform: rotate(-130deg); }
+      60% { transform: rotate(-110deg); } 85% { transform: rotate(-135deg); }
+      100% { transform: rotate(0deg); }
+    }
+    .avatar-g.relief .arm { animation: reliefWipe 1.6s ease-in-out 1; }
+    .avatar-g .sweat { opacity: 0; }
+    @keyframes sweatDrop { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
+    .avatar-g.relief .sweat { animation: sweatDrop 1.6s ease 1; }
+    .avatar-g.found { filter: grayscale(1) brightness(0.65); }
+    .avatar-g .strike { opacity: 0; }
+    .avatar-g.found .strike { opacity: 1; }
+
+    /* Dark transition */
+    #vignette {
+      position: fixed; inset: 0; z-index: 4; pointer-events: none;
+      background: radial-gradient(ellipse at 44% 46%, rgba(6,4,4,0.28) 0%, rgba(3,2,2,0.93) 100%);
+      opacity: 0; transition: opacity 1.5s ease;
+    }
+    .phase-hunt #vignette, .phase-found #vignette, .phase-survived #vignette, .phase-disqualified #vignette { opacity: 1; }
 
     #title {
       position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
       font-family: 'Creepster', cursive; font-size: clamp(1.4rem, 3.2vw, 2.4rem);
-      color: #f0f0f0; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000,
-        1px -1px 0 #000, -1px 1px 0 #000, 3px 3px 6px rgba(0,0,0,0.8);
+      color: #1a1a1a; text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
       letter-spacing: 2px; z-index: 10; pointer-events: none; white-space: nowrap;
+      transition: color 1.5s ease, text-shadow 1.5s ease;
+    }
+    .phase-hunt #title, .phase-found #title, .phase-survived #title, .phase-disqualified #title {
+      color: #f0f0f0; text-shadow: 2px 2px 0 #000, 3px 3px 6px rgba(0,0,0,0.8);
     }
 
-    #compass-hint {
-      position: fixed; top: 12px; left: 16px; z-index: 10; pointer-events: none;
-      font-family: monospace; font-size: 0.62rem; color: #555; line-height: 1.5;
+    #map-hint {
+      position: fixed; bottom: 14px; left: 16px; z-index: 10; pointer-events: none;
+      font-family: monospace; font-size: 0.68rem; color: #555; line-height: 1.5;
     }
 
-    /* Mascot */
-    @keyframes mascot-bob {
-      0%,100% { transform: translateY(0); }
-      50%      { transform: translateY(-6px); }
+    /* Mute button — always on top */
+    #mute-btn {
+      position: fixed; top: 12px; left: 12px; z-index: 100;
+      width: 44px; height: 44px; border-radius: 22px; cursor: pointer;
+      border: 2px solid #111; background: #faf8f1; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.12s;
     }
-    #mascot-canvas {
-      position: fixed; right: 16px; top: 80px; z-index: 11;
-      pointer-events: none;
-      animation: mascot-bob 2s ease-in-out infinite;
-    }
-
-    /* Tutorial panel */
-    #tutorial-panel {
-      position: fixed; right: 16px; top: 240px; z-index: 12;
-      width: 200px;
-      background: rgba(240,240,235,0.94); border: 2px solid #333;
-      border-radius: 12px; padding: 12px 14px;
-      box-shadow: 3px 3px 12px rgba(0,0,0,0.7);
-    }
-    #tutorial-panel .tut-header {
-      font-family: 'Creepster', cursive; font-size: 1.1rem;
-      color: #1a1a1a; letter-spacing: 1px; text-align: center;
-      margin-bottom: 6px;
-    }
-    #tut-canvas { display: block; margin: 0 auto 8px; }
-    #tutorial-panel .tut-body {
-      font-family: sans-serif; font-size: 0.7rem; color: #333; line-height: 1.4;
-      text-align: center; margin-bottom: 8px;
-    }
-    #tutorial-start {
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      color: #cc0000; text-align: center; letter-spacing: 1px;
+    #mute-btn:hover { transform: scale(1.08); }
+    .phase-hunt #mute-btn, .phase-found #mute-btn, .phase-survived #mute-btn, .phase-disqualified #mute-btn {
+      border-color: #eee; background: #17171a; color: #eee;
     }
 
-    /* HUD coin */
-    #hud-coin {
-      position: fixed; top: 12px; right: 170px; z-index: 10;
-      pointer-events: none; text-align: right;
+    /* Side panel */
+    #hide-panel {
+      position: fixed; right: 16px; top: 80px; z-index: 11; width: 300px;
+      background: #faf8f1; border: 2px solid #111; border-radius: 12px;
+      padding: 16px; color: #111; box-shadow: 3px 3px 0 #111;
+      font-family: sans-serif; transition: background 1.5s ease, border-color 1.5s ease, color 1.5s ease;
     }
-    #hud-coin .row1 {
-      font-family: 'Creepster', cursive; font-size: 1.1rem;
-      background: linear-gradient(135deg, #c0c0c0, #f0f0f0, #a8a8a8);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
+    .phase-hunt #hide-panel, .phase-found #hide-panel, .phase-survived #hide-panel, .phase-disqualified #hide-panel {
+      background: #17171a; border-color: #b01818; color: #eee; box-shadow: 0 0 24px rgba(255,0,0,0.25);
     }
-    #hud-coin .row2 {
-      font-family: 'Creepster', cursive; font-size: 0.85rem;
-      background: linear-gradient(135deg, #ffd700, #ffec6e, #b8860b);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
+    #phase-banner {
+      background: #111; color: #f1ede0; font-family: 'Creepster', cursive;
+      font-size: 1.25rem; letter-spacing: 2px; text-align: center;
+      padding: 6px; border-radius: 6px; margin-bottom: 10px;
+      transition: background 1.5s ease;
     }
+    .phase-hunt #phase-banner, .phase-found #phase-banner, .phase-survived #phase-banner, .phase-disqualified #phase-banner {
+      background: #b01818; color: #fff;
+    }
+    #hide-timer {
+      font-family: monospace; font-size: 1.5rem; font-weight: bold; text-align: center;
+      margin-bottom: 10px; letter-spacing: 1px;
+    }
+    .phase-hunt #hide-timer { color: #ff5555; }
+    .prow {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.8rem; padding: 6px 0; border-bottom: 1px dashed #999; gap: 8px;
+    }
+    .phase-hunt .prow { border-bottom-color: #555; }
+    .prow b { font-weight: bold; text-align: right; max-width: 62%; overflow-wrap: break-word; }
+    .locked { color: #1a6b1a; } .unlocked { color: #b01818; }
+    .phase-hunt .locked { color: #7fe07f; } .phase-hunt .unlocked { color: #ff5555; }
+    #dare-label { display: flex; gap: 7px; font-size: 0.72rem; color: #555; margin: 10px 0; line-height: 1.35; align-items: flex-start; }
+    .phase-hunt #dare-label { color: #999; }
+    #dare-label input { margin-top: 1px; }
+    .panel-btn {
+      display: block; width: 100%; margin-top: 12px;
+      font-family: 'Creepster', cursive; font-size: 1.15rem; letter-spacing: 1px;
+      background: #b01818; color: #fff; border: 2px solid #111; border-radius: 8px;
+      padding: 10px; cursor: pointer; transition: filter 0.15s;
+    }
+    .panel-btn:hover:not(:disabled) { filter: brightness(1.2); }
+    .panel-btn:disabled { opacity: 0.45; cursor: default; }
+    #p-score { margin-top: 12px; font-size: 0.75rem; color: #333; }
+    .phase-hunt #p-score, .phase-found #p-score, .phase-survived #p-score, .phase-disqualified #p-score { color: #bbb; }
+    #bpm-box { display: none; margin: 10px 0; text-align: center; }
+    #bpm-val { font-family: monospace; font-size: 1.6rem; color: #ff5555; display: block; margin-bottom: 4px; }
+    #ecg { display: block; margin: 0 auto; background: #101012; border: 1px solid #552222; border-radius: 4px; }
+    #ghost-at { font-size: 0.75rem; color: #ccc; margin-top: 6px; }
+    #p-note { font-size: 0.72rem; color: #b98; margin-top: 8px; display: none; }
 
-    /* HUD status */
-    #hud-status {
-      position: fixed; bottom: 80px; right: 16px; z-index: 10;
-      pointer-events: none; border: 1px solid #888; border-radius: 6px;
-      background: rgba(10,10,10,0.78); padding: 8px 14px;
-      font-family: 'Creepster', cursive; font-size: 1rem; line-height: 1.6;
-      background-image: linear-gradient(135deg, rgba(192,192,192,0.08), rgba(255,255,255,0.04));
+    /* Jump-scare overlay */
+    #jumpscare {
+      display: none; position: fixed; inset: 0; z-index: 90;
+      align-items: center; justify-content: center; pointer-events: none;
     }
-    #hud-status span {
-      background: linear-gradient(135deg, #c0c0c0, #f0f0f0, #a8a8a8);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
+    #jumpscare.show { display: flex; }
+    #jumpscare .flash { position: absolute; inset: 0; opacity: 0; background: #fff; }
+    #jumpscare .black { position: absolute; inset: 0; opacity: 0; background: #000; }
+    #jumpscare.show .flash { animation: flashWhite 0.52s ease 0.3s 1; }
+    #jumpscare.show .black { animation: flashBlack 0.4s ease 0.82s 1; }
+    @keyframes flashWhite { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes flashBlack { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 1; } }
+    #jumpscare img {
+      width: 240px; height: auto; position: relative;
     }
-    #status-outcome.outcome-won {
-      background: none !important;
-      -webkit-text-fill-color: #c8a800 !important;
-      color: #c8a800 !important; filter: none !important;
-    }
-    #status-outcome.outcome-lost {
-      background: none !important;
-      -webkit-text-fill-color: #882222 !important;
-      color: #882222 !important; filter: none !important;
-    }
-    #win-calc {
-      display: none;
-      position: fixed; bottom: 62px; right: 16px; z-index: 10;
-      pointer-events: none;
-      font-family: 'Creepster', cursive; font-size: 0.75rem;
-      color: #c8a800; background: rgba(10,10,10,0.7);
-      border: 1px solid #8a7000; border-radius: 5px; padding: 3px 10px;
-    }
+    @keyframes lunge { from { transform: scale(0.2); } to { transform: scale(1.8); } }
+    #jumpscare.show img { animation: lunge 0.3s cubic-bezier(0.6,0,1,1) forwards; }
+    body.reduced-motion #jumpscare.show img { animation: none; transform: scale(1.4); }
+    body.reduced-motion #jumpscare.show .flash { animation: flashWhite 0.52s ease 0.3s 1; }
 
-    /* Dev controls */
-    #dev-controls {
-      display: none;
-      position: fixed; bottom: 80px; left: 16px; z-index: 10;
-      background: rgba(10,10,10,0.85); border: 1px solid #ff4422;
-      border-radius: 8px; padding: 10px 14px;
-      font-family: 'Creepster', cursive;
-    }
-    #dev-controls .dev-label { font-size: 0.72rem; color: #ff6644; letter-spacing: 1px; margin-bottom: 8px; }
-    #dev-controls button {
-      display: block; width: 100%; margin-top: 6px;
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
-    }
-    #dev-controls button:hover { filter: brightness(1.2); }
-    #btn-resolve { background: #7c1d0e; color: #ffbbaa; }
-    #btn-newround { background: #1a3d1a; color: #aaffaa; }
-    #btn-newround.hidden { display: none; }
-
-    /* Win banner */
-    #win-banner {
-      display: none;
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      z-index: 20; text-align: center;
-      background: rgba(0,0,0,0.88); border: 3px solid #ff2222;
-      border-radius: 12px; padding: 24px 48px;
-      box-shadow: 0 0 40px rgba(255,0,0,0.5);
-    }
-    #win-banner h2 {
-      font-family: 'Creepster', cursive; font-size: clamp(2rem, 6vw, 4rem);
-      color: #ff2222; text-shadow: 2px 2px 0 #000, 0 0 20px rgba(255,0,0,0.8);
-      letter-spacing: 4px;
-    }
-    #win-banner p { font-family: 'Creepster', cursive; font-size: 1.1rem; color: #ccc; margin-top: 8px; }
-
-    /* Bet panel */
-    #bet-panel {
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      z-index: 11; display: flex; align-items: center; gap: 6px;
-      background: rgba(10,10,10,0.85); border: 1px solid #666;
-      border-radius: 12px; padding: 8px 14px;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.7);
-    }
-    .bet-adj {
-      font-family: 'Creepster', cursive; font-size: 1.4rem; color: #ccc;
-      background: #222; border: 1px solid #555; border-radius: 6px;
-      width: 34px; height: 34px; cursor: pointer; line-height: 1;
-      transition: background 0.15s;
-    }
-    .bet-adj:hover:not(:disabled) { background: #333; }
-    .bet-adj:disabled { opacity: 0.4; cursor: default; }
-    #bet-chips { display: flex; gap: 5px; align-items: center; }
-    .bet-chip {
-      font-family: 'Creepster', cursive; font-size: 0.9rem; color: #aaa;
-      background: #1a1a1a; border: 1px solid #444; border-radius: 7px;
-      padding: 5px 10px; cursor: pointer; transition: all 0.15s;
-    }
-    .bet-chip:hover:not(:disabled) { background: #2a2a2a; color: #ddd; }
-    .bet-chip.active {
-      background: #7a6000; border-color: #c8a800; color: #ffd700;
-      font-size: 1rem;
-      box-shadow: 0 0 8px rgba(200,160,0,0.5);
-    }
-    .bet-chip:disabled { opacity: 0.4; cursor: default; }
-    .bet-tkn-label {
-      font-family: 'Creepster', cursive; font-size: 0.85rem; color: #666;
-      padding-left: 2px;
-    }
-
-    /* Confirm chip */
-    #confirm-chip {
-      display: none;
-      position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%);
-      z-index: 12;
-      background: rgba(10,10,10,0.92); border: 1px solid #888;
-      border-radius: 10px; padding: 8px 16px;
-      align-items: center; gap: 10px;
-      font-family: 'Creepster', cursive; font-size: 1rem; color: #eee;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.8);
-      white-space: nowrap;
-    }
-    #confirm-chip.visible {
-      display: flex;
-      animation: slideUp 0.18s ease-out;
-    }
-    @keyframes slideUp {
-      from { transform: translateX(-50%) translateY(12px); opacity: 0; }
-      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
-    }
-    #confirm-yes, #confirm-no {
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer;
-    }
-    #confirm-yes { background: #7c3aed; color: #fff; }
-    #confirm-no  { background: #333;    color: #aaa; }
-    #confirm-yes:hover { filter: brightness(1.2); }
-    #confirm-no:hover  { filter: brightness(1.2); }
-
-    /* How-to-play intro overlay */
-    #intro-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 50;
+    /* Overlays (intro / result / lounge) */
+    .ovl {
+      display: none; position: fixed; inset: 0; z-index: 60;
       background: rgba(4,4,6,0.82);
       align-items: center; justify-content: center;
-      padding: 20px;
-      animation: introFade 0.25s ease-out;
+      padding: 20px; overflow-y: auto;
+      animation: ovlFade 0.25s ease-out;
     }
-    #intro-overlay.show { display: flex; }
-    @keyframes introFade { from { opacity: 0; } to { opacity: 1; } }
-    #intro-card {
-      max-width: 420px; width: 100%;
+    .ovl.show { display: flex; }
+    @keyframes ovlFade { from { opacity: 0; } to { opacity: 1; } }
+    .result-card {
+      max-width: 430px; width: 100%;
       background: linear-gradient(160deg, #17171a, #101012);
       border: 2px solid #ff2222; border-radius: 16px;
       padding: 22px 24px 20px;
       box-shadow: 0 0 44px rgba(255,0,0,0.35);
       color: #e8e8e8; text-align: center;
     }
-    #intro-card h2 {
+    .result-card h2 {
       font-family: 'Creepster', cursive; font-size: 2rem;
       color: #ff3030; letter-spacing: 2px;
       text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6);
       margin-bottom: 4px;
     }
-    #intro-card .intro-sub {
-      font-family: sans-serif; font-size: 0.78rem; color: #9a9a9a;
-      margin-bottom: 14px;
+    .result-card h2.good { color: #7fe07f; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(60,255,120,0.4); }
+    .result-card .sub { font-size: 0.85rem; color: #9a9a9a; margin-bottom: 12px; }
+    .result-card .big-points { font-family: 'Creepster', cursive; font-size: 1.5rem; color: #ffd700; margin: 6px 0 12px; }
+    .lb { text-align: left; background: rgba(255,255,255,0.04); border: 1px solid #444; border-radius: 10px; padding: 10px 12px; margin: 10px 0 14px; }
+    .lb h3 { font-family: 'Creepster', cursive; font-size: 1rem; letter-spacing: 1px; color: #ddd; margin-bottom: 6px; }
+    .lb .lrow { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px dashed #333; color: #ccc; }
+    .lb .lrow:last-child { border-bottom: none; }
+    .lb .lrow b { color: #ffd700; }
+    .ovl-btn {
+      font-family: 'Creepster', cursive; font-size: 1.2rem; letter-spacing: 1px;
+      color: #fff; background: #b01818; border: none; border-radius: 10px;
+      padding: 10px 30px; cursor: pointer; transition: filter 0.15s;
     }
-    #intro-card ol {
-      text-align: left; margin: 0 0 14px; padding-left: 4px;
-      list-style: none; counter-reset: step;
+    .ovl-btn:hover { filter: brightness(1.18); }
+    .found-marker {
+      width: 58px; height: 74px; margin: 12px auto; position: relative;
+      border: 2px solid #eee; border-radius: 29px 29px 10px 10px; background: #333;
     }
-    #intro-card ol li {
-      font-family: sans-serif; font-size: 0.9rem; line-height: 1.45;
-      color: #dcdcdc; margin-bottom: 10px; padding-left: 34px; position: relative;
-      counter-increment: step;
+    .found-marker::after {
+      content: ""; position: absolute; left: -8px; right: -8px; top: 34px;
+      border-top: 4px solid #ff3030; transform: rotate(-35deg);
     }
-    #intro-card ol li::before {
-      content: counter(step);
-      position: absolute; left: 0; top: 0;
+    .result-card ol { text-align: left; margin: 0 0 14px; padding-left: 4px; list-style: none; counter-reset: step; }
+    .result-card ol li {
+      font-size: 0.85rem; line-height: 1.45; color: #dcdcdc;
+      margin-bottom: 10px; padding-left: 34px; position: relative; counter-increment: step;
+    }
+    .result-card ol li::before {
+      content: counter(step); position: absolute; left: 0; top: 0;
       width: 24px; height: 24px; border-radius: 50%;
       background: #7c1d0e; color: #ffd0c4;
       font-family: 'Creepster', cursive; font-size: 0.95rem;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 0 8px rgba(255,60,20,0.4);
     }
-    #intro-card ol li b { color: #ffd700; }
-    #intro-card ol li .lose { color: #ff5555; font-weight: bold; }
-    #intro-card ol li .win  { color: #7fe07f; font-weight: bold; }
-    #intro-note {
-      font-family: sans-serif; font-size: 0.74rem; color: #b98;
-      background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
-      border-radius: 8px; padding: 8px 10px; margin-bottom: 16px; line-height: 1.4;
-    }
-    #intro-got {
-      font-family: 'Creepster', cursive; font-size: 1.3rem; letter-spacing: 1px;
-      color: #fff; background: #7c3aed; border: none; border-radius: 10px;
-      padding: 9px 30px; cursor: pointer; transition: filter 0.15s;
-    }
-    #intro-got:hover { filter: brightness(1.18); }
+    .result-card ol li b { color: #ffd700; }
 
     @media (max-width: 768px) {
-      #tutorial-panel, #mascot-canvas { display: none; }
-      #hud-coin { right: 16px; }
-      .bet-chip { padding: 4px 7px; font-size: 0.8rem; }
-      #intro-card h2 { font-size: 1.7rem; }
+      #hide-panel {
+        right: 0; left: 0; top: auto; bottom: 0; width: 100%;
+        border-radius: 14px 14px 0 0; padding: 12px 14px 14px;
+        max-height: 46vh; overflow-y: auto;
+      }
+      #hide-timer { font-size: 1.2rem; margin-bottom: 6px; }
+      .prow { padding: 4px 0; font-size: 0.74rem; }
+      #map-wrap { align-items: flex-start; }
+      #game-svg { height: 54vh; margin-top: 40px; }
+      #map-hint { bottom: auto; top: 52px; }
+      #mute-btn { width: 38px; height: 38px; font-size: 17px; }
     }
   </style>
 </head>
@@ -360,82 +311,82 @@
   <div id="map-wrap">
     <svg id="game-svg" viewBox="0 0 1376 768" preserveAspectRatio="xMidYMid meet"
          xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs>
+        <filter id="fp-filter" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="2.4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <radialGradient id="lamp-grad">
+          <stop offset="0%" stop-color="#ffd88a" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#ffd88a" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
       <g id="layer-static"></g>
-      <g id="layer-tint"></g>
-      <g id="layer-blood"></g>
-      <g id="layer-figures"></g>
+      <g id="layer-footprints"></g>
+      <g id="layer-avatar"></g>
       <g id="layer-ghost"></g>
       <g id="layer-labels"></g>
       <g id="layer-hotspots"></g>
     </svg>
   </div>
 
+  <div id="vignette"></div>
+
   <div id="title">👻 Awas Ada Pocong</div>
 
-  <div id="compass-hint">👻 Ketuk ruangan untuk bertaruh</div>
+  <div id="map-hint">Level 1 · blueprint</div>
 
-  <canvas id="mascot-canvas" width="130" height="130"></canvas>
+  <button id="mute-btn" aria-pressed="false" aria-label="Mute or unmute game sound">🔊</button>
 
-  <div id="tutorial-panel">
-    <div class="tut-header">RANDOM DOOR</div>
-    <canvas id="tut-canvas" width="172" height="56"></canvas>
-    <div class="tut-body">Hantu pocong lompat di sepanjang lorong sebelum masuk pintu acak.</div>
-    <div id="tutorial-start">→ START</div>
-  </div>
-
-  <div id="hud-coin">
-    <div class="row1">🪙 <span id="tkn-balance">1000 TKN</span></div>
-    <div class="row2" id="tkn-winnings" style="display:none">+0 TKN</div>
-  </div>
-
-  <div id="hud-status">
-    <span id="status-bet">bet: — TKN</span><br>
-    <span id="status-round">round: —</span><br>
-    <span id="status-outcome">status: watching</span>
-  </div>
-  <div id="win-calc">Perhitungan Kemenangan: Modal + 2× Bet</div>
-
-  <div id="dev-controls">
-    <div class="dev-label">🛠 Dev Controls (staging)</div>
-    <button id="btn-resolve">⚡ Resolve Round</button>
-    <button id="btn-newround" class="hidden">🔄 New Round</button>
-  </div>
-
-  <div id="win-banner">
-    <h2 id="win-text">You Win!</h2>
-    <p id="win-sub">The Pocong entered Kamar Utama. You were safe!</p>
-  </div>
-
-  <div id="bet-panel">
-    <button id="btn-decrement" class="bet-adj">−</button>
-    <div id="bet-chips">
-      <button class="bet-chip" data-amount="100">100</button>
-      <button class="bet-chip" data-amount="200">200</button>
-      <button class="bet-chip" data-amount="500">500</button>
-      <button class="bet-chip active" data-amount="1000">1000</button>
-      <button class="bet-chip" data-amount="5000">5000</button>
+  <aside id="hide-panel">
+    <div id="phase-banner">HIDING PHASE</div>
+    <div id="hide-timer">Hiding Phase: 01:00</div>
+    <div class="prow"><span>Chosen room</span><b id="p-room">—</b></div>
+    <div class="prow"><span>Room points</span><b id="p-points">—</b></div>
+    <div class="prow"><span>User Location</span><b id="p-lock" class="unlocked">NOT LOCKED</b></div>
+    <div class="prow"><span>Player</span><b id="p-player">Guest</b></div>
+    <div class="prow" id="p-dare-row" style="display:none"><span>Dare room</span><b id="p-dare">—</b></div>
+    <label id="dare-label"><input type="checkbox" id="dare-check">
+      <span>Add a dare pick: a second room the Pocong must also miss (×1.5 points)</span></label>
+    <div id="bpm-box">
+      <span id="bpm-val">♥ 70 BPM</span>
+      <svg id="ecg" width="264" height="36" viewBox="0 0 264 36"><polyline id="ecg-line" fill="none" stroke="#ff5555" stroke-width="1.6" points=""/></svg>
+      <div id="ghost-at"></div>
     </div>
-    <button id="btn-increment" class="bet-adj">+</button>
-    <span class="bet-tkn-label">TKN</span>
+    <button id="btn-start" class="panel-btn">Start hiding</button>
+    <button id="btn-confirm" class="panel-btn" style="display:none" disabled>CONFIRM &amp; PLACE</button>
+    <div id="p-note">Score saved on this device only.</div>
+    <div id="p-score">Streak ×1 · Best —</div>
+  </aside>
+
+  <div id="jumpscare" aria-hidden="true">
+    <div class="flash"></div>
+    <img src="/assets/pocong.jpg" alt="">
+    <div class="black"></div>
   </div>
 
-  <div id="confirm-chip">
-    <span id="confirm-text">Bet 1000 TKN on ...?</span>
-    <button id="confirm-yes">✓ OK</button>
-    <button id="confirm-no">✕</button>
-  </div>
-
-  <div id="intro-overlay">
-    <div id="intro-card">
-      <h2>👻 Cara Bermain</h2>
-      <div class="intro-sub">How to play — Awas Ada Pocong</div>
+  <div class="ovl" id="intro-overlay">
+    <div class="result-card">
+      <h2>👻 How to play</h2>
+      <div class="sub">Awas Ada Pocong — hide-and-seek</div>
       <ol>
-        <li>Pilih jumlah taruhan <b>(100–5000 TKN)</b> di panel bawah. <em>(Pick a bet amount.)</em></li>
-        <li>Ketuk sebuah ruangan untuk memasang taruhan di sana. <em>(Tap a room to bet.)</em></li>
-        <li>Pocong memilih <b>pintu acak</b>. Kalau ia masuk ruanganmu — <span class="lose">kamu KALAH 💀</span>. Ruangan lain — <span class="win">kamu MENANG 🎉</span> (Modal + 2× Bet).</li>
+        <li>Press <b>Start hiding</b>. You have <b>60 seconds</b> to pick one of the 11 rooms and press <b>CONFIRM &amp; PLACE</b> to lock it in.</li>
+        <li>At 00:00 the Pocong walks the hallway and enters <b>one random room</b>. The further along its route, the more that room is worth.</li>
+        <li>If it enters your room — <b style="color:#ff5555">FOUND!</b> Any other room — <b style="color:#7fe07f">you survived</b> and score points. Surviving in a row raises your streak multiplier.</li>
       </ol>
-      <div id="intro-note">🛠 Di staging, pakai <b>Dev Controls</b> di kiri-bawah — <b>Resolve Round</b> lalu <b>New Round</b> — untuk menjalankan ronde sendiri dan melihat Pocong memilih pintu.</div>
-      <button id="intro-got">Got it 👻</button>
+      <button class="ovl-btn" id="intro-got">Got it 👻</button>
+    </div>
+  </div>
+
+  <div class="ovl" id="result-overlay">
+    <div class="result-card">
+      <h2 id="r-title">You survived!</h2>
+      <div class="found-marker" id="r-marker" style="display:none"></div>
+      <div class="big-points" id="r-points"></div>
+      <div class="sub" id="r-sub"></div>
+      <div class="lb" id="r-lb"></div>
+      <button class="ovl-btn" id="r-again">Play again</button>
+      <button class="ovl-btn" id="r-next" style="background:#1a3d1a;margin-left:8px">Next round</button>
     </div>
   </div>
 
@@ -453,689 +404,888 @@
       return e;
     }
     const $ = (id) => document.getElementById(id);
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
+    };
 
-    // ── Room definitions (grid → isometric projection) ─────────────────────────
+    const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (REDUCED) document.body.classList.add('reduced-motion');
+
+    // ── Rooms (single source of truth for the client; mirrors HUNT_ROOMS in server.js) ──
+    // Door order = route order. Points = 100 + 10 × (door − 1).
     const ROOMS = [
-      { slug: 'kamar-utama',       label: 'Kamar Utama',       gridX: 0, gridZ: 0, type: 'bedroom'  },
-      { slug: 'library',           label: 'Library',           gridX: 1, gridZ: 0, type: 'library'  },
-      { slug: 'kamar-asisten',     label: 'Kamar Asisten',     gridX: 2, gridZ: 0, type: 'bedroom'  },
-      { slug: 'laundry-area',      label: 'Laundry Area',      gridX: 3, gridZ: 0, type: 'laundry'  },
-      { slug: 'kitchen-area',      label: 'Kitchen Area',      gridX: 0, gridZ: 1, type: 'kitchen'  },
-      { slug: 'kamar-anak',        label: 'Kamar Anak-Anak',   gridX: 1, gridZ: 1, type: 'playroom' },
-      { slug: 'playing-room',      label: 'Playing Room',      gridX: 2, gridZ: 1, type: 'playroom' },
-      { slug: 'living-room',       label: 'Living Room',       gridX: 3, gridZ: 1, type: 'living'   },
-      { slug: 'kamar-mandi',       label: 'Kamar Mandi',       gridX: 0, gridZ: 2, type: 'bathroom' },
-      { slug: 'kamar-mandi-kedua', label: 'Kamar Mandi Kedua', gridX: 1, gridZ: 2, type: 'bathroom' },
-      { slug: 'backyard',          label: 'Backyard',          gridX: 2, gridZ: 2, type: 'backyard' },
-      { slug: 'gudang',            label: 'Gudang',            gridX: 3, gridZ: 2, type: 'storage'  },
-      { slug: 'ruang-baca',        label: 'Ruang Baca',        gridX: 0, gridZ: 3, type: 'reading'  },
-      { slug: null, label: null, gridX: 1, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null, gridX: 2, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null, gridX: 3, gridZ: 3, type: 'corridor' },
+      { slug: 'master-bedroom',      label: 'Master Bedroom',      gx: 0, gz: 0, type: 'bedroom'  },
+      { slug: 'kids-bedroom',        label: "Kids' Bedroom",       gx: 1, gz: 0, type: 'kids'     },
+      { slug: 'living-room',         label: 'Living Room',         gx: 1, gz: 2, type: 'living'   },
+      { slug: 'library',             label: 'Library',             gx: 2, gz: 0, type: 'library'  },
+      { slug: 'kitchen',             label: 'Kitchen',             gx: 2, gz: 2, type: 'kitchen'  },
+      { slug: 'reading-room',        label: 'Reading Room',        gx: 3, gz: 0, type: 'reading'  },
+      { slug: 'bathroom',            label: 'Bathroom',            gx: 3, gz: 2, type: 'bathroom' },
+      { slug: 'assistants-room',     label: "Assistant's Room",    gx: 4, gz: 0, type: 'bedroom'  },
+      { slug: 'secondary-bathroom',  label: 'Secondary Bathroom',  gx: 4, gz: 2, type: 'bath2'    },
+      { slug: 'storage-room',        label: 'Storage Room',        gx: 5, gz: 0, type: 'storage'  },
+      { slug: 'backyard',            label: 'Backyard',            gx: 5, gz: 2, type: 'backyard' },
     ];
+    const roomPoints = (slug) => 100 + 10 * ROOMS.findIndex(r => r.slug === slug);
+    const roomBySlug = (slug) => ROOMS.find(r => r.slug === slug) || null;
 
-    const ISO = { hw: 108, hh: 62, wallH: 72, ox: 688, oy: 172 };
+    const ISO = { hw: 92, hh: 53, wallH: 40, ox: 470, oy: 150 };
     function iso(gx, gz) {
       return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh };
     }
     function ptsStr(arr) { return arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '); }
 
-    // Simple per-type furniture, expressed as small iso cuboids:
-    // [offsetX, offsetY(screen, negative = toward back), halfW, halfDepth, height]
+    // Furniture per room, as small iso cuboids relative to the room centre:
+    // [offsetX, offsetY, halfW, halfDepth, height]
     const FURN = {
-      bedroom:  [[-46,-14,28,13,24],[36,-6,15,11,30],[8,-30,10,8,16]],
-      playroom: [[-40,-10,24,12,10],[36,-4,13,10,20],[2,6,9,9,9]],
-      library:  [[-44,-16,30,10,42],[36,-2,18,12,10],[-2,-30,8,8,14]],
-      reading:  [[-44,-16,30,10,42],[36,-4,17,12,11],[-2,-28,8,8,14]],
-      kitchen:  [[-42,-14,28,11,26],[36,-16,13,10,40],[8,-28,15,7,10]],
-      laundry:  [[-44,-12,16,12,30],[-10,-16,16,12,30],[38,-4,11,10,20]],
-      living:   [[-44,-6,30,14,14],[6,-4,20,12,7],[36,-26,17,4,24]],
-      bathroom: [[-44,-12,26,12,16],[36,-14,13,9,18],[8,-26,10,8,20]],
-      backyard: [[-42,-20,9,9,36],[-42,-44,20,20,4],[32,-2,20,6,8]],
-      storage:  [[-42,-14,30,12,46],[36,-6,17,12,26],[8,-28,12,8,16]],
+      bedroom:  [[-34,-12,22,11,22],[30,-4,14,10,26],[8,-26,9,7,12],[-6,8,10,8,6]],
+      kids:     [[-32,-8,18,11,18],[30,-8,12,10,14],[4,-26,9,8,10],[6,10,14,8,4]],
+      living:   [[-34,-2,24,13,14],[4,-4,18,11,7],[36,-24,14,4,22],[10,-30,8,7,10],[-8,10,10,7,7]],
+      library:  [[-38,-16,26,9,36],[36,-2,16,11,10],[-2,-28,8,8,30],[6,8,14,8,8]],
+      kitchen:  [[-36,-12,24,10,24],[32,-16,11,9,34],[8,-28,14,7,10],[4,10,16,9,7]],
+      reading:  [[-36,-10,14,11,16],[32,-6,10,9,26],[-4,-26,10,8,8],[-10,10,9,7,5]],
+      bathroom: [[-36,-12,22,11,14],[32,-14,10,8,18],[8,-26,9,7,18],[-6,8,8,7,8]],
+      bath2:    [[-34,-10,16,11,22],[32,-8,10,9,16],[4,-26,8,7,12],[-4,8,11,9,10]],
+      storage:  [[-38,-12,24,11,38],[34,-6,14,10,22],[8,-28,11,8,14],[-2,8,12,8,8]],
+      backyard: [[-38,-18,8,8,30],[-38,-40,20,18,4],[30,-2,18,6,8],[2,10,12,6,5]],
     };
+    // The piece of furniture the avatar hides behind/under (drawn after the avatar).
+    const COVER = {
+      bedroom:  [-6, -8, 24, 11, 10],   // under the bed
+      kids:     [30, -10, 12, 10, 16],  // inside the toy box
+      living:   [-34, -4, 24, 13, 16],  // behind the sofa
+      library:  [-38, -18, 26, 9, 38],  // behind a bookshelf
+      kitchen:  [4, 10, 16, 9, 9],      // under the kitchen table
+      reading:  [-36, -12, 14, 11, 18], // behind the armchair
+      bathroom: [32, -16, 10, 8, 20],   // behind the shower curtain
+      bath2:    [-4, 8, 11, 9, 12],     // behind the laundry basket
+      assistants: null, storage: null, backyard: null,
+    };
+    FURN.bedroom2 = FURN.bedroom; // assistants-room shares the bedroom set
+    COVER.assistants = [-2, 10, 16, 9, 12]; // under the desk
+    COVER.storage = [-38, -14, 24, 11, 40]; // between the crates
+    COVER.backyard = [30, -4, 18, 6, 10];   // behind the bush
 
+    const PAPER = { faceR: '#e3ddc9', faceL: '#eee8d6', top: '#f7f3e8', ink: '#111' };
     function drawCuboid(g, cx, cy, hw, hd, h) {
-      // Right-front face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx, cy + hd - h], [cx + hw, cy - h], [cx + hw, cy], [cx, cy + hd]]),
-        fill: '#6a6a68', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: PAPER.faceR, stroke: PAPER.ink, 'stroke-width': 1.6, 'stroke-linejoin': 'round',
       }));
-      // Left-front face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx - hw, cy - h], [cx, cy + hd - h], [cx, cy + hd], [cx - hw, cy]]),
-        fill: '#8c8c8a', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: PAPER.faceL, stroke: PAPER.ink, 'stroke-width': 1.6, 'stroke-linejoin': 'round',
       }));
-      // Top face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx, cy - hd - h], [cx + hw, cy - h], [cx, cy + hd - h], [cx - hw, cy - h]]),
-        fill: '#c6c6c4', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: PAPER.top, stroke: PAPER.ink, 'stroke-width': 1.6, 'stroke-linejoin': 'round',
       }));
     }
 
-    // ── Build the static isometric mansion ──────────────────────────────────────
-    const roomGeo = {};          // slug → { cx, cy, floorPts, figureAnchor, ghostRest }
-    const hotspotEls = {};       // slug → <polygon>
-    const corridorCenters = [];
+    // ── Build the static blueprint map ─────────────────────────────────────────
+    const roomGeo = {};   // slug → { cx, cy, floorPts, door, hide, routeDist, wpIndex, outline, lampEl }
+    const hotspotEls = {};
+    const outlineEls = {};
+    const routeWps = [];  // master waypoint list along the Pocong Route
+    let routeTotalLen = 0;
+    const routeCum = [];  // cumulative length at each waypoint
 
     (function buildMap() {
       const staticG   = $('layer-static');
       const labelsG   = $('layer-labels');
       const hotspotsG = $('layer-hotspots');
+      const footG     = $('layer-footprints');
       const hw = ISO.hw, hh = ISO.hh, wH = ISO.wallH;
 
-      // Painter's order: back (small gx+gz) to front (large gx+gz)
-      const ordered = ROOMS.slice().sort((a, b) => (a.gridX + a.gridZ) - (b.gridX + b.gridZ));
+      // North arrow
+      const nG = svgEl('g', { transform: 'translate(80,110)' });
+      nG.appendChild(svgEl('line', { x1: 0, y1: 18, x2: 0, y2: -16, stroke: '#111', 'stroke-width': 2.5 }));
+      nG.appendChild(svgEl('polygon', { points: '0,-24 -7,-10 7,-10', fill: '#111' }));
+      const nT = svgEl('text', { x: 12, y: 0, 'font-family': 'monospace', 'font-size': 15, 'font-weight': 'bold', fill: '#111' });
+      nT.textContent = 'N';
+      nG.appendChild(nT);
+      staticG.appendChild(nG);
 
+      // Entrance foyer tile (gx 0, gz 2) — non-selectable
+      (function entrance() {
+        const c = iso(0, 2);
+        const top = [c.x, c.y - hh], right = [c.x + hw, c.y], bottom = [c.x, c.y + hh], left = [c.x - hw, c.y];
+        staticG.appendChild(svgEl('polygon', {
+          points: ptsStr([top, right, bottom, left]),
+          fill: '#ece8dc', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+        }));
+        const t = svgEl('text', {
+          x: c.x, y: (c.y + 4).toFixed(1), 'text-anchor': 'middle',
+          'font-family': 'sans-serif', 'font-size': 12, 'font-weight': 'bold', fill: '#555',
+        });
+        t.textContent = 'Entrance';
+        labelsG.appendChild(t);
+      })();
+
+      // Painter's order: back to front
+      const ordered = ROOMS.slice().sort((a, b) => (a.gx + a.gz) - (b.gx + b.gz));
       for (const r of ordered) {
-        const c = iso(r.gridX, r.gridZ);
+        const c = iso(r.gx, r.gz);
         const cx = c.x, cy = c.y;
-        const isCorr = r.type === 'corridor';
+        const top = [cx, cy - hh], right = [cx + hw, cy], bottom = [cx, cy + hh], left = [cx - hw, cy];
 
-        const top    = [cx, cy - hh];
-        const right  = [cx + hw, cy];
-        const bottom = [cx, cy + hh];
-        const left   = [cx - hw, cy];
+        // Lamp glow on the floor (visible in the dark phase)
+        const lamp = svgEl('ellipse', {
+          cx, cy: cy + 4, rx: hw * 0.85, ry: hh * 0.85, fill: 'url(#lamp-grad)', class: 'lamp',
+        });
+        staticG.appendChild(lamp);
 
-        // Back-left wall (rises from the left→top edge)
+        // Back walls (away from the viewer): left→top and top→right edges
         staticG.appendChild(svgEl('polygon', {
           points: ptsStr([left, top, [cx, cy - hh - wH], [cx - hw, cy - wH]]),
-          fill: '#9a9a98', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: '#ddd6c2', stroke: PAPER.ink, 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
-        // Back-right wall (rises from the top→right edge)
         staticG.appendChild(svgEl('polygon', {
           points: ptsStr([top, right, [cx + hw, cy - wH], [cx, cy - hh - wH]]),
-          fill: '#7c7c7a', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: '#ccc4ae', stroke: PAPER.ink, 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
+
         // Floor diamond
         staticG.appendChild(svgEl('polygon', {
           points: ptsStr([top, right, bottom, left]),
-          fill: isCorr ? '#b0b0ae' : '#dcdcda',
-          stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: '#faf8f1', stroke: PAPER.ink, 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
 
-        if (isCorr) {
-          corridorCenters.push({ x: cx, y: cy - 6 });
-          continue;
+        // Furniture (except the cover piece)
+        const cov = COVER[r.type];
+        for (const f of (FURN[r.type] || FURN.bedroom)) {
+          if (cov && f[0] === cov[0] && f[1] === cov[1]) continue;
+          drawCuboid(staticG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
         }
 
-        // Furniture (decorative; never intercepts pointer events)
-        const set = FURN[r.type] || FURN.bedroom;
-        for (const f of set) drawCuboid(staticG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
+        // Room outline (selection / dare / mine markers)
+        const outline = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'room-outline' });
+        staticG.appendChild(outline);
+        outlineEls[r.slug] = outline;
 
-        // Label pill above the room
-        const lx = cx, ly = cy - hh - wH - 4;
-        const wpx = r.label.length * 6.6 + 14;
-        labelsG.appendChild(svgEl('rect', {
-          x: (lx - wpx / 2).toFixed(1), y: (ly - 15).toFixed(1),
-          width: wpx.toFixed(1), height: 17, rx: 5,
-          fill: 'rgba(10,10,10,0.82)', stroke: '#cfcfcf', 'stroke-width': 1,
-        }));
+        // Label pill (paper style)
+        const ly = cy - hh - wH - 8;
         const t = svgEl('text', {
-          x: lx.toFixed(1), y: (ly - 3).toFixed(1),
-          'text-anchor': 'middle', 'font-family': 'sans-serif',
-          'font-size': 11, 'font-weight': 'bold', fill: '#f4f4f4',
+          x: cx, y: ly, 'text-anchor': 'middle', 'font-family': 'sans-serif',
+          'font-size': 12.5, 'font-weight': 'bold', fill: '#111',
         });
         t.textContent = r.label;
         labelsG.appendChild(t);
 
+        // Door onto the hallway edge: a gap + swing arc, drawn flat
+        const isNorth = r.gz === 0;
+        let dA, dB;
+        if (isNorth) { dA = left; dB = bottom; } else { dA = top; dB = right; }
+        const door = { x: (dA[0] + dB[0]) / 2, y: (dA[1] + dB[1]) / 2 };
+        const gap = 11;
+        const ux = (dB[0] - dA[0]), uy = (dB[1] - dA[1]);
+        const ul = Math.hypot(ux, uy); const vx = ux / ul, vy = uy / ul;
+        footG.appendChild(svgEl('line', {
+          x1: (door.x - vx * gap * 2.2).toFixed(1), y1: (door.y - vy * gap * 2.2).toFixed(1),
+          x2: (door.x + vx * gap * 2.2).toFixed(1), y2: (door.y + vy * gap * 2.2).toFixed(1),
+          stroke: '#faf8f1', 'stroke-width': 5,
+        }));
+        footG.appendChild(svgEl('path', {
+          d: 'M ' + (door.x - vx * gap).toFixed(1) + ' ' + (door.y - vy * gap).toFixed(1) +
+             ' A ' + (gap * 2) + ' ' + (gap * 2) + ' 0 0 ' + (isNorth ? 0 : 1) + ' ' +
+             (door.x - vy * gap * 1.6).toFixed(1) + ' ' + (door.y + vx * gap * 1.6).toFixed(1),
+          fill: 'none', stroke: '#555', 'stroke-width': 1.2, 'stroke-dasharray': '3 3',
+        }));
+
+        // Hiding spot (opposite side from the door, slightly toward cover furniture)
+        const covRel = cov || [-20, 0];
+        const hide = { x: cx + covRel[0] - (isNorth ? 0 : 14), y: cy + covRel[1] + (isNorth ? 4 : -2), pose: 'crouch' };
+
         // Hotspot = floor diamond
-        const hs = svgEl('polygon', {
-          points: ptsStr([top, right, bottom, left]),
-          class: 'hotspot',
-        });
+        const hs = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'hotspot' });
         hs.dataset.slug = r.slug;
+        hs.setAttribute('tabindex', '0');
+        hs.setAttribute('role', 'button');
+        hs.setAttribute('aria-label', r.label + ' — ' + roomPoints(r.slug) + ' points');
         hotspotsG.appendChild(hs);
         hotspotEls[r.slug] = hs;
 
-        roomGeo[r.slug] = {
-          cx, cy,
-          floorPts: ptsStr([top, right, bottom, left]),
-          figureAnchor: { x: cx, y: cy + 12 },
-          ghostRest:    { x: cx, y: cy - 4 },
-        };
-
-        const room = r;
-        hs.addEventListener('pointerenter', () => {
-          if (canBet()) hs.classList.add('hovered');
-        });
-        hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
-        hs.addEventListener('click', () => { if (canBet()) showConfirmChip(room); });
+        roomGeo[r.slug] = { cx, cy, floorPts: ptsStr([top, right, bottom, left]), door, hide, outline, lampEl: lamp };
       }
+
+      // Pocong Route: hallway tile centres (gz = 1), west → east
+      const hallPts = [];
+      for (let g = 0; g <= 5; g++) hallPts.push(iso(g, 1));
+      // red dashed route line
+      footG.appendChild(svgEl('polyline', {
+        points: ptsStr(hallPts.map(p => [p.x, p.y])), fill: 'none', stroke: '#b01818',
+        'stroke-width': 3, 'stroke-dasharray': '10 7', opacity: 0.8,
+      }));
+      // spawn marker
+      footG.appendChild(svgEl('circle', { cx: hallPts[0].x, cy: hallPts[0].y - 8, r: 6, fill: 'none', stroke: '#b01818', 'stroke-width': 2 }));
+      const rl = svgEl('text', {
+        x: hallPts[2].x, y: hallPts[2].y + 34, 'text-anchor': 'middle',
+        'font-family': 'monospace', 'font-size': 13, 'font-weight': 'bold', fill: '#b01818', 'letter-spacing': '1.5',
+      });
+      rl.textContent = 'POCONG ROUTE →';
+      labelsG.appendChild(rl);
+
+      // Master waypoint list: hall centres interleaved with doors in route order.
+      // routeWps entries: { x, y, isDoor, slug }
+      const byGxNorth = {}, byGxSouth = {};
+      for (const r of ROOMS) (r.gz === 0 ? byGxNorth : byGxSouth)[r.gx] = r;
+      for (let g = 0; g <= 5; g++) {
+        if (g === 0) routeWps.push({ x: hallPts[0].x, y: hallPts[0].y, isDoor: false, slug: null });
+        else routeWps.push({ x: hallPts[g].x, y: hallPts[g].y, isDoor: false, slug: null });
+        const n = byGxNorth[g]; if (n) routeWps.push({ x: roomGeo[n.slug].door.x, y: roomGeo[n.slug].door.y, isDoor: true, slug: n.slug });
+        const s = byGxSouth[g]; if (s) routeWps.push({ x: roomGeo[s.slug].door.x, y: roomGeo[s.slug].door.y, isDoor: true, slug: s.slug });
+      }
+      let cum = 0; routeCum.push(0);
+      for (let i = 1; i < routeWps.length; i++) {
+        cum += Math.hypot(routeWps[i].x - routeWps[i - 1].x, routeWps[i].y - routeWps[i - 1].y);
+        routeCum.push(cum);
+      }
+      routeTotalLen = cum;
+      ROOMS.forEach(r => {
+        const wp = routeWps.findIndex(w => w.isDoor && w.slug === r.slug);
+        roomGeo[r.slug].wpIndex = wp;
+        roomGeo[r.slug].routeDist = routeCum[wp];
+      });
     })();
 
-    // ── Player token art (canvas → data URL, cached per initial) ─────────────────
-    const tokenCache = {};
-    function playerTokenURL(initial) {
-      const key = (initial || '?').toUpperCase().charAt(0);
-      if (tokenCache[key]) return tokenCache[key];
-      const c = document.createElement('canvas');
-      c.width = 68; c.height = 96;
-      const ctx = c.getContext('2d');
-      const cx = 34;
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.32)';
-      ctx.beginPath(); ctx.ellipse(cx, 90, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // Suit body
-      ctx.fillStyle = '#2a2a2a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 13, 88); ctx.lineTo(cx - 9, 52);
-      ctx.lineTo(cx + 9, 52);  ctx.lineTo(cx + 13, 88); ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      // Red tie
-      ctx.fillStyle = '#cc1111';
-      ctx.beginPath(); ctx.moveTo(cx, 54); ctx.lineTo(cx - 3, 68);
-      ctx.lineTo(cx, 74); ctx.lineTo(cx + 3, 68); ctx.closePath(); ctx.fill();
-      // Head
-      ctx.fillStyle = '#e8d6bc';
-      ctx.beginPath(); ctx.arc(cx, 44, 11, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
-      // Eyes
-      ctx.fillStyle = '#222';
-      ctx.beginPath(); ctx.arc(cx - 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
-      // Hat brim + crown
-      ctx.fillStyle = '#141414';
-      ctx.beginPath(); ctx.ellipse(cx, 34, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillRect(cx - 10, 18, 20, 16);
-      ctx.fillStyle = '#cc1111'; ctx.fillRect(cx - 10, 30, 20, 3);
-      // Initial tag above hat
-      ctx.fillStyle = 'rgba(0,0,0,0.82)';
-      ctx.beginPath(); ctx.arc(cx, 9, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.4; ctx.stroke();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(key, cx, 10);
-      const url = c.toDataURL();
-      tokenCache[key] = url;
-      return url;
+    // ── Avatar ─────────────────────────────────────────────────────────────────
+    let avatarG = null;
+    function buildAvatar() {
+      const g = svgEl('g', { class: 'avatar-g' });
+      const body = svgEl('ellipse', { cx: 0, cy: -12, rx: 9, ry: 13, fill: '#fdfbf4', stroke: '#111', 'stroke-width': 2 });
+      g.appendChild(body);
+      const head = svgEl('circle', { cx: 0, cy: -32, r: 9.5, fill: '#f2dfc4', stroke: '#111', 'stroke-width': 2 });
+      g.appendChild(head);
+      const e1 = svgEl('circle', { cx: -3.4, cy: -33.5, r: 2.6, fill: '#fff', stroke: '#111', 'stroke-width': 0.8 });
+      const e2 = svgEl('circle', { cx: 3.4, cy: -33.5, r: 2.6, fill: '#fff', stroke: '#111', 'stroke-width': 0.8 });
+      const p1 = svgEl('circle', { cx: -3.4, cy: -33, r: 1.1, fill: '#111' });
+      const p2 = svgEl('circle', { cx: 3.4, cy: -33, r: 1.1, fill: '#111' });
+      g.appendChild(e1); g.appendChild(e2); g.appendChild(p1); g.appendChild(p2);
+      const mouth = svgEl('ellipse', { cx: 0, cy: -28, rx: 2.2, ry: 1.5, fill: '#7c1d0e' });
+      g.appendChild(mouth);
+      const arm = svgEl('rect', { x: -2, y: -46, width: 4, height: 14, rx: 2, fill: '#f2dfc4', stroke: '#111', 'stroke-width': 1.4, transform: 'rotate(160 0 -40)' });
+      arm.classList.add('arm');
+      g.appendChild(arm);
+      const sweat = svgEl('ellipse', { cx: 8, cy: -44, rx: 2, ry: 3, fill: '#7fb4e0', stroke: '#3a6ea8', 'stroke-width': 0.8 });
+      sweat.classList.add('sweat');
+      g.appendChild(sweat);
+      const strike = svgEl('line', { x1: -14, y1: -44, x2: 14, y2: -2, stroke: '#ff2222', 'stroke-width': 3.5 });
+      strike.classList.add('strike');
+      g.appendChild(strike);
+      return g;
+    }
+    function placeAvatar(slug) {
+      const layer = $('layer-avatar');
+      layer.innerHTML = '';
+      avatarG = null;
+      const geo = roomGeo[slug];
+      if (!geo) return;
+      avatarG = buildAvatar();
+      avatarG.setAttribute('transform', 'translate(' + geo.hide.x.toFixed(1) + ',' + geo.hide.y.toFixed(1) + ')');
+      layer.appendChild(avatarG);
+      // Cover furniture drawn after the avatar so it half-hides behind it
+      const cov = COVER[roomBySlug(slug).type];
+      if (cov) drawCuboid(layer, geo.cx + cov[0], geo.cy + cov[1], cov[2], cov[3], cov[4]);
+      if (!REDUCED) { avatarG.classList.add('tremble', 'peek'); }
     }
 
-    // ── Player figures ──────────────────────────────────────────────────────────
-    const FIG_W = 26, FIG_H = 37;
-    const playerFigures = [];
-
-    function placePlayerTokens(players) {
-      const layer = $('layer-figures');
-      for (const el of playerFigures) el.remove();
-      playerFigures.length = 0;
-
-      const counts = {};
-      for (let i = 0; i < Math.min(players.length, 50); i++) {
-        const p = players[i];
-        const geo = roomGeo[p.room_slug];
-        if (!geo) continue;
-        counts[p.room_slug] = (counts[p.room_slug] || 0) + 1;
-        const n = counts[p.room_slug];
-        const ang = (n - 1) * 2.399963;
-        const r = Math.min(6 + (n - 1) * 12, 46);
-        const px = geo.figureAnchor.x + r * Math.cos(ang);
-        const py = geo.figureAnchor.y + r * Math.sin(ang) * 0.52;
-
-        const img = svgEl('image', {
-          class: 'player-fig',
-          x: (px - FIG_W / 2).toFixed(1),
-          y: (py - FIG_H).toFixed(1),
-          width: FIG_W, height: FIG_H,
-        });
-        img.setAttributeNS(XLINK, 'href', playerTokenURL(p.username ? p.username[0] : '?'));
-        img.setAttribute('href', playerTokenURL(p.username ? p.username[0] : '?'));
-        img.dataset.slug = p.room_slug;
-        img.dataset.username = p.username || '';
-        // Front-to-back stacking so lower figures overlap correctly
-        img.style.setProperty('--depth', py);
-        layer.appendChild(img);
-        playerFigures.push(img);
-      }
-      // Sort within layer by y so nearer figures paint on top
-      playerFigures
-        .slice()
-        .sort((a, b) => parseFloat(a.getAttribute('y')) - parseFloat(b.getAttribute('y')))
-        .forEach(el => layer.appendChild(el));
-    }
-
-    // ── Pocong ghost (2D sprite with fake-3D flair) ─────────────────────────────
-    const GHOST_W = 42, GHOST_H = 58;
-    // Soft ground shadow (grows/shrinks with the bob) + the sprite itself.
-    const ghostShadow = svgEl('ellipse', {
-      cx: 0, cy: 0, rx: 20, ry: 6, fill: 'rgba(0,0,0,0.34)',
-    });
+    // ── Pocong ghost sprite ────────────────────────────────────────────────────
+    const GHOST_W = 34, GHOST_H = 47;
+    const ghostShadow = svgEl('ellipse', { cx: 0, cy: 0, rx: 16, ry: 5, fill: 'rgba(0,0,0,0.34)' });
     $('layer-ghost').appendChild(ghostShadow);
-    const ghostImg = svgEl('image', { x: 0, y: 0, width: GHOST_W, height: GHOST_H });
+    const ghostImg = svgEl('image', { x: 0, y: 0, width: GHOST_W, height: GHOST_H, opacity: 0 });
     ghostImg.setAttributeNS(XLINK, 'href', '/assets/pocong.jpg');
     ghostImg.setAttribute('href', '/assets/pocong.jpg');
     $('layer-ghost').appendChild(ghostImg);
-
-    // Central hallway: a spine down the middle of the map, spanning the WHOLE
-    // mansion top-to-bottom (front-to-back), not just the last few tiles.
-    // Points are stored as a there-and-back palindrome so the ghost paces the
-    // full corridor and returns smoothly instead of teleporting.
-    const spineX = ISO.ox; // screen-center column (gx == gz)
-    const spine = [
-      { x: spineX,       y: ISO.oy - 12 },   // behind Kamar Utama
-      { x: spineX + 26,  y: ISO.oy + 108 },
-      { x: spineX - 26,  y: ISO.oy + 226 },
-      { x: spineX + 26,  y: ISO.oy + 344 },
-      { x: spineX - 20,  y: ISO.oy + 452 },
-      { x: spineX,       y: ISO.oy + 452 + ISO.hh }, // front corridor edge
-    ];
-    const ghostLoop = spine.concat(spine.slice(1, -1).reverse());
-    let ghostBase = { x: ghostLoop[0].x, y: ghostLoop[0].y };
-    let gSeg = 0, gT = 0;
+    let ghostBase = { x: routeWps.length ? routeWps[0].x : 0, y: routeWps.length ? routeWps[0].y : 0 };
+    let ghostVisible = false;
 
     function renderGhost(gx, gy) {
       const t = performance.now();
-      const lift  = Math.abs(Math.sin(t / 300)) * 16;      // lively hop, returns to floor
-      const sway  = Math.sin(t / 620) * 6;                 // gentle side-to-side
-      const pulse = 1 + Math.sin(t / 240) * 0.05;          // subtle scale breathing
-      const f     = 1 - (lift / 16) * 0.55;                // shadow factor (small when high)
+      const lift  = REDUCED ? 0 : Math.abs(Math.sin(t / 300)) * 12;
+      const sway  = REDUCED ? 0 : Math.sin(t / 620) * 4;
+      const f     = 1 - (lift / 12) * 0.55;
       ghostShadow.setAttribute('cx', (gx + sway * 0.5).toFixed(1));
       ghostShadow.setAttribute('cy', gy.toFixed(1));
-      ghostShadow.setAttribute('rx', (20 * f).toFixed(1));
-      ghostShadow.setAttribute('ry', (6 * f).toFixed(1));
-      ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.34 * f).toFixed(3) + ')');
-      // Position + scale the sprite around its bottom-center (the feet).
+      ghostShadow.setAttribute('rx', (16 * f).toFixed(1));
+      ghostShadow.setAttribute('ry', (5 * f).toFixed(1));
       const px = gx + sway, py = gy - lift;
       ghostImg.setAttribute('transform',
         'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ') ' +
-        'scale(' + pulse.toFixed(3) + ') ' +
         'translate(' + (-GHOST_W / 2) + ',' + (-GHOST_H) + ')');
     }
 
-    function tickGhost() {
-      if (currentState.round?.status !== 'completed' && ghostLoop.length > 1) {
-        gT += 0.016;
-        if (gT >= 1) { gT = 0; gSeg = (gSeg + 1) % ghostLoop.length; }
-        const a = ghostLoop[gSeg];
-        const b = ghostLoop[(gSeg + 1) % ghostLoop.length];
-        ghostBase = { x: a.x + (b.x - a.x) * gT, y: a.y + (b.y - a.y) * gT };
-      }
-      renderGhost(ghostBase.x, ghostBase.y);
-      requestAnimationFrame(tickGhost);
-    }
-    renderGhost(ghostBase.x, ghostBase.y);
-    requestAnimationFrame(tickGhost);
+    // ── Game state ─────────────────────────────────────────────────────────────
+    const HIDE_MS = 60000;
+    const state = {
+      phase: 'intro',       // intro | hiding | resolving | hunt | survived | found | disqualified
+      endAt: 0,
+      room: null,           // slug
+      dareRoom: null,       // slug
+      locked: false,
+      result: null,         // { target, outcome, points, streak, multiplier, best }
+      me: null,             // { username, best, streak }
+      offline: false,
+    };
 
-    // ── Blood splatter art (canvas → data URL) ──────────────────────────────────
-    let sharedBloodURL = null;
-    function bloodURL() {
-      if (sharedBloodURL) return sharedBloodURL;
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = 256;
-      const ctx = c.getContext('2d');
-      for (let i = 0; i < 9; i++) {
-        const angle = (i / 9) * Math.PI * 2 + 0.3 * (i % 3);
-        const dist  = 28 + (i % 5) * 16;
-        const cx = 128 + Math.cos(angle) * dist;
-        const cy = 128 + Math.sin(angle) * dist;
-        const rx = 14 + (i % 4) * 8;
-        const ry = 9  + (i % 3) * 7;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle + i * 0.4);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#cc0000';
-        ctx.fill();
-        ctx.restore();
-      }
-      ctx.beginPath();
-      ctx.ellipse(128, 128, 42, 36, 0.3, 0, Math.PI * 2);
-      ctx.fillStyle = '#aa0000';
-      ctx.fill();
-      for (let i = 0; i < 6; i++) {
-        const a = i * 1.05;
-        const d = 70 + i * 10;
-        ctx.beginPath();
-        ctx.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 5 + i % 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#cc0000';
-        ctx.fill();
-      }
-      sharedBloodURL = c.toDataURL();
-      return sharedBloodURL;
+    function setPhase(p) {
+      state.phase = p;
+      document.body.className =
+        (p === 'hunt' ? 'phase-hunt' : p === 'found' ? 'phase-found' :
+         p === 'survived' ? 'phase-survived' : p === 'disqualified' ? 'phase-disqualified' : '') +
+        (REDUCED ? ' reduced-motion' : '');
+      updatePanel();
     }
 
-    // ── Game state ──────────────────────────────────────────────────────────────
-    let currentState    = { round: null, bet: null, players: [] };
-    let selectedRoom     = null;
-    let lastRoundId      = null;
-    let lastStatus       = null;
-    let lastPlayersJson  = '';
-    let selectedBetAmount = 1000;
-    const BET_TIERS = [100, 200, 500, 1000, 5000];
-
-    function canBet() {
-      return currentState.round?.status === 'active' && !currentState.bet;
+    function fmtTime(ms) {
+      const s = Math.ceil(ms / 1000);
+      return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
     }
-    function refreshHotspotState() {
-      const on = canBet();
-      for (const slug in hotspotEls) {
-        const hs = hotspotEls[slug];
-        hs.classList.toggle('bettable', on);
-        if (!on) hs.classList.remove('hovered');
+
+    function updatePanel() {
+      const banner = $('phase-banner');
+      if (state.phase === 'intro') banner.textContent = 'HIDING PHASE';
+      else if (state.phase === 'hiding') banner.textContent = 'HIDING PHASE';
+      else if (state.phase === 'hunt') banner.textContent = 'POCONG PHASE';
+      else if (state.phase === 'survived') banner.textContent = 'YOU SURVIVED';
+      else banner.textContent = state.phase === 'found' ? 'FOUND!' : 'DISQUALIFIED';
+
+      $('btn-start').style.display = state.phase === 'intro' ? 'block' : 'none';
+      $('btn-confirm').style.display = (state.phase === 'hiding' && !state.locked) ? 'block' : 'none';
+      $('btn-confirm').disabled = !state.room;
+      $('dare-label').style.display = (state.phase === 'hiding' && !state.locked) ? 'flex' : 'none';
+
+      $('p-room').textContent = state.room ? roomBySlug(state.room).label : '—';
+      $('p-points').textContent = state.room ? roomPoints(state.room) : '—';
+      $('p-dare-row').style.display = state.dareRoom ? 'flex' : 'none';
+      $('p-dare').textContent = state.dareRoom ? roomBySlug(state.dareRoom).label : '—';
+      const lockEl = $('p-lock');
+      if (state.phase === 'hiding' || state.phase === 'hunt') {
+        lockEl.textContent = state.locked ? 'LOCKED IN' : 'NOT LOCKED';
+        lockEl.className = state.locked ? 'locked' : 'unlocked';
       }
+      $('p-player').textContent = state.me ? '@' + state.me.username : 'Guest';
+      const streak = state.me ? state.me.streak : 0;
+      const mult = Math.min(1 + 0.25 * Math.max(streak - 1, 0), 3);
+      const best = state.me ? state.me.best : 0;
+      $('p-score').textContent = 'Streak ×' + (Math.round(mult * 100) / 100) + ' · Best ' + (best || '—');
+      $('p-note').style.display = state.offline ? 'block' : 'none';
+
+      $('bpm-box').style.display = state.phase === 'hunt' ? 'block' : 'none';
     }
 
-    // ── HUD ───────────────────────────────────────────────────────────────────
-    function updateHUD(state) {
-      const { round, bet } = state;
-      if (round) $('status-round').textContent = `round: ${round.round_number}`;
+    // ── Selection ──────────────────────────────────────────────────────────────
+    function canPick() { return state.phase === 'hiding' && !state.locked; }
 
-      const outcomeEl = $('status-outcome');
-      outcomeEl.className = '';
-
-      if (bet) {
-        $('status-bet').textContent = `bet: ${bet.amount_tkn} TKN`;
-        if (bet.outcome === 'won') {
-          outcomeEl.textContent = 'status: won 🎉';
-          outcomeEl.classList.add('outcome-won');
-          const wEl = $('tkn-winnings');
-          wEl.style.display = 'block';
-          wEl.textContent = `+${bet.amount_tkn} TKN`;
-          $('win-calc').style.display = 'block';
-        } else if (bet.outcome === 'lost') {
-          outcomeEl.textContent = 'status: lost 💀';
-          outcomeEl.classList.add('outcome-lost');
-          $('win-calc').style.display = 'none';
-        } else {
-          outcomeEl.textContent = 'status: bet placed';
-          $('win-calc').style.display = 'none';
-        }
+    function pickRoom(slug) {
+      if (!canPick()) return;
+      const dareOn = $('dare-check').checked;
+      if (dareOn && state.room && slug !== state.room) {
+        state.dareRoom = slug;
+      } else if (slug === state.room) {
+        return; // already chosen
       } else {
-        $('status-bet').textContent = 'bet: — TKN';
-        outcomeEl.textContent = 'status: watching';
-        $('win-calc').style.display = 'none';
+        state.room = slug;
+        if (state.dareRoom === slug) state.dareRoom = null;
+        placeAvatar(slug);
       }
-
-      const tutStart = $('tutorial-start');
-      if (tutStart) tutStart.style.display = (bet || round?.status !== 'active') ? 'none' : 'block';
-
-      const devPanel = $('dev-controls');
-      if (devPanel.style.display !== 'none') {
-        $('btn-newround').classList.toggle('hidden', round?.status !== 'completed');
-      }
-
-      updateBetChipStates();
+      for (const s in outlineEls) outlineEls[s].classList.remove('sel', 'dare');
+      if (state.room) outlineEls[state.room].classList.add('sel');
+      if (state.dareRoom) outlineEls[state.dareRoom].classList.add('dare');
+      updatePanel();
     }
 
-    // ── Bet chips ───────────────────────────────────────────────────────────────
-    function updateBetChipStates() {
-      const off = !currentState.round || currentState.round.status !== 'active' || !!currentState.bet;
-      document.querySelectorAll('.bet-chip, .bet-adj').forEach(btn => { btn.disabled = off; });
-      document.querySelectorAll('.bet-chip').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.amount) === selectedBetAmount);
+    for (const slug in hotspotEls) {
+      const hs = hotspotEls[slug];
+      hs.addEventListener('click', () => pickRoom(slug));
+      hs.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickRoom(slug); }
       });
     }
 
-    document.querySelectorAll('.bet-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedBetAmount = parseInt(btn.dataset.amount);
-        updateBetChipStates();
-        if (selectedRoom) showConfirmChip(selectedRoom);
-      });
-    });
-    $('btn-decrement').addEventListener('click', () => {
-      const idx = BET_TIERS.indexOf(selectedBetAmount);
-      if (idx > 0) { selectedBetAmount = BET_TIERS[idx - 1]; updateBetChipStates(); }
-    });
-    $('btn-increment').addEventListener('click', () => {
-      const idx = BET_TIERS.indexOf(selectedBetAmount);
-      if (idx < BET_TIERS.length - 1) { selectedBetAmount = BET_TIERS[idx + 1]; updateBetChipStates(); }
-    });
-
-    // ── Confirm chip ──────────────────────────────────────────────────────────
-    function showConfirmChip(room) {
-      selectedRoom = room;
-      $('confirm-text').textContent = `Bet ${selectedBetAmount} TKN on ${room.label}?`;
-      $('confirm-chip').classList.add('visible');
-    }
-    function hideConfirmChip() {
-      $('confirm-chip').classList.remove('visible');
-      selectedRoom = null;
+    function refreshHotspotState() {
+      const on = canPick();
+      for (const slug in hotspotEls) hotspotEls[slug].classList.toggle('pickable', on);
     }
 
-    $('confirm-yes').addEventListener('click', async () => {
-      if (!selectedRoom) return;
-      const room = selectedRoom;
-      hideConfirmChip();
+    // ── Timer: absolute end timestamp, recomputed on every tick ────────────────
+    function tick() {
+      if (state.phase !== 'hiding') return;
+      const remaining = Math.max(0, state.endAt - Date.now());
+      $('hide-timer').textContent = 'Hiding Phase: ' + fmtTime(remaining);
+      if (remaining === 0) resolveRound();
+    }
+    setInterval(tick, 250);
+    document.addEventListener('visibilitychange', tick);
+    window.addEventListener('pageshow', tick);
+    window.addEventListener('focus', tick);
+
+    function startRound() {
+      ensureAudio();
+      state.room = null; state.dareRoom = null; state.locked = false; state.result = null; state.offline = false;
+      $('dare-check').checked = false;
+      $('layer-footprints').innerHTML = '';
+      $('layer-avatar').innerHTML = ''; avatarG = null;
+      ghostImg.setAttribute('opacity', 0); ghostVisible = false;
+      for (const s in outlineEls) outlineEls[s].classList.remove('sel', 'dare', 'mine');
+      // Absolute end timestamp: survives background tabs, throttling and sleep
+      state.endAt = Date.now() + HIDE_MS;
+      setPhase('hiding');
+      refreshHotspotState();
+      tick();
+    }
+
+    $('btn-start').addEventListener('click', startRound);
+    $('intro-got').addEventListener('click', () => {
+      $('intro-overlay').classList.remove('show');
+      store.set('pocong-intro-v2', '1');
+    });
+
+    $('dare-check').addEventListener('change', () => {
+      if (!$('dare-check').checked) {
+        state.dareRoom = null;
+        if (state.dareRoom || outlineEls[state.dareRoom]) {} // no-op guard
+        for (const s in outlineEls) outlineEls[s].classList.remove('dare');
+        updatePanel();
+      }
+    });
+
+    $('btn-confirm').addEventListener('click', () => {
+      if (!state.room) return;
+      state.locked = true;
+      refreshHotspotState();
+      updatePanel();
+    });
+
+    // ── Resolve the round: the server picks the target ─────────────────────────
+    async function resolveRound() {
+      if (state.phase !== 'hiding') return;
+      setPhase('resolving'); // guards against double-resolve (interval + visibility)
+      const body = {
+        room: state.locked ? state.room : null,
+        dare_room: (state.locked && state.dareRoom) ? state.dareRoom : null,
+      };
+      let result = null;
       try {
-        const res = await fetch('/api/game/bet', {
+        const res = await fetch('/api/game/hunt', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ room_slug: room.slug, amount_tkn: selectedBetAmount }),
+          body: JSON.stringify(body),
         });
-        if (res.ok) await pollState();
-        else { const err = await res.json(); alert(err.error || 'Bet failed'); }
-      } catch (e) { console.error(e); }
-    });
-    $('confirm-no').addEventListener('click', hideConfirmChip);
-
-    // ── Win state ───────────────────────────────────────────────────────────────
-    function applyWinState(state) {
-      const { round, bet } = state;
-      if (!round || round.status !== 'completed' || !round.winner_room) return;
-      const geo = roomGeo[round.winner_room];
-
-      // Red tint + blood splatter on the winner room floor
-      const tintLayer = $('layer-tint');
-      const bloodLayer = $('layer-blood');
-      tintLayer.innerHTML = '';
-      bloodLayer.innerHTML = '';
-      if (geo) {
-        tintLayer.appendChild(svgEl('polygon', {
-          points: geo.floorPts, fill: 'rgba(255,0,0,0.28)',
-        }));
-        const bw = 150, bh = 130;
-        const blood = svgEl('image', {
-          x: (geo.cx - bw / 2).toFixed(1),
-          y: (geo.cy - bh / 2 + 6).toFixed(1),
-          width: bw, height: bh, opacity: 0.92,
-        });
-        blood.setAttributeNS(XLINK, 'href', bloodURL());
-        blood.setAttribute('href', bloodURL());
-        bloodLayer.appendChild(blood);
+        if (res.ok) result = await res.json();
+      } catch (_) {}
+      // Local fallback: offline pick + scoring when the server is unreachable,
+      // rejects the request, or returns a target we don't know.
+      if (!result || !result.target || !roomBySlug(result.target)) {
+        result = localFallback(body);
       }
-
-      // Tint player figures: grey in winner room, gold elsewhere
-      for (const el of playerFigures) {
-        el.classList.remove('dim', 'safe');
-        el.classList.add(el.dataset.slug === round.winner_room ? 'dim' : 'safe');
-      }
-
-      // Park the ghost in the winner room
-      if (geo) ghostBase = { x: geo.ghostRest.x, y: geo.ghostRest.y };
-
-      // Banner
-      const winText = $('win-text');
-      const winSub  = $('win-sub');
-      const banner  = $('win-banner');
-
-      if (bet?.outcome === 'won') {
-        winText.textContent = 'You Win! 🎉';
-        winText.style.color = '#ff2222';
-        const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
-        winSub.textContent = `The Pocong entered ${lbl}. You were safe!`;
-        banner.style.display = 'block';
-      } else if (bet?.outcome === 'lost') {
-        winText.textContent = 'You Lose! 💀';
-        winText.style.color = '#888';
-        winSub.textContent = 'The Pocong found you...';
-        banner.style.display = 'block';
-      } else {
-        const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
-        winText.textContent = '👻 Pocong!';
-        winText.style.color = '#888';
-        winSub.textContent = `Entered ${lbl}!`;
-        banner.style.display = 'block';
-      }
-
-      document.body.classList.add('shaking');
-      setTimeout(() => document.body.classList.remove('shaking'), 600);
-    }
-
-    function clearWinState() {
-      $('layer-tint').innerHTML = '';
-      $('layer-blood').innerHTML = '';
-      for (const el of playerFigures) el.classList.remove('dim', 'safe');
-      $('win-banner').style.display = 'none';
-      $('win-calc').style.display = 'none';
-      $('tkn-winnings').style.display = 'none';
-      const wt = $('win-text');
-      if (wt) { wt.style.color = ''; }
-    }
-
-    // ── Poll ──────────────────────────────────────────────────────────────────
-    async function pollState() {
-      try {
-        const res = await fetch('/api/game/state', { headers: authHeaders });
-        if (!res.ok) return;
-        const state = await res.json();
-        currentState = state;
-        updateHUD(state);
-
-        const roundChanged   = state.round?.id !== lastRoundId;
-        const statusChanged  = state.round?.status !== lastStatus;
-        const pJson          = JSON.stringify(state.players || []);
-        const playersChanged = pJson !== lastPlayersJson;
-
-        if (roundChanged || statusChanged || playersChanged) {
-          if (roundChanged || statusChanged) clearWinState();
-          placePlayerTokens(state.players || []);
-          if (state.round?.status === 'completed') applyWinState(state);
-          lastRoundId     = state.round?.id;
-          lastStatus      = state.round?.status;
-          lastPlayersJson = pJson;
-        }
+      state.result = result;
+      if (!body.room) {
+        setPhase('disqualified');
         refreshHotspotState();
-      } catch (e) { console.warn('Poll error:', e.message); }
-    }
-    pollState();
-    setInterval(pollState, 3000);
-
-    // ── Dev controls ──────────────────────────────────────────────────────────
-    async function callAdvance() {
-      const res = await fetch('/api/game/advance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'advance failed'); }
-      return res.json();
+        showResult();
+        return;
+      }
+      await startHunt();
     }
 
-    $('btn-resolve').addEventListener('click', async () => {
-      try { await callAdvance(); await callAdvance(); await pollState(); }
-      catch (e) { alert(e.message); }
+    function localFallback(body) {
+      state.offline = true;
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const target = ROOMS[buf[0] % ROOMS.length].slug;
+      const local = JSON.parse(store.get('pocong-local') || '{"streak":0,"best":0}');
+      let outcome, points = 0, streak, mult = 1;
+      if (!body.room) {
+        outcome = 'disqualified'; streak = 0;
+      } else if (target === body.room || target === body.dare_room) {
+        outcome = 'found'; streak = 0;
+        local.streak = 0;
+      } else {
+        outcome = 'survived';
+        streak = local.streak + 1;
+        mult = Math.min(1 + 0.25 * (streak - 1), 3);
+        points = Math.round(roomPoints(body.room) * mult * (body.dare_room ? 1.5 : 1));
+        local.streak = streak;
+        local.best = Math.max(local.best, points);
+      }
+      store.set('pocong-local', JSON.stringify(local));
+      state.me = { username: state.me ? state.me.username : null, best: local.best, streak: local.streak };
+      return { target, outcome, points, streak, multiplier: mult, best: local.best };
+    }
+
+    // ── Hunt walk ──────────────────────────────────────────────────────────────
+    const HUNT = { active: false, path: [], cum: [], total: 0, dist: 0, lastSeg: 0, lastFpDist: 0, pauseUntil: 0, lastT: 0 };
+
+    function buildWalkPath(targetSlug) {
+      const tIdx = roomGeo[targetSlug].wpIndex;
+      const path = [];
+      for (let i = 0; i <= tIdx; i++) path.push({ x: routeWps[i].x, y: routeWps[i].y, isDoor: routeWps[i].isDoor });
+      path.push({ x: roomGeo[targetSlug].cx, y: roomGeo[targetSlug].cy, isDoor: false, isEnd: true });
+      const cum = [0];
+      for (let i = 1; i < path.length; i++) {
+        cum.push(cum[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y));
+      }
+      HUNT.path = path; HUNT.cum = cum; HUNT.total = cum[cum.length - 1];
+    }
+
+    function dropFootprints(x, y) {
+      const g = svgEl('g', { class: 'fp-glow', filter: 'url(#fp-filter)' });
+      g.appendChild(svgEl('ellipse', { cx: x - 5, cy: y + 2, rx: 4, ry: 5.5, fill: '#ffd36b', transform: 'rotate(-18 ' + (x - 5) + ' ' + (y + 2) + ')' }));
+      g.appendChild(svgEl('ellipse', { cx: x + 5, cy: y - 2, rx: 4, ry: 5.5, fill: '#ffca45', transform: 'rotate(18 ' + (x + 5) + ' ' + (y - 2) + ')' }));
+      $('layer-footprints').appendChild(g);
+      setTimeout(() => g.remove(), 4100);
+      if (!REDUCED) playStep();
+    }
+
+    let ghostDistFrac = 0;
+    let huntDone = false;
+
+    function updateHunt(now) {
+      if (!HUNT.active || huntDone) return;
+      if (!HUNT.lastT) HUNT.lastT = now;
+      const dt = Math.min((now - HUNT.lastT) / 1000, 0.1);
+      HUNT.lastT = now;
+      if (now < HUNT.pauseUntil) return;
+      HUNT.dist += 110 * dt;
+      let i = HUNT.lastSeg;
+      while (i < HUNT.cum.length - 1 && HUNT.cum[i + 1] < HUNT.dist) {
+        i++;
+        if (HUNT.path[i].isDoor) { HUNT.pauseUntil = now + 500; ghostAtText(HUNT.path[i].slug, false); }
+      }
+      HUNT.lastSeg = i;
+      if (HUNT.dist >= HUNT.total) {
+        HUNT.dist = HUNT.total;
+        const end = HUNT.path[HUNT.path.length - 1];
+        renderGhost(end.x, end.y);
+        arriveAtTarget();
+        return;
+      }
+      const a = HUNT.path[i], b = HUNT.path[i + 1];
+      const segLen = HUNT.cum[i + 1] - HUNT.cum[i] || 1;
+      const f = (HUNT.dist - HUNT.cum[i]) / segLen;
+      const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f;
+      ghostBase = { x, y };
+      renderGhost(x, y);
+      ghostDistFrac = HUNT.dist / Math.max(routeTotalLen, 1);
+      if (HUNT.dist - HUNT.lastFpDist >= 26) {
+        HUNT.lastFpDist = HUNT.dist;
+        dropFootprints(x, y);
+      }
+      updateProximity();
+    }
+
+    function ghostAtText(slug, inside) {
+      const r = slug ? roomBySlug(slug) : null;
+      $('ghost-at').textContent = r ? (inside ? 'The Pocong is in the ' + r.label : 'The Pocong is at the ' + r.label + ' door') : 'The Pocong walks the hallway';
+    }
+
+    function updateProximity() {
+      if (!state.room) return;
+      const pDist = roomGeo[state.room].routeDist;
+      const gDist = ghostDistFrac * routeTotalLen;
+      const p = 1 - Math.min(Math.abs(pDist - gDist) / Math.max(routeTotalLen, 1), 1);
+      state.proximity = p;
+      const bpm = Math.round(70 + 110 * p);
+      $('bpm-val').textContent = '♥ ' + bpm + ' BPM';
+      updateAudioLevels(p, bpm);
+      drawEcg(p, bpm, performance.now());
+    }
+
+    // ── ECG line ───────────────────────────────────────────────────────────────
+    const ecgVals = new Array(88).fill(18);
+    let lastEcgPush = 0, lastBeatAt = 0;
+    function drawEcg(p, bpm, now) {
+      if (now - lastEcgPush > 40) {
+        lastEcgPush = now;
+        const period = 60000 / bpm;
+        const ph = (now - lastBeatAt) % period / period;
+        let v = 18 + Math.sin(now / 300) * 0.8;
+        if (ph < 0.09) v = 18 - 12 * Math.sin(ph / 0.09 * Math.PI);
+        else if (ph < 0.16) v = 18 + 12 * Math.sin((ph - 0.09) / 0.07 * Math.PI);
+        ecgVals.push(v); ecgVals.shift();
+        $('ecg-line').setAttribute('points', ecgVals.map((val, i) => (i * 3) + ',' + val.toFixed(1)).join(' '));
+      }
+    }
+
+    // ── Audio (Web Audio, synthesized; nothing autoplays) ──────────────────────
+    let AC = null, ambienceBus, muteGain, scareGain, heartGain, breathGain, stepGain;
+    let noiseSrc = null, lfoSrc = null, beatsOn = false, nextBeatAt = 0;
+    let audioStarted = false;
+    let muted = store.get('pocong-muted') === '1';
+
+    function ensureAudio() {
+      if (audioStarted) return;
+      audioStarted = true;
+      try {
+        AC = new (window.AudioContext || window.webkitAudioContext)();
+        muteGain = AC.createGain(); muteGain.gain.value = muted ? 0 : 1;
+        muteGain.connect(AC.destination);
+        const comp = AC.createDynamicsCompressor();
+        comp.threshold.value = -18; comp.ratio.value = 12;
+        comp.connect(muteGain);
+        ambienceBus = AC.createGain(); ambienceBus.gain.value = 0.35;
+        ambienceBus.connect(comp);
+        heartGain = AC.createGain(); heartGain.gain.value = 0.06; heartGain.connect(ambienceBus);
+        breathGain = AC.createGain(); breathGain.gain.value = 0.03; breathGain.connect(ambienceBus);
+        stepGain = AC.createGain(); stepGain.gain.value = 0.12; stepGain.connect(ambienceBus);
+        scareGain = AC.createGain(); scareGain.gain.value = 1.0; scareGain.connect(muteGain);
+        applyMute();
+      } catch (_) { AC = null; }
+    }
+
+    const unlockHandler = () => { ensureAudio(); };
+    window.addEventListener('pointerdown', unlockHandler, { once: true });
+    window.addEventListener('keydown', unlockHandler, { once: true });
+
+    function startLoops() {
+      if (!AC || AC.state === 'suspended') { if (AC) AC.resume(); if (!AC) return; }
+      AC.resume();
+      stopLoops(false);
+      // heavy breathing: looped noise → bandpass, LFO on gain
+      const len = AC.sampleRate * 2;
+      const buf = AC.createBuffer(1, len, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      noiseSrc = AC.createBufferSource(); noiseSrc.buffer = buf; noiseSrc.loop = true;
+      const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 1.2;
+      noiseSrc.connect(bp); bp.connect(breathGain);
+      lfoSrc = AC.createOscillator(); lfoSrc.frequency.value = 0.45;
+      const lg = AC.createGain(); lg.gain.value = 0.015;
+      lfoSrc.connect(lg); lg.connect(breathGain.gain);
+      noiseSrc.start(); lfoSrc.start();
+      beatsOn = true; nextBeatAt = AC.currentTime + 0.1;
+      ambienceBus.gain.setTargetAtTime(0.35, AC.currentTime, 0.05);
+    }
+
+    function stopLoops(ramp) {
+      beatsOn = false;
+      if (noiseSrc) { try { noiseSrc.stop(); } catch (_) {} noiseSrc = null; }
+      if (lfoSrc) { try { lfoSrc.stop(); } catch (_) {} lfoSrc = null; }
+    }
+
+    function scheduleBeats(bpm) {
+      if (!AC || !beatsOn) return;
+      const t = AC.currentTime;
+      if (nextBeatAt < t) nextBeatAt = t + 0.05;
+      while (nextBeatAt < t + 0.4) {
+        thump(nextBeatAt, 55); thump(nextBeatAt + 0.14, 45);
+        nextBeatAt += 60000 / bpm / 1000;
+      }
+      lastBeatAt = performance.now();
+    }
+    function thump(at, freq) {
+      const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(1, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.1);
+      o.connect(g); g.connect(heartGain);
+      o.start(at); o.stop(at + 0.12);
+    }
+    function playStep() {
+      if (!AC || muted) return;
+      const len = Math.floor(AC.sampleRate * 0.07);
+      const buf = AC.createBuffer(1, len, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = AC.createBufferSource(); src.buffer = buf;
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
+      src.connect(lp); lp.connect(stepGain);
+      src.start();
+    }
+    function updateAudioLevels(p, bpm) {
+      if (!AC) return;
+      heartGain.gain.setTargetAtTime(0.06 + 0.18 * p, AC.currentTime, 0.2);
+      breathGain.gain.setTargetAtTime(0.03 + 0.15 * p, AC.currentTime, 0.2);
+      scheduleBeats(bpm);
+    }
+
+    // The sting is the loudest moment by construction: the compressed ambience
+    // bus is dropped to zero first, and the sting runs through its own gain.
+    function playSting() {
+      if (!AC) return;
+      ambienceBus.gain.setTargetAtTime(0, AC.currentTime, 0.015);
+      stopLoops(true);
+      const t = AC.currentTime + 0.03;
+      const mk = (type, f0, f1, lvl) => {
+        const o = AC.createOscillator(); o.type = type;
+        o.frequency.setValueAtTime(f0, t);
+        o.frequency.exponentialRampToValueAtTime(f1, t + 1.0);
+        const g = AC.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(lvl, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+        o.connect(g); g.connect(scareGain);
+        o.start(t); o.stop(t + 1.25);
+      };
+      mk('sawtooth', 180, 60, 0.55);
+      mk('square', 240, 90, 0.35);
+      const len = Math.floor(AC.sampleRate * 0.25);
+      const buf = AC.createBuffer(1, len, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = AC.createBufferSource(); src.buffer = buf;
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.8, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      src.connect(g); g.connect(scareGain);
+      src.start(t);
+    }
+
+    // ── Mute toggle ────────────────────────────────────────────────────────────
+    function applyMute() {
+      if (AC && muteGain) muteGain.gain.setTargetAtTime(muted ? 0 : 1, AC.currentTime, 0.05);
+      const btn = $('mute-btn');
+      btn.textContent = muted ? '🔇' : '🔊';
+      btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    }
+    $('mute-btn').addEventListener('click', () => {
+      ensureAudio();
+      muted = !muted;
+      store.set('pocong-muted', muted ? '1' : '0');
+      applyMute();
     });
-    $('btn-newround').addEventListener('click', async () => {
-      try { await callAdvance(); await pollState(); }
-      catch (e) { alert(e.message); }
-    });
+    applyMute();
 
-    fetch('/api/game/env')
-      .then(r => r.json())
-      .then(({ isStaging }) => {
-        if (isStaging) $('dev-controls').style.display = 'block';
-      })
-      .catch(() => {});
+    // ── Start the hunt ─────────────────────────────────────────────────────────
+    async function startHunt() {
+      setPhase('hunt');
+      refreshHotspotState();
+      buildWalkPath(state.result.target);
+      HUNT.active = true; HUNT.dist = 0; HUNT.lastSeg = 0; HUNT.lastFpDist = 0;
+      HUNT.pauseUntil = 0; HUNT.lastT = 0; huntDone = false;
+      ghostBase = { x: HUNT.path[0].x, y: HUNT.path[0].y };
+      ghostImg.setAttribute('opacity', 1); ghostVisible = true;
+      renderGhost(ghostBase.x, ghostBase.y);
+      outlineEls[state.room].classList.add('mine');
+      if (state.dareRoom) outlineEls[state.dareRoom].classList.add('mine');
+      ghostAtText(null, false);
+      $('hide-timer').textContent = 'Hiding Phase: 00:00';
+      ensureAudio();
+      startLoops();
+      updateProximity();
+    }
 
-    // ── Mascot drawing ────────────────────────────────────────────────────────
-    (function drawMascot() {
-      const mc = $('mascot-canvas');
-      if (!mc) return;
-      const ctx = mc.getContext('2d');
-      const cx = 65, cy = 65;
-
-      ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2);
-      ctx.fillStyle = '#111'; ctx.fill();
-      ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.stroke();
-
-      ctx.beginPath(); ctx.ellipse(cx, cy + 18, 28, 34, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0f0f0'; ctx.fill();
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(cx - 26, cy + 4 + i * 10);
-        ctx.bezierCurveTo(cx - 8, cy + 2 + i * 10, cx + 8, cy + 6 + i * 10, cx + 26, cy + 4 + i * 10);
-        ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.stroke();
+    function arriveAtTarget() {
+      huntDone = true; HUNT.active = false;
+      const target = state.result.target;
+      const found = target === state.room || target === state.dareRoom;
+      ghostAtText(target, true);
+      if (found) {
+        setTimeout(() => playJumpscare(), 350);
+      } else {
+        setTimeout(() => survive(), 350);
       }
+    }
 
-      ctx.beginPath(); ctx.ellipse(cx, cy - 12, 20, 23, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0f0f0'; ctx.fill();
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-      ctx.beginPath();
-      ctx.rect(cx - 18, cy - 48, 36, 20);
-      ctx.fillStyle = '#1a1a1a'; ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-
-      ctx.beginPath(); ctx.ellipse(cx, cy - 28, 26, 5, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1a1a'; ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-
-      ctx.beginPath(); ctx.rect(cx - 18, cy - 30, 36, 4);
-      ctx.fillStyle = '#cc0000'; ctx.fill();
-
-      ctx.fillStyle = '#222';
-      ctx.beginPath(); ctx.arc(cx - 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
-
-      ctx.beginPath(); ctx.arc(cx, cy - 8, 8, 0.1, Math.PI - 0.1);
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-    })();
-
-    // ── Tutorial illustration ─────────────────────────────────────────────────
-    (function drawTutorial() {
-      const tc = $('tut-canvas');
-      if (!tc) return;
-      const ctx = tc.getContext('2d');
-
-      function pocong(x, y, s) {
-        s = s || 1;
-        ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-        ctx.beginPath(); ctx.ellipse(0, 8, 8, 12, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#f0f0f0'; ctx.fill();
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(0, -8, 7, 8, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#f0f0f0'; ctx.fill();
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.fillStyle = '#333';
-        ctx.beginPath(); ctx.arc(-2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc( 2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
+    // ── Jump-scare / found ─────────────────────────────────────────────────────
+    function playJumpscare() {
+      stopLoops(true);
+      playSting();
+      const js = $('jumpscare');
+      js.classList.add('show');
+      if (!REDUCED) {
+        document.body.classList.add('shaking');
+        setTimeout(() => document.body.classList.remove('shaking'), 600);
       }
+      setTimeout(() => {
+        js.classList.remove('show');
+        if (avatarG) avatarG.classList.add('found');
+        setTimeout(showResult, 1000);
+      }, 1400);
+      setPhase('found');
+    }
 
-      pocong(22, 28);
-      pocong(150, 28);
+    // ── Survived ───────────────────────────────────────────────────────────────
+    function survive() {
+      stopLoops(true);
+      if (avatarG) { avatarG.classList.remove('tremble', 'peek'); avatarG.classList.add('relief'); }
+      setPhase('survived');
+      refreshHotspotState();
+      setTimeout(showResult, 1800);
+    }
 
-      ctx.beginPath(); ctx.moveTo(38, 28); ctx.lineTo(128, 28);
-      ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(122, 22); ctx.lineTo(134, 28); ctx.lineTo(122, 34);
-      ctx.closePath(); ctx.fillStyle = '#cc0000'; ctx.fill();
-    })();
+    // ── Result card + leaderboard ──────────────────────────────────────────────
+    async function fetchScores() {
+      try {
+        const res = await fetch('/api/game/scores', { headers: authHeaders });
+        if (res.ok) return await res.json();
+      } catch (_) {}
+      return null;
+    }
+    function lbHtml(data, myBest) {
+      const rows = (data && data.leaders && data.leaders.length)
+        ? data.leaders.map((l, i) => '<div class="lrow"><span>' + (i + 1) + '. ' + escapeHtml(l.username) + '</span><b>' + l.best + '</b></div>').join('')
+        : '<div class="lrow"><span>No survivors yet. Be the first.</span><b>—</b></div>';
+      const mine = myBest ? '<div class="lrow"><span>Your best</span><b>' + myBest + '</b></div>' : '';
+      return '<h3>Spectator lounge · Leaderboard</h3>' + rows + mine;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
 
-    // ── How-to-play intro overlay (first visit only) ────────────────────────────
-    (function introOverlay() {
-      const INTRO_KEY = 'aap_intro_seen_v1';
-      const overlay = $('intro-overlay');
-      if (!overlay) return;
-
-      let seen = false;
-      try { seen = localStorage.getItem(INTRO_KEY) === '1'; } catch (_) {}
-
-      function dismiss() {
-        overlay.classList.remove('show');
-        try { localStorage.setItem(INTRO_KEY, '1'); } catch (_) {}
+    async function showResult() {
+      const data = await fetchScores();
+      if (data && data.me) state.me = data.me;
+      const r = state.result;
+      const ov = $('result-overlay');
+      const title = $('r-title'), sub = $('r-sub'), pts = $('r-points'), marker = $('r-marker');
+      marker.style.display = 'none';
+      $('r-next').style.display = 'inline-block';
+      $('r-again').style.display = 'inline-block';
+      if (state.phase === 'survived') {
+        title.textContent = 'You survived!';
+        title.className = 'good';
+        marker.style.display = 'none';
+        pts.textContent = '+' + r.points + ' points';
+        sub.textContent = 'The Pocong entered the ' + roomBySlug(r.target).label +
+          '. Streak ×' + (Math.round((r.multiplier || 1) * 100) / 100) +
+          (state.offline ? ' · Score saved on this device only.' : '');
+        $('r-next').style.display = 'inline-block';
+        $('r-again').style.display = 'none';
+      } else if (state.phase === 'found') {
+        title.textContent = 'FOUND!';
+        title.className = '';
+        marker.style.display = 'block';
+        pts.textContent = '';
+        sub.textContent = 'The Pocong found you in the ' + roomBySlug(state.room).label +
+          '. Your streak starts again next round.';
+        $('r-next').style.display = 'none';
+        $('r-again').style.display = 'inline-block';
+      } else {
+        title.textContent = 'DISQUALIFIED';
+        title.className = '';
+        marker.style.display = 'block';
+        pts.textContent = '';
+        sub.textContent = 'Time ran out before you locked in a room.';
+        $('r-next').style.display = 'none';
+        $('r-again').style.display = 'inline-block';
       }
+      const myBest = (data && data.me) ? data.me.best : (state.me ? state.me.best : 0);
+      $('r-lb').innerHTML = lbHtml(data, myBest);
+      ov.classList.add('show');
+      updatePanel();
+    }
 
-      if (!seen) overlay.classList.add('show');
+    $('r-next').addEventListener('click', () => { $('result-overlay').classList.remove('show'); startRound(); });
+    $('r-again').addEventListener('click', () => { $('result-overlay').classList.remove('show'); startRound(); });
 
-      $('intro-got').addEventListener('click', dismiss);
-      // Tapping the dark backdrop (outside the card) also dismisses.
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+    // ── Main loop ──────────────────────────────────────────────────────────────
+    function frame(now) {
+      updateHunt(now);
+      if (ghostVisible && HUNT.active && !huntDone) renderGhost(ghostBase.x, ghostBase.y);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // ── Boot ───────────────────────────────────────────────────────────────────
+    (async function boot() {
+      const data = await fetchScores();
+      if (data && data.me) state.me = data.me;
+      updatePanel();
+      if (store.get('pocong-intro-v2') !== '1') $('intro-overlay').classList.add('show');
     })();
   </script>
 </body>

@@ -13,9 +13,17 @@
       "expectSelector": "#title"
     },
     {
-      "name": "Game state API returns round data",
-      "path": "/api/game/state",
-      "expectText": "round"
+      "id": "hiding-phase",
+      "name": "Hiding panel and blueprint map render",
+      "path": "/",
+      "expectSelector": "#hide-panel",
+      "visual": true,
+      "impact": ["public/**"]
+    },
+    {
+      "name": "Leaderboard API returns leaders",
+      "path": "/api/game/scores",
+      "expectText": "leaders"
     }
   ]
 }

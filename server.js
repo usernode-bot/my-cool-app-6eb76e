@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
 
@@ -9,7 +10,17 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const USERNODE_JWT_PUBLIC_KEY = process.env.USERNODE_JWT_PUBLIC_KEY;
 const IS_STAGING = process.env.USERNODE_ENV === 'staging';
 
-const PUBLIC_API_PATHS = new Set(['/health', '/api/game/state', '/api/game/env']);
+// The 11 hiding locations, in Pocong Route (door) order. The first door along
+// the walk is worth the least, the last the most. Must match ROOMS in
+// public/index.html (same slugs, same order).
+const HUNT_ROOMS = [
+  'master-bedroom', 'kids-bedroom', 'living-room', 'library', 'kitchen',
+  'reading-room', 'bathroom', 'assistants-room', 'secondary-bathroom',
+  'storage-room', 'backyard',
+];
+const roomPoints = (slug) => 100 + 10 * HUNT_ROOMS.indexOf(slug);
+
+const PUBLIC_API_PATHS = new Set(['/health', '/api/game/scores']);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
 
 app.use(express.json());
@@ -42,148 +53,112 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // on a non-/api/ path, so it bypasses the JWT gate above.
 app.get('/favicon.ico', (_req, res) => res.status(204).end());
 
-app.get('/api/game/env', (_req, res) => res.json({ isStaging: IS_STAGING }));
+// ── Resolve a hide-and-seek round (authenticated) ────────────────────────────
+// Called once by the client when its 60s hiding timer reaches 00:00. The
+// server — not the client — picks the room the Pocong enters.
 
-// ── Game state (public) ──────────────────────────────────────────────────────
+app.post('/api/game/hunt', async (req, res) => {
+  const { room = null, dare_room = null } = req.body || {};
+  if (room !== null && !HUNT_ROOMS.includes(room)) {
+    return res.status(400).json({ error: 'Invalid room' });
+  }
+  if (dare_room !== null) {
+    if (room === null || !HUNT_ROOMS.includes(dare_room) || dare_room === room) {
+      return res.status(400).json({ error: 'Invalid dare room' });
+    }
+  }
 
-app.get('/api/game/state', async (req, res) => {
   try {
-    // Get current active or most recent round
-    const roundRes = await pool.query(`
-      SELECT * FROM rounds
-      ORDER BY round_number DESC
-      LIMIT 1
-    `);
-    if (!roundRes.rows.length) {
-      return res.json({ round: null, bet: null, players: [] });
+    const lastRes = await pool.query(`
+      SELECT streak, created_at FROM game_scores
+      WHERE user_id = $1 ORDER BY id DESC LIMIT 1
+    `, [req.user.id]);
+    if (lastRes.rows.length) {
+      const ageMs = Date.now() - new Date(lastRes.rows[0].created_at).getTime();
+      if (ageMs < 55000) {
+        return res.status(429).json({ error: 'Previous round is still running' });
+      }
     }
-    const round = roundRes.rows[0];
+    const prevStreak = lastRes.rows.length ? lastRes.rows[0].streak : 0;
 
-    // All bets for this round (for player token placement)
-    const betsRes = await pool.query(`
-      SELECT username, room_slug, outcome FROM bets WHERE round_id = $1
-    `, [round.id]);
+    let target = null;
+    let outcome = 'disqualified';
+    let points = 0;
+    let streak = 0;
+    let multiplier = 1;
 
-    // Calling user's bet (if authenticated)
-    let userBet = null;
-    if (req.user) {
-      const ubRes = await pool.query(`
-        SELECT room_slug, amount_tkn, outcome FROM bets
-        WHERE round_id = $1 AND user_id = $2
-      `, [round.id, req.user.id]);
-      userBet = ubRes.rows[0] || null;
+    if (room !== null) {
+      // Every room has the same 1 in 11 chance of being chosen.
+      target = HUNT_ROOMS[crypto.randomInt(HUNT_ROOMS.length)];
+      const isFound = target === room || target === dare_room;
+      if (isFound) {
+        outcome = 'found';
+        streak = 0;
+        points = 0;
+      } else {
+        outcome = 'survived';
+        streak = prevStreak + 1;
+        multiplier = Math.min(1 + 0.25 * (streak - 1), 3);
+        points = Math.round(roomPoints(room) * multiplier * (dare_room !== null ? 1.5 : 1));
+      }
     }
+
+    await pool.query(`
+      INSERT INTO game_scores (user_id, username, room_slug, dare_room, target_room, outcome, points, streak)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [req.user.id, req.user.username, room, dare_room, target, outcome, points, streak]);
+
+    const bestRes = await pool.query(`
+      SELECT COALESCE(MAX(points), 0) AS best FROM game_scores
+      WHERE user_id = $1 AND outcome = 'survived'
+    `, [req.user.id]);
 
     res.json({
-      round: {
-        id: round.id,
-        round_number: round.round_number,
-        status: round.status,
-        winner_room: round.winner_room,
-      },
-      bet: userBet,
-      players: betsRes.rows,
+      target,
+      outcome,
+      points,
+      streak,
+      multiplier,
+      best: bestRes.rows[0].best,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── Place bet (authenticated) ────────────────────────────────────────────────
+// ── Leaderboard (public) ─────────────────────────────────────────────────────
 
-app.post('/api/game/bet', async (req, res) => {
-  const { room_slug, amount_tkn = 1000 } = req.body;
-  const VALID_ROOMS = [
-    'kamar-utama', 'library', 'kamar-asisten', 'laundry-area', 'kitchen-area',
-    'kamar-anak', 'playing-room', 'living-room', 'kamar-mandi',
-    'kamar-mandi-kedua', 'backyard', 'gudang', 'ruang-baca',
-  ];
-  if (!VALID_ROOMS.includes(room_slug)) {
-    return res.status(400).json({ error: 'Invalid room' });
-  }
+app.get('/api/game/scores', async (req, res) => {
   try {
-    const roundRes = await pool.query(`
-      SELECT * FROM rounds WHERE status = 'active' ORDER BY round_number DESC LIMIT 1
+    const leadersRes = await pool.query(`
+      SELECT username, MAX(points) AS best FROM game_scores
+      WHERE outcome = 'survived'
+      GROUP BY user_id, username
+      ORDER BY best DESC
+      LIMIT 10
     `);
-    if (!roundRes.rows.length) {
-      return res.status(400).json({ error: 'No active round' });
+    let me = null;
+    if (req.user) {
+      const bestRes = await pool.query(`
+        SELECT COALESCE(MAX(points), 0) AS best FROM game_scores
+        WHERE user_id = $1 AND outcome = 'survived'
+      `, [req.user.id]);
+      const streakRes = await pool.query(`
+        SELECT streak FROM game_scores WHERE user_id = $1 ORDER BY id DESC LIMIT 1
+      `, [req.user.id]);
+      me = {
+        username: req.user.username,
+        best: bestRes.rows[0].best,
+        streak: streakRes.rows.length ? streakRes.rows[0].streak : 0,
+      };
     }
-    const round = roundRes.rows[0];
-    const bet = await pool.query(`
-      INSERT INTO bets (user_id, username, round_id, room_slug, amount_tkn)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
-    `, [req.user.id, req.user.username, round.id, room_slug, amount_tkn]);
-    res.json({ ok: true, bet: bet.rows[0] });
-  } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Already bet this round' });
-    }
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Advance round (admin only) ───────────────────────────────────────────────
-
-app.post('/api/game/advance', async (req, res) => {
-  if (!IS_STAGING && req.user.username !== 'admin' && !req.user.is_admin) {
-    return res.status(403).json({ error: 'Admin only' });
-  }
-  const { winner_room } = req.body;
-  const ROOM_SLUGS = [
-    'kamar-utama', 'library', 'kamar-asisten', 'laundry-area', 'kitchen-area',
-    'kamar-anak', 'playing-room', 'living-room', 'kamar-mandi',
-    'kamar-mandi-kedua', 'backyard', 'gudang', 'ruang-baca',
-  ];
-  try {
-    const roundRes = await pool.query(`
-      SELECT * FROM rounds ORDER BY round_number DESC LIMIT 1
-    `);
-    if (!roundRes.rows.length) return res.status(400).json({ error: 'No rounds' });
-    const round = roundRes.rows[0];
-
-    if (round.status === 'active') {
-      await pool.query(`UPDATE rounds SET status='resolving' WHERE id=$1`, [round.id]);
-      return res.json({ ok: true, status: 'resolving' });
-    }
-
-    if (round.status === 'resolving') {
-      const chosen = winner_room || ROOM_SLUGS[Math.floor(Math.random() * ROOM_SLUGS.length)];
-      await pool.query(`
-        UPDATE rounds SET status='completed', winner_room=$1, completed_at=NOW()
-        WHERE id=$2
-      `, [chosen, round.id]);
-      await pool.query(`
-        UPDATE bets SET outcome = CASE WHEN room_slug = $1 THEN 'lost' ELSE 'won' END
-        WHERE round_id = $2
-      `, [chosen, round.id]);
-      // Create next round
-      await pool.query(`
-        INSERT INTO rounds (round_number, status) VALUES ($1, 'active')
-      `, [round.round_number + 1]);
-      return res.json({ ok: true, status: 'completed', winner_room: chosen });
-    }
-
-    if (round.status === 'completed') {
-      // Already completed — just ensure next active round exists
-      const nextRes = await pool.query(`
-        SELECT id FROM rounds WHERE status='active' ORDER BY round_number DESC LIMIT 1
-      `);
-      if (!nextRes.rows.length) {
-        await pool.query(`
-          INSERT INTO rounds (round_number, status) VALUES ($1, 'active')
-        `, [round.round_number + 1]);
-      }
-      return res.json({ ok: true, status: 'next_round_ready' });
-    }
-
-    res.status(400).json({ error: 'Unknown round status' });
+    res.json({ leaders: leadersRes.rows, me });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── Legacy press endpoints (kept, unused by new UI) ──────────────────────────
+// ── Legacy press endpoints (kept, unused by the game) ────────────────────────
 
 app.post('/api/press', async (req, res) => {
   try {
@@ -229,93 +204,46 @@ async function start() {
     )
   `);
 
+  // Append-only score history for the hide-and-seek game. One row per round,
+  // per player. Public data: usernames and points only.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS rounds (
-      id SERIAL PRIMARY KEY,
-      round_number INTEGER NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'active',
-      winner_room VARCHAR(100),
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      completed_at TIMESTAMPTZ
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS bets (
+    CREATE TABLE IF NOT EXISTS game_scores (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
       username VARCHAR(255) NOT NULL,
-      round_id INTEGER NOT NULL REFERENCES rounds(id),
-      room_slug VARCHAR(100) NOT NULL,
-      amount_tkn INTEGER NOT NULL DEFAULT 1000,
-      outcome VARCHAR(20) NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(user_id, round_id)
+      room_slug VARCHAR(50),
+      dare_room VARCHAR(50),
+      target_room VARCHAR(50),
+      outcome VARCHAR(20) NOT NULL,
+      points INTEGER NOT NULL DEFAULT 0,
+      streak INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS game_scores_user_idx
+    ON game_scores (user_id, created_at DESC)
+  `);
 
-  // ── Staging seed data ─────────────────────────────────────────────────────
+  // ── Staging seed data: leaderboard rows only ───────────────────────────────
   if (IS_STAGING) {
-    const existing = await pool.query(`SELECT COUNT(*) FROM rounds`);
+    const existing = await pool.query(`
+      SELECT COUNT(*) FROM game_scores WHERE username LIKE 'Staging demo%'
+    `);
     if (existing.rows[0].count === '0') {
-      // Insert a completed round 5 with kamar-utama as winner
-      const r = await pool.query(`
-        INSERT INTO rounds (round_number, status, winner_room, completed_at)
-        VALUES (5, 'completed', 'kamar-utama', NOW())
-        ON CONFLICT DO NOTHING
-        RETURNING id
-      `);
-      if (r.rows.length) {
-        const roundId = r.rows[0].id;
-        const stagingBets = [
-          // Lost bets in kamar-utama
-          ['staging-user-01', 1, 'kamar-utama', 'lost'],
-          ['staging-user-02', 2, 'kamar-utama', 'lost'],
-          ['staging-user-03', 3, 'kamar-utama', 'lost'],
-          ['staging-user-04', 4, 'kamar-utama', 'lost'],
-          ['staging-user-05', 5, 'kamar-utama', 'lost'],
-          ['staging-user-06', 6, 'kamar-utama', 'lost'],
-          ['staging-user-07', 7, 'kamar-utama', 'lost'],
-          ['staging-user-08', 8, 'kamar-utama', 'lost'],
-          // Won bets in library
-          ['staging-demo-user', 9, 'library', 'won'],
-          ['staging-user-10', 10, 'library', 'won'],
-          ['staging-user-11', 11, 'library', 'won'],
-          ['staging-user-12', 12, 'library', 'won'],
-          ['staging-user-13', 13, 'library', 'won'],
-          ['staging-user-14', 14, 'library', 'won'],
-          // Other safe rooms
-          ['staging-user-15', 15, 'kamar-asisten', 'won'],
-          ['staging-user-16', 16, 'laundry-area', 'won'],
-          ['staging-user-17', 17, 'kitchen-area', 'won'],
-          ['staging-user-18', 18, 'kamar-anak', 'won'],
-          ['staging-user-19', 19, 'playing-room', 'won'],
-          ['staging-user-20', 20, 'living-room', 'won'],
-          ['staging-user-21', 21, 'kamar-mandi', 'won'],
-          ['staging-user-22', 22, 'kamar-mandi-kedua', 'won'],
-          ['staging-user-23', 23, 'backyard', 'won'],
-          ['staging-user-24', 24, 'gudang', 'won'],
-          ['staging-user-25', 25, 'ruang-baca', 'won'],
-          ['staging-user-26', 26, 'kitchen-area', 'won'],
-          ['staging-user-27', 27, 'playing-room', 'won'],
-          ['staging-user-28', 28, 'living-room', 'won'],
-          ['staging-user-29', 29, 'backyard', 'won'],
-          ['staging-user-30', 30, 'library', 'won'],
-        ];
-        for (const [username, uid, room, outcome] of stagingBets) {
-          await pool.query(`
-            INSERT INTO bets (user_id, username, round_id, room_slug, amount_tkn, outcome)
-            VALUES ($1, $2, $3, $4, 1000, $5)
-            ON CONFLICT DO NOTHING
-          `, [uid, username, roundId, room, outcome]);
-        }
+      const seed = [
+        ['Staging demo Rina', 900001, 'backyard', 'storage-room', 'survived', 420, 5],
+        ['Staging demo Budi', 900002, 'library', null, 'survived', 300, 3],
+        ['Staging demo Sari', 900003, 'kitchen', null, 'survived', 250, 2],
+        ['Staging demo Joko', 900004, 'bathroom', null, 'survived', 180, 1],
+        ['Staging demo Dewi', 900005, 'master-bedroom', null, 'survived', 120, 1],
+      ];
+      for (const [username, uid, room, dare, outcome, points, streak] of seed) {
+        await pool.query(`
+          INSERT INTO game_scores (user_id, username, room_slug, dare_room, target_room, outcome, points, streak)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [uid, username, room, dare, 'master-bedroom', outcome, points, streak]);
       }
-      // Active round 6 for new bets
-      await pool.query(`
-        INSERT INTO rounds (round_number, status)
-        VALUES (6, 'active')
-        ON CONFLICT DO NOTHING
-      `);
     }
   }
 
