@@ -264,6 +264,44 @@
     }
     #btn-leaderboard:hover { background: #3a3129; }
 
+    /* Game mode switch + party */
+    .mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid #6b5a42; border-radius: 6px; overflow: hidden; }
+    .mode-switch button {
+      font-family: sans-serif; font-size: 0.78rem; font-weight: bold; padding: 7px 4px; min-height: 36px;
+      color: #c9bda4; background: #2e2721; border: none; cursor: pointer;
+    }
+    .mode-switch button + button { border-left: 1px solid #6b5a42; }
+    .mode-switch button[aria-pressed="true"] { background: #3f2a73; color: #fff; }
+    #party-setup, #party-info { margin-top: 9px; }
+    #party-setup[hidden], #party-info[hidden], .pp-btn[hidden] { display: none; }
+    .pp-field input {
+      display: block; width: 100%; margin-top: 4px; padding: 6px 8px; font-family: monospace;
+      font-size: 0.95rem; letter-spacing: 2px; text-transform: uppercase;
+      color: #f3e9d2; background: #110e0c; border: 1px solid #6b5a42; border-radius: 4px;
+    }
+    .pp-btn {
+      display: block; width: 100%; margin-bottom: 8px;
+      font-family: 'Creepster', cursive; font-size: 0.95rem; letter-spacing: 1px;
+      color: #e8d9b5; background: #2e2721; border: 1px solid #6b5a42; border-radius: 6px;
+      padding: 6px 0; cursor: pointer;
+    }
+    .pp-btn:hover:not(:disabled) { background: #3a3129; }
+    .pp-btn.primary { color: #fff; background: #7c3aed; border-color: #7c3aed; font-size: 1.05rem; }
+    .pp-btn.primary:hover:not(:disabled) { background: #7c3aed; filter: brightness(1.18); }
+    .pp-btn:disabled { opacity: 0.45; cursor: default; }
+    .pp-btn:focus-visible, .mode-switch button:focus-visible, .pp-field input:focus-visible { outline: 2px solid #ffd700; outline-offset: 2px; }
+    .party-code { font-family: monospace; font-size: 1rem; font-weight: bold; letter-spacing: 2px; color: #f3e9d2; }
+    #party-scoreboard { list-style: none; margin: 8px 0 9px; border-top: 1px solid #3a3129; }
+    #party-scoreboard li {
+      display: flex; align-items: center; gap: 8px; font-size: 0.76rem; color: #d9cdb4;
+      padding: 5px 2px; border-bottom: 1px solid #3a3129;
+    }
+    #party-scoreboard .ps-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #party-scoreboard .ps-name.me { color: #b574ff; font-weight: bold; }
+    #party-scoreboard .ps-lock { font-size: 0.64rem; color: #3dbb6d; }
+    #party-scoreboard .ps-score { font-family: monospace; color: #f3e9d2; }
+    .pp-note { font-size: 0.68rem; color: #9b8f78; line-height: 1.4; }
+
     /* Leaderboard sheet */
     #leaderboard-overlay {
       display: none; position: fixed; inset: 0; z-index: 40;
@@ -456,6 +494,31 @@
     <aside id="phase-panel" aria-label="Game panel">
       <div id="title">Awas Ada Pocong</div>
 
+      <section class="pp-step" id="mode-step">
+        <div class="pp-label">Game Mode</div>
+        <div class="mode-switch" role="group" aria-label="Game mode">
+          <button type="button" id="mode-open" aria-pressed="true">Open round</button>
+          <button type="button" id="mode-party" aria-pressed="false">Party</button>
+        </div>
+        <div id="party-setup" hidden>
+          <p class="pp-help">Hide with friends in your own rounds. Create a party and share its code, or join one with a code.</p>
+          <button type="button" id="btn-party-create" class="pp-btn">Create party</button>
+          <label class="pp-field" for="party-code-input">Party code
+            <input id="party-code-input" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDE">
+          </label>
+          <button type="button" id="btn-party-join" class="pp-btn">Join party</button>
+          <div id="party-setup-note" class="pp-note"></div>
+        </div>
+        <div id="party-info" hidden>
+          <div class="pp-row">Party code: <span id="party-code" class="party-code"></span> <span id="party-count"></span></div>
+          <ol id="party-scoreboard" aria-label="Party scoreboard"></ol>
+          <button type="button" id="btn-party-join-this" class="pp-btn primary" hidden>Join this party</button>
+          <button type="button" id="btn-party-start" class="pp-btn primary" hidden>Start round</button>
+          <button type="button" id="btn-party-leave" class="pp-btn">Use another code</button>
+          <div id="party-note" class="pp-note"></div>
+        </div>
+      </section>
+
       <section class="pp-step">
         <div class="pp-label">Current Game Phase</div>
         <div id="phase-banner" class="pp-banner">Hiding Phase: 01:00</div>
@@ -494,7 +557,7 @@
       <section class="pp-step">
         <div class="pp-label">Status</div>
         <div class="pp-stats">
-          <div class="pp-stat"><span>Score</span><b id="stat-score">0</b></div>
+          <div class="pp-stat"><span id="stat-score-label">Score</span><b id="stat-score">0</b></div>
           <div class="pp-stat"><span>This round</span><b id="stat-round">0</b></div>
           <div class="pp-stat"><span>Best round</span><b id="stat-best">0</b></div>
           <div class="pp-stat"><span>Streak (multiplier)</span><b id="stat-streak">0 (x1.0)</b></div>
@@ -1267,11 +1330,36 @@
     let serverSkewMs = 0;
     let jumpscareShown = false;
 
+    // ── Game mode: the open round everyone plays, or a party's own rounds ──────
+    const MODE_KEY = 'aap_mode_v1';
+    const PARTY_KEY = 'aap_party_v1';
+    let mode = 'open';
+    let partyCode = null;
+    (function initMode() {
+      const fromUrl = (urlParams.get('party') || '').toUpperCase();
+      let savedMode = null, savedCode = null;
+      try { savedMode = localStorage.getItem(MODE_KEY); savedCode = localStorage.getItem(PARTY_KEY); } catch (_) {}
+      if (/^[A-Z0-9]{4,8}$/.test(fromUrl)) { mode = 'party'; partyCode = fromUrl; }
+      else if (savedMode === 'party') { mode = 'party'; partyCode = savedCode || null; }
+    })();
+    function saveMode() {
+      try {
+        localStorage.setItem(MODE_KEY, mode);
+        if (partyCode) localStorage.setItem(PARTY_KEY, partyCode); else localStorage.removeItem(PARTY_KEY);
+      } catch (_) {}
+    }
+    function isParty() { return mode === 'party'; }
+    function apiBase() {
+      return isParty() && partyCode ? '/api/party/' + encodeURIComponent(partyCode) : '/api/game';
+    }
+    function isPartyMember() { return !!(currentState.party && currentState.party.is_member); }
+
     function nowMs() {
       const local = (window.usernode && window.usernode.now) ? window.usernode.now().getTime() : Date.now();
       return local + serverSkewMs;
     }
     function canHide() {
+      if (isParty() && !isPartyMember()) return false;
       return !!(currentState.round && currentState.round.status === 'hiding' && !currentState.my_hide);
     }
     function canDare() {
@@ -1346,7 +1434,11 @@
       const r = currentState.round;
       const timer = $('hiding-timer');
       const banner = $('phase-banner');
-      if (!r) { timer.textContent = '--:--'; banner.textContent = 'Hiding Phase: --:--'; return; }
+      if (!r) {
+        timer.textContent = '--:--';
+        banner.textContent = isParty() ? 'Party lobby' : 'Hiding Phase: --:--';
+        return;
+      }
       if (r.status === 'hiding') {
         const t = fmt(remainingMs());
         timer.textContent = t;
@@ -1369,7 +1461,11 @@
     function multiplier(streak) { return Math.min(3, 1 + 0.1 * (streak || 0)); }
     function statusInfo() {
       const { round, my_hide } = currentState;
-      if (!round) return ['amber', 'Connecting to the mansion.'];
+      if (isParty() && !partyCode) return ['amber', 'Create a party or join one with a code.'];
+      if (isParty() && currentState.party && !isPartyMember()) return ['amber', 'Join this party to hide in its rounds.'];
+      if (!round) return isParty() && currentState.party
+        ? ['amber', 'Party lobby. Start a round when everyone has joined.']
+        : ['amber', 'Connecting to the mansion.'];
       if (round.status === 'hiding') {
         if (my_hide && my_hide.room_slug) return ['green', 'Location Locked. Waiting for the Pocong.'];
         return ['amber', 'Hiding Phase. Pick a room and confirm it.'];
@@ -1381,6 +1477,7 @@
       if (my_hide && my_hide.outcome === 'survived') return ['green', 'Survived. +' + (my_hide.points_awarded || 0) + ' points this round.'];
       if (my_hide && my_hide.outcome === 'eliminated') return ['red', 'Found by the Pocong. Spectator Lounge.'];
       if (my_hide && my_hide.outcome === 'disqualified') return ['red', 'Timed out without a lock. Spectator Lounge.'];
+      if (isParty()) return ['amber', 'Round over. Start the next round when everyone is ready.'];
       return ['amber', 'Round over. The next round opens shortly.'];
     }
 
@@ -1398,6 +1495,11 @@
         banner.classList.toggle('over', over);
         $('map-banner-title').textContent = hunt ? 'POCONG PHASE' : over ? 'ROUND OVER' : 'HIDING PHASE';
         $('map-banner-label').textContent = over ? 'The Pocong entered:' : hunt ? 'Remaining Hiding Time' : 'Remaining Hiding Time';
+      } else {
+        $('map-wrap').classList.remove('hunt', 'resolved');
+        $('phase-banner').classList.remove('hunt', 'over');
+        $('map-banner-title').textContent = isParty() ? 'PARTY LOBBY' : 'HIDING PHASE';
+        $('map-banner-label').textContent = isParty() ? 'Waiting for a round' : 'Remaining Hiding Time';
       }
       tickTimer();
 
@@ -1419,7 +1521,11 @@
       confirm.textContent = (my_hide && my_hide.room_slug) ? 'LOCKED IN' : 'CONFIRM & PLACE';
       $('phase-note').textContent = canHide()
         ? (selectedRoom ? 'Press CONFIRM & PLACE to lock ' + roomLabel(selectedRoom.slug) + '.' : 'Tap a room on the map or in the grid, then confirm.')
-        : (my_hide && my_hide.room_slug ? 'Your room is locked for this round.' : (round && round.status !== 'hiding' ? 'Wait for the next hiding phase.' : ''));
+        : (my_hide && my_hide.room_slug ? 'Your room is locked for this round.'
+        : (isParty() && !partyCode) ? 'Create or join a party first.'
+        : (isParty() && !isPartyMember()) ? 'Join the party first.'
+        : (isParty() && (!round || round.status === 'resolved')) ? 'Start a party round to hide.'
+        : (round && round.status !== 'hiding' ? 'Wait for the next hiding phase.' : ''));
 
       $('room-select').disabled = !canHide();
       $('room-select').value = canHide() && selectedRoom ? selectedRoom.slug : (my_hide && my_hide.room_slug ? my_hide.room_slug : '');
@@ -1445,6 +1551,7 @@
         : canDare() ? 'Optional. Choose a second room, then dare it.' : 'Lock your hiding room first.';
 
       const s = stats || { total_score: 0, current_streak: 0, best_score: 0 };
+      $('stat-score-label').textContent = isParty() ? 'Party score' : 'Score';
       $('stat-score').textContent = String(s.total_score || 0);
       $('stat-best').textContent = String(s.best_score || 0);
       $('stat-round').textContent = String((my_hide && my_hide.points_awarded) || 0);
@@ -1452,7 +1559,103 @@
       const [light, text] = statusInfo();
       $('status-light').className = 'light ' + (light === 'amber' ? '' : light);
       $('status-text').textContent = text;
+      renderParty();
     }
+
+    // ── Party panel ────────────────────────────────────────────────────────────
+    function renderParty() {
+      $('mode-open').setAttribute('aria-pressed', String(!isParty()));
+      $('mode-party').setAttribute('aria-pressed', String(isParty()));
+      const p = currentState.party;
+      $('party-setup').hidden = !(isParty() && !partyCode);
+      $('party-info').hidden = !(isParty() && partyCode && p);
+      if (!isParty() || !p) return;
+      $('party-code').textContent = p.code;
+      $('party-count').textContent = '(' + p.members.length + ' of ' + p.max_members + ')';
+      const list = $('party-scoreboard');
+      list.innerHTML = '';
+      p.members.forEach((m) => {
+        const li = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'ps-name' + (myUsername && m.username === myUsername ? ' me' : '');
+        name.textContent = m.username;
+        li.appendChild(name);
+        if (m.locked) {
+          const lock = document.createElement('span');
+          lock.className = 'ps-lock';
+          lock.textContent = 'Hidden';
+          li.appendChild(lock);
+        }
+        const score = document.createElement('span');
+        score.className = 'ps-score';
+        score.textContent = m.score + ' pts';
+        li.appendChild(score);
+        list.appendChild(li);
+      });
+      const r = currentState.round;
+      const idle = !r || r.status === 'resolved';
+      $('btn-party-join-this').hidden = p.is_member;
+      $('btn-party-start').hidden = !(p.is_member && idle);
+      $('btn-party-start').textContent = r ? 'Start next round' : 'Start round';
+      if (!$('party-note').dataset.error) {
+        $('party-note').textContent = !p.is_member
+          ? 'Created by ' + p.created_by + '. Join to hide in its rounds.'
+          : idle ? 'Share the code. Any member can start a round.' : 'Round ' + r.round_number + ' is on.';
+      }
+    }
+    function partyError(el, msg) {
+      $(el).dataset.error = '1';
+      $(el).textContent = msg;
+      setTimeout(() => { delete $(el).dataset.error; }, 4000);
+    }
+
+    function switchMode(nextMode, nextCode) {
+      mode = nextMode;
+      partyCode = nextMode === 'party' ? (nextCode || null) : partyCode;
+      saveMode();
+      currentState = { round: null, my_hide: null, hides: [], stats: null, party: null };
+      lastRoundId = null; lastStatus = null; selectedRoom = null;
+      ghostWalking = false; walk = null;
+      clearResult();
+      placeFigures([], null);
+      updateHUD();
+      refreshHotspotState();
+      pollState();
+    }
+
+    async function partyPost(path, body) {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify(body || {}),
+      });
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(data.error === 'account_required' ? 'Open the app inside Homeroom to play in a party.' : (data.error || 'Something went wrong. Try again.'));
+      return data;
+    }
+
+    $('mode-open').addEventListener('click', () => { if (isParty()) switchMode('open'); });
+    $('mode-party').addEventListener('click', () => { if (!isParty()) switchMode('party', partyCode); });
+    $('btn-party-create').addEventListener('click', async () => {
+      try { const { code } = await partyPost('/api/party'); switchMode('party', code); }
+      catch (e) { partyError('party-setup-note', e.message); }
+    });
+    async function joinCode(code) {
+      code = String(code || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{4,8}$/.test(code)) { partyError('party-setup-note', 'Enter the party code, for example ABCDE.'); return; }
+      try { await partyPost('/api/party/' + encodeURIComponent(code) + '/join'); switchMode('party', code); }
+      catch (e) { partyError(partyCode ? 'party-note' : 'party-setup-note', e.message); }
+    }
+    $('btn-party-join').addEventListener('click', () => joinCode($('party-code-input').value));
+    $('party-code-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinCode($('party-code-input').value); });
+    $('btn-party-join-this').addEventListener('click', () => joinCode(partyCode));
+    $('btn-party-start').addEventListener('click', async () => {
+      AUDIO.init();
+      try { await partyPost(apiBase() + '/start'); await pollState(); }
+      catch (e) { partyError('party-note', e.message); }
+    });
+    $('btn-party-leave').addEventListener('click', () => { partyCode = null; switchMode('party', null); });
 
     // ── Result + jump-scare ────────────────────────────────────────────────────
     function showResult() {
@@ -1556,7 +1759,7 @@
       AUDIO.init();
       if (!selectedRoom || !canHide()) return;
       try {
-        const res = await fetch('/api/game/hide', {
+        const res = await fetch(apiBase() + '/hide', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ room_slug: selectedRoom.slug }),
@@ -1572,7 +1775,7 @@
       const slug = $('daring-select').value;
       if (!slug || !canDare()) return;
       try {
-        const res = await fetch('/api/game/daring', {
+        const res = await fetch(apiBase() + '/daring', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
           body: JSON.stringify({ room_slug: slug }),
@@ -1583,11 +1786,29 @@
     });
 
     // ── Poll ───────────────────────────────────────────────────────────────────
+    // A party round's result stays on screen for result_ms, then the panel
+    // waits for a member to start the next round.
+    function resultVisible() {
+      const r = currentState.round;
+      if (!isParty() || !r || !r.resolved_at) return true;
+      return nowMs() < new Date(r.resolved_at).getTime() + (currentState.result_ms || 8000);
+    }
+
     async function pollState() {
+      if (isParty() && !partyCode) { updateHUD(); refreshHotspotState(); return; }
+      const base = apiBase();
       try {
-        const res = await fetch('/api/game/state', { headers: authHeaders });
+        const res = await fetch(base + '/state', { headers: authHeaders });
+        if (base !== apiBase()) return; // the mode changed while this was in flight
+        if (res.status === 404 && isParty()) {
+          partyCode = null;
+          switchMode('party', null);
+          partyError('party-setup-note', 'No party with that code.');
+          return;
+        }
         if (!res.ok) { console.warn('Poll error: HTTP ' + res.status); return; }
         const state = await res.json();
+        if (base !== apiBase()) return;
         if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
 
@@ -1614,7 +1835,9 @@
 
         placeFigures(state.hides || [], state.my_hide);
         updateHUD();
-        if (state.round && state.round.status === 'resolved') showResult();
+        if (state.round && state.round.status === 'resolved') {
+          if (resultVisible()) showResult(); else clearResult();
+        }
 
         lastRoundId = state.round && state.round.id;
         lastStatus  = state.round && state.round.status;
@@ -1632,7 +1855,7 @@
     // ── Dev controls ───────────────────────────────────────────────────────────
     $('btn-advance').addEventListener('click', async () => {
       try {
-        await fetch('/api/game/advance', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: '{}' });
+        await fetch(apiBase() + '/advance', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: '{}' });
         await pollState();
       } catch (e) { console.warn(e); }
     });
