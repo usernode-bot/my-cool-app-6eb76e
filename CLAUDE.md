@@ -267,6 +267,31 @@ cannot both pick a target.
   `hiding` round is inserted (guarded so it happens once). The staging
   `advance` button follows the same steps one click at a time.
 
+**Self-healing.** `runTransitions` also repairs state a production database
+may carry from an older version of the game, so no manual action or DB reset
+is ever needed to get a round running. `timeOf(v)` reads a stored timestamp
+(null when missing or unparseable) and `openNextRound(now, afterNumber)`
+holds the guarded insert of the next hiding round:
+
+- **Empty `rounds` table** (production, non-staging): the first round
+  (`round_number` 1, `hiding`, +60s) is opened on boot — `start()` runs
+  `runTransitions(new Date())` after `migrate()`, never blocking boot — and on
+  the first poll.
+- **Legacy statuses** (`active`, `resolving`, `completed`, unknown, from the
+  pre-hiding game): the row is left untouched; the next round opens after it
+  (`round_number` continues from the highest existing one).
+- **Stale `hiding`**: deadline null/unparseable, or more than
+  `HUNT_MS + RESULT_MS` past: the round is settled in place (resolved and
+  scored, no hunt replayed) and the next round opens.
+- **Stale `hunt`**: `hunt_ends_at` null/unparseable, or more than `RESULT_MS`
+  past: resolved and scored (target `COALESCE`d so it is never lost), next
+  round opens.
+- **`resolved` with `resolved_at` null**: the next round opens at once.
+
+Live rounds (deadlines only just passed) keep the normal timed path; the
+inserts keep the `NOT EXISTS` guard and the flips stay conditional `UPDATE
+... WHERE status = ...`.
+
 ### Scoring (`resolveRound`)
 
 For each locked player:
@@ -351,6 +376,11 @@ HUD and, on a resolved round, the result banner. `visibilitychange` and
 `pageshow` trigger an immediate poll so a returning tab re-reads the truth.
 The countdown is re-derived from `hiding_ends_at` on every frame and never
 decremented.
+
+A failed poll (non-2xx or a thrown fetch) sets the `connectionLost` flag: the
+**Current Game Phase** box shows "Reconnecting..." and the status line turns
+amber with "Lost the connection. Reconnecting." while the map countdown keeps
+its `hiding_ends_at`-derived value. The next successful poll clears it.
 
 ## 12. Dev Controls panel (staging only)
 

@@ -1266,6 +1266,7 @@
     let lastRoundId = null, lastStatus = null;
     let serverSkewMs = 0;
     let jumpscareShown = false;
+    let connectionLost = false;
 
     function nowMs() {
       const local = (window.usernode && window.usernode.now) ? window.usernode.now().getTime() : Date.now();
@@ -1359,6 +1360,9 @@
         timer.textContent = roomLabel(r.target_room);
         banner.textContent = 'Round ' + r.round_number + ' over';
       }
+      // A failed poll: say so in the phase box while the map timer (derived
+      // from the round's absolute end time) keeps its value and keeps ticking.
+      if (connectionLost) banner.textContent = 'Reconnecting...';
     }
     setInterval(tickTimer, 200);
     setInterval(() => { if (currentState.round && currentState.round.status === 'hiding') tickTimer(); }, 1000);
@@ -1369,6 +1373,7 @@
     function multiplier(streak) { return Math.min(3, 1 + 0.1 * (streak || 0)); }
     function statusInfo() {
       const { round, my_hide } = currentState;
+      if (connectionLost) return ['amber', 'Lost the connection. Reconnecting.'];
       if (!round) return ['amber', 'Connecting to the mansion.'];
       if (round.status === 'hiding') {
         if (my_hide && my_hide.room_slug) return ['green', 'Location Locked. Waiting for the Pocong.'];
@@ -1586,8 +1591,14 @@
     async function pollState() {
       try {
         const res = await fetch('/api/game/state', { headers: authHeaders });
-        if (!res.ok) return;
+        if (!res.ok) {
+          connectionLost = true;
+          console.warn('State poll failed: HTTP ' + res.status);
+          updateHUD();
+          return;
+        }
         const state = await res.json();
+        connectionLost = false;
         if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
 
@@ -1619,7 +1630,11 @@
         lastRoundId = state.round && state.round.id;
         lastStatus  = state.round && state.round.status;
         refreshHotspotState();
-      } catch (e) { console.warn('Poll error:', e.message); }
+      } catch (e) {
+        connectionLost = true;
+        console.warn('Poll error:', e.message);
+        updateHUD();
+      }
     }
     function my_hide_room_geo() {
       const mh = currentState.my_hide;

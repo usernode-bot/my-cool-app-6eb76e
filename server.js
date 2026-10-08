@@ -85,53 +85,128 @@ function pickTarget() {
   return ROOM_SLUGS[Math.floor(Math.random() * ROOM_SLUGS.length)];
 }
 
+// ms for a stored timestamp, or null when it is missing or not a real date
+// (a round written by an older version of the game, or a half-written row).
+function timeOf(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+// Open the next hiding round after `afterNumber`. Guarded so two concurrent
+// requests (or a boot racing a poll) cannot both insert one.
+async function openNextRound(now, afterNumber) {
+  const ins = await pool.query(
+    `INSERT INTO rounds (round_number, status, hiding_ends_at)
+     SELECT $1, 'hiding', $2
+     WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
+    [afterNumber + 1, new Date(now.getTime() + HIDING_MS), afterNumber]
+  );
+  return ins.rowCount > 0;
+}
+
 // Time-gated transitions. Runs before any read of the round so a browser that
 // polls is enough to let the clock expire even with no admin. Idempotent, and
 // the status is flipped with a conditional UPDATE so two concurrent requests
 // cannot both pick a target.
 async function runTransitions(now) {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const r = await pool.query(`SELECT * FROM rounds ORDER BY round_number DESC LIMIT 1`);
-    if (!r.rows.length) return;
+    if (!r.rows.length) {
+      // No round at all (a fresh production database, or a wiped table): open
+      // the first one instead of waiting for a staging seed that never comes.
+      await pool.query(
+        `INSERT INTO rounds (round_number, status, hiding_ends_at)
+         SELECT 1, 'hiding', $1 WHERE NOT EXISTS (SELECT 1 FROM rounds)`,
+        [new Date(now.getTime() + HIDING_MS)]
+      );
+      continue;
+    }
     const round = r.rows[0];
 
-    if (round.status === 'hiding' && now > new Date(round.hiding_ends_at)) {
-      const target = pickTarget();
-      const upd = await pool.query(
-        `UPDATE rounds SET status='hunt', target_room=$1, hunt_ends_at=$2
-         WHERE id=$3 AND status='hiding' RETURNING id`,
-        [target, new Date(now.getTime() + HUNT_MS), round.id]
-      );
-      if (!upd.rows.length) continue; // another request won the race
-      // Anyone who never locked a room is disqualified to the Spectator
-      // Lounge. They have no hides row, so there is nothing to rewrite here:
-      // a locked-in hide also carries outcome 'pending' until resolve, and
-      // must NOT be caught. Disqualification is reported at read time.
-      continue;
+    if (round.status === 'hiding') {
+      const d = timeOf(round.hiding_ends_at);
+      const stale = d === null || now.getTime() > d + HUNT_MS + RESULT_MS;
+      if (stale) {
+        // A hiding round with no usable deadline, or one whose whole cycle
+        // (hunt + result hold included) has long passed: settle it quietly
+        // (its locked players still score) and open the next round. Nobody is
+        // watching this round any more, so no hunt is replayed for it.
+        const target = pickTarget();
+        const upd = await pool.query(
+          `UPDATE rounds SET status='resolved', target_room=$1, hunt_ends_at=$2, resolved_at=$2
+           WHERE id=$3 AND status='hiding' RETURNING id, round_number`,
+          [target, now, round.id]
+        );
+        if (!upd.rows.length) continue; // another request won the race
+        await resolveRound(round.id, target);
+        await openNextRound(now, round.round_number);
+        continue;
+      }
+      if (now.getTime() > d) {
+        const target = pickTarget();
+        const upd = await pool.query(
+          `UPDATE rounds SET status='hunt', target_room=$1, hunt_ends_at=$2
+           WHERE id=$3 AND status='hiding' RETURNING id`,
+          [target, new Date(now.getTime() + HUNT_MS), round.id]
+        );
+        if (!upd.rows.length) continue; // another request won the race
+        // Anyone who never locked a room is disqualified to the Spectator
+        // Lounge. They have no hides row, so there is nothing to rewrite here:
+        // a locked-in hide also carries outcome 'pending' until resolve, and
+        // must NOT be caught. Disqualification is reported at read time.
+        continue;
+      }
+      return;
     }
 
-    if (round.status === 'hunt' && round.hunt_ends_at && now > new Date(round.hunt_ends_at)) {
-      const upd = await pool.query(
-        `UPDATE rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt' RETURNING id`,
-        [now, round.id]
-      );
-      if (!upd.rows.length) continue;
-      await resolveRound(round.id, round.target_room);
-      continue;
+    if (round.status === 'hunt') {
+      const h = timeOf(round.hunt_ends_at);
+      const stale = h === null || now.getTime() > h + RESULT_MS;
+      if (stale) {
+        const target = pickTarget();
+        const upd = await pool.query(
+          `UPDATE rounds SET status='resolved', resolved_at=$1, target_room=COALESCE(target_room, $2)
+           WHERE id=$3 AND status='hunt' RETURNING target_room`,
+          [now, target, round.id]
+        );
+        if (!upd.rows.length) continue;
+        await resolveRound(round.id, upd.rows[0].target_room);
+        await openNextRound(now, round.round_number);
+        continue;
+      }
+      if (now.getTime() > h) {
+        const upd = await pool.query(
+          `UPDATE rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt' RETURNING id`,
+          [now, round.id]
+        );
+        if (!upd.rows.length) continue;
+        await resolveRound(round.id, round.target_room);
+        continue;
+      }
+      return;
     }
 
-    // The resolved round is shown for RESULT_MS, then the next round opens.
-    if (round.status === 'resolved' && round.resolved_at && now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS) {
-      const ins = await pool.query(
-        `INSERT INTO rounds (round_number, status, hiding_ends_at)
-         SELECT $1, 'hiding', $2
-         WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
-        [round.round_number + 1, new Date(now.getTime() + HIDING_MS), round.round_number]
-      );
-      if (!ins.rowCount) continue;
-      continue;
+    if (round.status === 'resolved') {
+      if (timeOf(round.resolved_at) === null) {
+        // A resolved row with no result timestamp cannot serve its hold:
+        // open the next round right away.
+        await openNextRound(now, round.round_number);
+        continue;
+      }
+      // The resolved round is shown for RESULT_MS, then the next round opens.
+      if (now.getTime() >= timeOf(round.resolved_at) + RESULT_MS) {
+        if (await openNextRound(now, round.round_number)) continue;
+        continue;
+      }
+      return;
     }
-    return;
+
+    // Any other status ('active', 'resolving', 'completed', unknown — rows
+    // written by the pre-hiding version of the game) is left untouched; a new
+    // round simply opens after it.
+    await openNextRound(now, round.round_number);
+    continue;
   }
 }
 
@@ -233,6 +308,7 @@ app.get('/api/game/state', async (req, res) => {
       server_now: req.now.toISOString(),
     });
   } catch (err) {
+    console.error('[state]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -496,6 +572,14 @@ let shuttingDown = false;
 
 async function start() {
   await migrate();
+  // Self-heal before the first request can race it: on an empty (production)
+  // database this opens round 1, and a stale or legacy round is settled so a
+  // live hiding phase exists as soon as the app is reachable.
+  try {
+    await runTransitions(new Date());
+  } catch (e) {
+    console.error('[boot] runTransitions failed', e.message);
+  }
   server = app.listen(port, () => console.log(`Listening on :${port}`));
 }
 
