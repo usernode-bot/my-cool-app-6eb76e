@@ -259,6 +259,11 @@ a conditional `UPDATE ... WHERE status = <expected>` so two concurrent requests
 cannot both pick a target.
 
 - Round creation stores `hiding_ends_at = now + 60s`.
+- Self-healing: if `rounds` is empty, round 1 opens; if the latest row has a
+  status this machine does not know (the old `active` / `resolving` /
+  `completed` rows, left untouched) the next hiding round opens from it; a
+  `hiding` or `hunt` row with no deadline gets one. This also runs once at
+  boot, so a deploy onto an old database starts the game on its own.
 - At `hiding -> hunt`, `target_room` is drawn from the 11 slugs and
   `hunt_ends_at = now + 6s`.
 - At `hunt -> resolved`, points are computed and stats written.
@@ -335,10 +340,13 @@ username, a room slug and a score).
 
 On boot in staging, if `rounds` is empty:
 
-1. One round `hiding` with `hiding_ends_at = now + 60s`, so the countdown is
-   live.
-2. A handful of `hides` on it from `staging-demo-user` / `staging-user-NN` in
-   several rooms, so the map shows figures.
+1. One legacy round 5 (`status = 'completed'`, no deadline), the shape
+   production carried from the old betting version. `runTransitions` is then
+   run, which must open round 6 `hiding` with `hiding_ends_at = now + 60s`
+   from it, exactly as a production boot does. This is what makes the staging
+   preview exercise the auto-start recovery, so the countdown is live.
+2. A handful of `hides` on round 6 from `staging-demo-user` / `staging-user-NN`
+   in several rooms, so the map shows figures.
 3. Six `player_stats` rows with varied `best_score` and `current_streak`, so the
    leaderboard renders with a real ranking.
 

@@ -89,11 +89,56 @@ function pickTarget() {
 // polls is enough to let the clock expire even with no admin. Idempotent, and
 // the status is flipped with a conditional UPDATE so two concurrent requests
 // cannot both pick a target.
+const LIVE_STATUSES = ['hiding', 'hunt', 'resolved'];
+
+// Opens the next hiding round after `afterRoundNumber` (0 for an empty
+// table), guarded so concurrent requests open it once.
+async function openHidingRound(now, afterRoundNumber) {
+  const ins = await pool.query(
+    `INSERT INTO rounds (round_number, status, hiding_ends_at)
+     SELECT $1, 'hiding', $2
+     WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
+    [afterRoundNumber + 1, new Date(now.getTime() + HIDING_MS), afterRoundNumber]
+  );
+  return ins.rowCount > 0;
+}
+
 async function runTransitions(now) {
   for (let i = 0; i < 4; i++) {
     const r = await pool.query(`SELECT * FROM rounds ORDER BY round_number DESC LIMIT 1`);
-    if (!r.rows.length) return;
+    if (!r.rows.length) {
+      // No round at all (a production database that never had one): open
+      // round 1 so the game runs from the first load, in every environment.
+      await openHidingRound(now, 0);
+      continue;
+    }
     const round = r.rows[0];
+
+    // Self-heal from state this machine cannot advance. Production carried
+    // rounds from the earlier betting version ('active' / 'resolving' /
+    // 'completed', no deadlines): none of the branches below ever matched,
+    // so no round opened and the countdown had nothing to count down from.
+    // A legacy or unknown status is treated as finished (the row is left
+    // untouched) and the next hiding round opens from it.
+    if (!LIVE_STATUSES.includes(round.status)) {
+      await openHidingRound(now, round.round_number);
+      continue;
+    }
+    // A live round with no deadline can never expire: give it one now.
+    if (round.status === 'hiding' && !round.hiding_ends_at) {
+      await pool.query(
+        `UPDATE rounds SET hiding_ends_at=$1 WHERE id=$2 AND status='hiding' AND hiding_ends_at IS NULL`,
+        [new Date(now.getTime() + HIDING_MS), round.id]
+      );
+      continue;
+    }
+    if (round.status === 'hunt' && !round.hunt_ends_at) {
+      await pool.query(
+        `UPDATE rounds SET hunt_ends_at=$1 WHERE id=$2 AND status='hunt' AND hunt_ends_at IS NULL`,
+        [now, round.id]
+      );
+      continue;
+    }
 
     if (round.status === 'hiding' && now > new Date(round.hiding_ends_at)) {
       const target = pickTarget();
@@ -121,14 +166,8 @@ async function runTransitions(now) {
     }
 
     // The resolved round is shown for RESULT_MS, then the next round opens.
-    if (round.status === 'resolved' && round.resolved_at && now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS) {
-      const ins = await pool.query(
-        `INSERT INTO rounds (round_number, status, hiding_ends_at)
-         SELECT $1, 'hiding', $2
-         WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
-        [round.round_number + 1, new Date(now.getTime() + HIDING_MS), round.round_number]
-      );
-      if (!ins.rowCount) continue;
+    if (round.status === 'resolved' && (!round.resolved_at || now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS)) {
+      await openHidingRound(now, round.round_number);
       continue;
     }
     return;
@@ -453,13 +492,20 @@ async function migrate() {
     const existing = await pool.query(`SELECT COUNT(*) FROM rounds`);
     if (existing.rows[0].count === '0') {
       const now = new Date();
-      const r = await pool.query(
-        `INSERT INTO rounds (round_number, status, hiding_ends_at)
-         VALUES (6, 'hiding', $1) RETURNING id`,
-        [new Date(now.getTime() + HIDING_MS)]
+      // Seed the shape production carried before the hide-and-seek rebuild: a
+      // finished round from the old betting state machine as the latest row,
+      // with no deadline. The recovery in runTransitions has to open round 6
+      // from it, exactly as a production boot does; the figures below are
+      // then attached to the round it opened.
+      await pool.query(
+        `INSERT INTO rounds (round_number, status, winner_room, completed_at)
+         VALUES (5, 'completed', 'kamar-utama', $1)`,
+        [new Date(now.getTime() - 60 * 1000)]
       );
-      const roundId = r.rows[0].id;
-      const seeded = [
+      await runTransitions(now);
+      const r = await pool.query(`SELECT id FROM rounds WHERE status='hiding' ORDER BY round_number DESC LIMIT 1`);
+      const roundId = r.rows.length ? r.rows[0].id : null;
+      const seeded = roundId === null ? [] : [
         ['staging-demo-user', 900001, 'library'],
         ['staging-user-01', 900002, 'kamar-utama'],
         ['staging-user-02', 900003, 'kamar-utama'],
@@ -496,6 +542,9 @@ let shuttingDown = false;
 
 async function start() {
   await migrate();
+  // Self-heal at boot too, so a deploy onto an old or empty rounds table
+  // opens a hiding round before the first poll arrives.
+  try { await runTransitions(new Date()); } catch (e) { console.error('[start] runTransitions failed', e.message); }
   server = app.listen(port, () => console.log(`Listening on :${port}`));
 }
 

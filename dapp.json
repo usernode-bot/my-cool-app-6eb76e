@@ -56,6 +56,11 @@
       "expectText": "round"
     },
     {
+      "name": "A hiding round auto-opens from a legacy round, with its end timestamp",
+      "path": "/api/game/state",
+      "expectText": "\"status\":\"hiding\",\"target_room\":null,\"hiding_ends_at\":\"20"
+    },
+    {
       "name": "Leaderboard API returns a leaderboard",
       "path": "/api/game/leaderboard",
       "expectText": "leaderboard"
