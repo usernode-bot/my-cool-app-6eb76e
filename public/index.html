@@ -1583,10 +1583,18 @@
     });
 
     // ── Poll ───────────────────────────────────────────────────────────────────
+    // A failed status check shows a visible reconnecting state (the Status
+    // line's amber light) instead of silently keeping the last message. The
+    // next successful poll's updateHUD writes the real status back.
+    function showReconnecting() {
+      $('status-light').className = 'light';
+      $('status-text').textContent = 'Reconnecting to the mansion.';
+    }
+
     async function pollState() {
       try {
         const res = await fetch('/api/game/state', { headers: authHeaders });
-        if (!res.ok) return;
+        if (!res.ok) { showReconnecting(); return; }
         const state = await res.json();
         if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
@@ -1619,7 +1627,7 @@
         lastRoundId = state.round && state.round.id;
         lastStatus  = state.round && state.round.status;
         refreshHotspotState();
-      } catch (e) { console.warn('Poll error:', e.message); }
+      } catch (e) { console.warn('Poll error:', e.message); showReconnecting(); }
     }
     function my_hide_room_geo() {
       const mh = currentState.my_hide;

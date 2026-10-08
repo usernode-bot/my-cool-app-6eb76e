@@ -85,17 +85,41 @@ function pickTarget() {
   return ROOM_SLUGS[Math.floor(Math.random() * ROOM_SLUGS.length)];
 }
 
+// Turns a stored timestamp into a usable Date, or null when it is missing or
+// unparseable. A null return means the phase cannot be trusted to have a live
+// clock and the round must be moved on.
+function toDate(v) {
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // Time-gated transitions. Runs before any read of the round so a browser that
 // polls is enough to let the clock expire even with no admin. Idempotent, and
 // the status is flipped with a conditional UPDATE so two concurrent requests
 // cannot both pick a target.
+//
+// The pass is also self-healing: a row left behind by older code (legacy
+// statuses or a missing/unparseable end time) is closed out and superseded by
+// a fresh hiding round, so production auto-starts with no manual reset.
 async function runTransitions(now) {
   for (let i = 0; i < 4; i++) {
     const r = await pool.query(`SELECT * FROM rounds ORDER BY round_number DESC LIMIT 1`);
-    if (!r.rows.length) return;
+    if (!r.rows.length) {
+      // A brand-new or emptied table (production included): open round 1 so
+      // the game starts on its own. The guard keeps concurrent callers to one.
+      const ins = await pool.query(
+        `INSERT INTO rounds (round_number, status, hiding_ends_at)
+         SELECT 1, 'hiding', $1
+         WHERE NOT EXISTS (SELECT 1 FROM rounds)`,
+        [new Date(now.getTime() + HIDING_MS)]
+      );
+      continue;
+    }
     const round = r.rows[0];
 
-    if (round.status === 'hiding' && now > new Date(round.hiding_ends_at)) {
+    if (round.status === 'hiding') {
+      const ends = toDate(round.hiding_ends_at);
+      if (ends && now <= ends) return;
       const target = pickTarget();
       const upd = await pool.query(
         `UPDATE rounds SET status='hunt', target_room=$1, hunt_ends_at=$2
@@ -110,18 +134,25 @@ async function runTransitions(now) {
       continue;
     }
 
-    if (round.status === 'hunt' && round.hunt_ends_at && now > new Date(round.hunt_ends_at)) {
+    if (round.status === 'hunt') {
+      const ends = toDate(round.hunt_ends_at);
+      if (ends && now <= ends) return;
+      // A legacy hunt row may carry no target; score against a freshly drawn
+      // one so nothing stays pending forever.
+      const target = round.target_room || pickTarget();
       const upd = await pool.query(
-        `UPDATE rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt' RETURNING id`,
-        [now, round.id]
+        `UPDATE rounds SET status='resolved', target_room=$1, resolved_at=$2 WHERE id=$3 AND status='hunt' RETURNING id`,
+        [target, now, round.id]
       );
       if (!upd.rows.length) continue;
-      await resolveRound(round.id, round.target_room);
+      await resolveRound(round.id, target);
       continue;
     }
 
     // The resolved round is shown for RESULT_MS, then the next round opens.
-    if (round.status === 'resolved' && round.resolved_at && now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS) {
+    if (round.status === 'resolved') {
+      const shown = toDate(round.resolved_at);
+      if (shown && now.getTime() < shown.getTime() + RESULT_MS) return;
       const ins = await pool.query(
         `INSERT INTO rounds (round_number, status, hiding_ends_at)
          SELECT $1, 'hiding', $2
@@ -131,7 +162,19 @@ async function runTransitions(now) {
       if (!ins.rowCount) continue;
       continue;
     }
-    return;
+
+    // Legacy or unknown status from the pre-rebuild code ('active',
+    // 'resolving', 'completed'): close the round out and let the next loop
+    // iteration open the fresh hiding round. The hold is put behind us so the
+    // client never sees this round as resolved; nothing is deleted.
+    const target = round.target_room || pickTarget();
+    const upd = await pool.query(
+      `UPDATE rounds SET status='resolved', target_room=$1, resolved_at=$2
+       WHERE id=$3 AND status=$4 RETURNING id`,
+      [target, new Date(now.getTime() - RESULT_MS), round.id, round.status]
+    );
+    if (upd.rows.length) await resolveRound(round.id, target);
+    continue;
   }
 }
 
@@ -496,6 +539,10 @@ let shuttingDown = false;
 
 async function start() {
   await migrate();
+  // Heal any stuck or legacy round data before the first request arrives, and
+  // open a round when the table is empty, so production auto-starts.
+  try { await runTransitions(new Date()); }
+  catch (e) { console.error('[start] round heal failed:', e.message); }
   server = app.listen(port, () => console.log(`Listening on :${port}`));
 }
 
