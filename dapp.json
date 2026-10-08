@@ -23,6 +23,24 @@
       "impact": ["public/**", "server.js"]
     },
     {
+      "name": "Blueprint map renders with its title and the eleven room buttons",
+      "path": "/",
+      "expectSelector": "#room-grid button:nth-child(11)",
+      "expectText": "Mansion Level 1 Hallway Map"
+    },
+    {
+      "name": "Side panel shows Player Setup, the signature box and the daring pick",
+      "path": "/",
+      "expectSelector": "#sig-initials",
+      "expectText": "Player Setup: Select & Confirm"
+    },
+    {
+      "name": "Daring second pick step is on the panel",
+      "path": "/",
+      "expectSelector": "#btn-daring",
+      "expectText": "Daring Pick"
+    },
+    {
       "name": "Mute toggle is present",
       "path": "/",
       "expectSelector": "#btn-mute"
