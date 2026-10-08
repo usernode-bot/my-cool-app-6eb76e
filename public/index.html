@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script>
   // usernode-dev-console@1
   (function () {
@@ -62,6 +62,20 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%91%BB%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Creepster&display=swap" rel="stylesheet">
+  <script src="/usernode-bridge/v1/bridge.js"></script>
+  <script>
+    (function () {
+      var media = window.matchMedia('(prefers-color-scheme: dark)');
+      function applyTheme() {
+        var theme = (window.usernode && window.usernode.theme) || (media.matches ? 'dark' : 'light');
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        document.documentElement.style.colorScheme = theme;
+      }
+      applyTheme();
+      window.addEventListener('usernode:theme-changed', applyTheme);
+      media.addEventListener('change', applyTheme);
+    })();
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; }
@@ -75,21 +89,21 @@
     }
     body.shaking { animation: shake 0.5s ease; }
 
-    /* 2D isometric map */
     #map-wrap {
       position: fixed; inset: 0; z-index: 1;
       display: flex; align-items: center; justify-content: center;
       background: radial-gradient(ellipse at 50% 42%, #1a1a1a 0%, #0a0a0a 72%);
+      transition: background 0.6s ease;
     }
-    #game-svg {
-      display: block; width: 100%; height: 100%;
-    }
+    #map-wrap.hunt { background: radial-gradient(ellipse at 50% 45%, #141210 0%, #050506 78%); }
+    #game-svg { display: block; width: 100%; height: 100%; }
+
     .hotspot { fill: transparent; stroke: none; }
     .hotspot.bettable { cursor: pointer; }
-    .hotspot.hovered { fill: rgba(255,255,255,0.14); }
-    .player-fig { transition: filter 0.4s ease; }
-    .player-fig.dim  { filter: grayscale(1) brightness(0.45); }
-    .player-fig.safe { filter: sepia(0.7) saturate(2.2) hue-rotate(2deg) brightness(1.05); }
+    .hotspot.hovered { fill: rgba(180,20,20,0.16); }
+    .hotspot.locked { fill: rgba(124,58,237,0.30); }
+    .player-fig.dim { filter: grayscale(1) brightness(0.45); }
+    .player-fig.safe { filter: sepia(0.6) saturate(2) brightness(1.05); }
 
     #title {
       position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
@@ -104,94 +118,134 @@
       font-family: monospace; font-size: 0.62rem; color: #555; line-height: 1.5;
     }
 
-    /* Mascot */
-    @keyframes mascot-bob {
-      0%,100% { transform: translateY(0); }
-      50%      { transform: translateY(-6px); }
+    /* Sound toggle: fixed to the map's top-right corner, both phases */
+    #btn-mute {
+      position: fixed; top: 12px; right: 16px; z-index: 15;
+      font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
+      color: #ffd700; background: rgba(10,10,10,0.9); border: 1px solid #c8a800;
+      border-radius: 7px; padding: 6px 12px; cursor: pointer;
+      transition: all 0.15s;
     }
-    #mascot-canvas {
-      position: fixed; right: 16px; top: 80px; z-index: 11;
-      pointer-events: none;
-      animation: mascot-bob 2s ease-in-out infinite;
-    }
+    #btn-mute:hover { background: #2a2a2a; }
+    #btn-mute.off { color: #888; border-color: #555; }
 
-    /* Tutorial panel */
-    #tutorial-panel {
-      position: fixed; right: 16px; top: 240px; z-index: 12;
-      width: 200px;
-      background: rgba(240,240,235,0.94); border: 2px solid #333;
+    /* Phase panel */
+    #phase-panel {
+      position: fixed; right: 16px; top: 78px; z-index: 12;
+      width: 240px;
+      background: rgba(240,240,235,0.95); border: 2px solid #333;
       border-radius: 12px; padding: 12px 14px;
       box-shadow: 3px 3px 12px rgba(0,0,0,0.7);
+      font-family: sans-serif; color: #1a1a1a;
     }
-    #tutorial-panel .tut-header {
-      font-family: 'Creepster', cursive; font-size: 1.1rem;
-      color: #1a1a1a; letter-spacing: 1px; text-align: center;
-      margin-bottom: 6px;
+    #phase-panel .phase-banner {
+      font-family: 'Creepster', cursive; font-size: 1.05rem; font-weight: normal;
+      color: #1a1a1a; letter-spacing: 1px; text-align: center; margin: 0;
     }
-    #tut-canvas { display: block; margin: 0 auto 8px; }
-    #tutorial-panel .tut-body {
-      font-family: sans-serif; font-size: 0.7rem; color: #333; line-height: 1.4;
-      text-align: center; margin-bottom: 8px;
+    #hiding-timer {
+      font-family: monospace; font-size: 1.15rem; font-weight: bold;
+      color: #b3000f; text-align: center; margin: 8px 0 6px;
     }
-    #tutorial-start {
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      color: #cc0000; text-align: center; letter-spacing: 1px;
+    .phase-row { font-size: 0.76rem; line-height: 1.5; color: #333; }
+    .phase-row .lock-state { font-weight: bold; color: #5a2bb0; }
+    .phase-row .lock-state.none { color: #888; font-weight: normal; }
+    #phase-score { font-size: 0.76rem; color: #555; margin: 8px 0; }
+    #btn-confirm {
+      display: block; width: 100%;
+      font-family: 'Creepster', cursive; font-size: 1rem; letter-spacing: 1px;
+      color: #fff; background: #7c3aed; border: none; border-radius: 8px;
+      padding: 7px 0; cursor: pointer; transition: filter 0.15s;
+    }
+    #btn-confirm:hover:not(:disabled) { filter: brightness(1.18); }
+    #btn-confirm:disabled { opacity: 0.45; cursor: default; }
+    #phase-note { font-size: 0.68rem; color: #777; text-align: center; margin-top: 6px; }
+    #btn-leaderboard {
+      display: block; width: 100%; margin-top: 8px;
+      font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
+      color: #444; background: #e2ded4; border: 1px solid #999; border-radius: 8px;
+      padding: 5px 0; cursor: pointer;
+    }
+    #btn-leaderboard:hover { background: #d6d2c8; }
+
+    /* Leaderboard sheet */
+    #leaderboard-overlay {
+      display: none; position: fixed; inset: 0; z-index: 40;
+      background: rgba(4,4,6,0.72); align-items: center; justify-content: center; padding: 20px;
+    }
+    #leaderboard-overlay.show { display: flex; }
+    #leaderboard-card {
+      width: 100%; max-width: 380px; max-height: 76vh; overflow: auto;
+      background: linear-gradient(160deg, #17171a, #101012);
+      border: 2px solid #c8a800; border-radius: 14px; padding: 18px 18px 14px;
+      color: #e8e8e8;
+    }
+    #leaderboard-card h2 {
+      font-family: 'Creepster', cursive; font-size: 1.6rem; color: #ffd700;
+      letter-spacing: 2px; text-align: center; margin-bottom: 4px;
+    }
+    #leaderboard-card .lb-sub { font-family: sans-serif; font-size: 0.72rem; color: #999; text-align: center; margin-bottom: 12px; }
+    #leaderboard-list { list-style: none; }
+    #leaderboard-list li {
+      display: flex; justify-content: space-between; gap: 10px;
+      font-family: sans-serif; font-size: 0.85rem; padding: 7px 2px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    #leaderboard-list li .lb-name { color: #ddd; }
+    #leaderboard-list li .lb-score { color: #ffd700; font-weight: bold; }
+    #leaderboard-list li .lb-streak { color: #888; font-size: 0.72rem; }
+    #leaderboard-empty { font-family: sans-serif; font-size: 0.82rem; color: #999; text-align: center; padding: 12px 0; }
+    #leaderboard-close {
+      display: block; width: 100%; margin-top: 14px;
+      font-family: 'Creepster', cursive; font-size: 1rem; color: #fff;
+      background: #7c3aed; border: none; border-radius: 9px; padding: 8px 0; cursor: pointer;
     }
 
-    /* HUD coin */
-    #hud-coin {
-      position: fixed; top: 12px; right: 170px; z-index: 10;
-      pointer-events: none; text-align: right;
+    /* Jump-scare flash + overlay */
+    #flash {
+      position: fixed; inset: 0; z-index: 60; pointer-events: none;
+      background: #fff; opacity: 0;
     }
-    #hud-coin .row1 {
-      font-family: 'Creepster', cursive; font-size: 1.1rem;
-      background: linear-gradient(135deg, #c0c0c0, #f0f0f0, #a8a8a8);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
+    #flash.on { animation: flashHit 0.9s ease-out; }
+    @keyframes flashHit {
+      0% { opacity: 0.95; } 14% { opacity: 0; } 30% { opacity: 0.7; } 48% { opacity: 0; } 100% { opacity: 0; }
     }
-    #hud-coin .row2 {
-      font-family: 'Creepster', cursive; font-size: 0.85rem;
-      background: linear-gradient(135deg, #ffd700, #ffec6e, #b8860b);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
+    #jumpscare {
+      position: fixed; inset: 0; z-index: 55; pointer-events: none;
+      display: none; align-items: center; justify-content: center;
     }
-
-    /* HUD status */
-    #hud-status {
-      position: fixed; bottom: 80px; right: 16px; z-index: 10;
-      pointer-events: none; border: 1px solid #888; border-radius: 6px;
-      background: rgba(10,10,10,0.78); padding: 8px 14px;
-      font-family: 'Creepster', cursive; font-size: 1rem; line-height: 1.6;
-      background-image: linear-gradient(135deg, rgba(192,192,192,0.08), rgba(255,255,255,0.04));
+    #jumpscare.on { display: flex; }
+    #jumpscare img {
+      width: min(46vw, 320px); image-rendering: auto;
+      filter: drop-shadow(0 0 30px rgba(255,0,0,0.6));
+      animation: lunge 0.9s cubic-bezier(.2,.8,.3,1);
     }
-    #hud-status span {
-      background: linear-gradient(135deg, #c0c0c0, #f0f0f0, #a8a8a8);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.8));
-    }
-    #status-outcome.outcome-won {
-      background: none !important;
-      -webkit-text-fill-color: #c8a800 !important;
-      color: #c8a800 !important; filter: none !important;
-    }
-    #status-outcome.outcome-lost {
-      background: none !important;
-      -webkit-text-fill-color: #882222 !important;
-      color: #882222 !important; filter: none !important;
-    }
-    #win-calc {
-      display: none;
-      position: fixed; bottom: 62px; right: 16px; z-index: 10;
-      pointer-events: none;
-      font-family: 'Creepster', cursive; font-size: 0.75rem;
-      color: #c8a800; background: rgba(10,10,10,0.7);
-      border: 1px solid #8a7000; border-radius: 5px; padding: 3px 10px;
+    @keyframes lunge {
+      from { transform: scale(0.25); opacity: 0; }
+      55%  { transform: scale(1.25); opacity: 1; }
+      to   { transform: scale(1.6); opacity: 0; }
     }
 
-    /* Dev controls */
+    /* Result banner */
+    #result-banner {
+      display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      z-index: 30; text-align: center;
+      background: rgba(0,0,0,0.9); border: 3px solid #ff2222;
+      border-radius: 12px; padding: 20px 34px;
+      box-shadow: 0 0 40px rgba(255,0,0,0.5);
+    }
+    #result-banner.safe { border-color: #7c3aed; box-shadow: 0 0 40px rgba(124,58,237,0.5); }
+    #result-banner h2 {
+      font-family: 'Creepster', cursive; font-size: clamp(1.6rem, 5vw, 3rem);
+      color: #ff2222; letter-spacing: 3px; text-shadow: 2px 2px 0 #000;
+    }
+    #result-banner.safe h2 { color: #b574ff; }
+    #result-banner p { font-family: sans-serif; font-size: 0.85rem; color: #ccc; margin-top: 8px; }
+    #result-slash { display: none; margin: 0 auto 6px; }
+    #result-banner.found #result-slash { display: block; }
+
     #dev-controls {
       display: none;
-      position: fixed; bottom: 80px; left: 16px; z-index: 10;
+      position: fixed; bottom: 16px; left: 16px; z-index: 10;
       background: rgba(10,10,10,0.85); border: 1px solid #ff4422;
       border-radius: 8px; padding: 10px 14px;
       font-family: 'Creepster', cursive;
@@ -203,96 +257,12 @@
       padding: 5px 14px; border-radius: 5px; border: none; cursor: pointer;
     }
     #dev-controls button:hover { filter: brightness(1.2); }
-    #btn-resolve { background: #7c1d0e; color: #ffbbaa; }
-    #btn-newround { background: #1a3d1a; color: #aaffaa; }
-    #btn-newround.hidden { display: none; }
-
-    /* Win banner */
-    #win-banner {
-      display: none;
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      z-index: 20; text-align: center;
-      background: rgba(0,0,0,0.88); border: 3px solid #ff2222;
-      border-radius: 12px; padding: 24px 48px;
-      box-shadow: 0 0 40px rgba(255,0,0,0.5);
-    }
-    #win-banner h2 {
-      font-family: 'Creepster', cursive; font-size: clamp(2rem, 6vw, 4rem);
-      color: #ff2222; text-shadow: 2px 2px 0 #000, 0 0 20px rgba(255,0,0,0.8);
-      letter-spacing: 4px;
-    }
-    #win-banner p { font-family: 'Creepster', cursive; font-size: 1.1rem; color: #ccc; margin-top: 8px; }
-
-    /* Bet panel */
-    #bet-panel {
-      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      z-index: 11; display: flex; align-items: center; gap: 6px;
-      background: rgba(10,10,10,0.85); border: 1px solid #666;
-      border-radius: 12px; padding: 8px 14px;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.7);
-    }
-    .bet-adj {
-      font-family: 'Creepster', cursive; font-size: 1.4rem; color: #ccc;
-      background: #222; border: 1px solid #555; border-radius: 6px;
-      width: 34px; height: 34px; cursor: pointer; line-height: 1;
-      transition: background 0.15s;
-    }
-    .bet-adj:hover:not(:disabled) { background: #333; }
-    .bet-adj:disabled { opacity: 0.4; cursor: default; }
-    #bet-chips { display: flex; gap: 5px; align-items: center; }
-    .bet-chip {
-      font-family: 'Creepster', cursive; font-size: 0.9rem; color: #aaa;
-      background: #1a1a1a; border: 1px solid #444; border-radius: 7px;
-      padding: 5px 10px; cursor: pointer; transition: all 0.15s;
-    }
-    .bet-chip:hover:not(:disabled) { background: #2a2a2a; color: #ddd; }
-    .bet-chip.active {
-      background: #7a6000; border-color: #c8a800; color: #ffd700;
-      font-size: 1rem;
-      box-shadow: 0 0 8px rgba(200,160,0,0.5);
-    }
-    .bet-chip:disabled { opacity: 0.4; cursor: default; }
-    .bet-tkn-label {
-      font-family: 'Creepster', cursive; font-size: 0.85rem; color: #666;
-      padding-left: 2px;
-    }
-
-    /* Confirm chip */
-    #confirm-chip {
-      display: none;
-      position: fixed; bottom: 78px; left: 50%; transform: translateX(-50%);
-      z-index: 12;
-      background: rgba(10,10,10,0.92); border: 1px solid #888;
-      border-radius: 10px; padding: 8px 16px;
-      align-items: center; gap: 10px;
-      font-family: 'Creepster', cursive; font-size: 1rem; color: #eee;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.8);
-      white-space: nowrap;
-    }
-    #confirm-chip.visible {
-      display: flex;
-      animation: slideUp 0.18s ease-out;
-    }
-    @keyframes slideUp {
-      from { transform: translateX(-50%) translateY(12px); opacity: 0; }
-      to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
-    }
-    #confirm-yes, #confirm-no {
-      font-family: 'Creepster', cursive; font-size: 1rem;
-      border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer;
-    }
-    #confirm-yes { background: #7c3aed; color: #fff; }
-    #confirm-no  { background: #333;    color: #aaa; }
-    #confirm-yes:hover { filter: brightness(1.2); }
-    #confirm-no:hover  { filter: brightness(1.2); }
+    #btn-advance { background: #7c1d0e; color: #ffbbaa; }
 
     /* How-to-play intro overlay */
     #intro-overlay {
-      display: none;
-      position: fixed; inset: 0; z-index: 50;
-      background: rgba(4,4,6,0.82);
-      align-items: center; justify-content: center;
-      padding: 20px;
+      display: none; position: fixed; inset: 0; z-index: 50;
+      background: rgba(4,4,6,0.82); align-items: center; justify-content: center; padding: 20px;
       animation: introFade 0.25s ease-out;
     }
     #intro-overlay.show { display: flex; }
@@ -300,42 +270,30 @@
     #intro-card {
       max-width: 420px; width: 100%;
       background: linear-gradient(160deg, #17171a, #101012);
-      border: 2px solid #ff2222; border-radius: 16px;
-      padding: 22px 24px 20px;
-      box-shadow: 0 0 44px rgba(255,0,0,0.35);
-      color: #e8e8e8; text-align: center;
+      border: 2px solid #ff2222; border-radius: 16px; padding: 22px 24px 20px;
+      box-shadow: 0 0 44px rgba(255,0,0,0.35); color: #e8e8e8; text-align: center;
     }
     #intro-card h2 {
-      font-family: 'Creepster', cursive; font-size: 2rem;
-      color: #ff3030; letter-spacing: 2px;
-      text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6);
+      font-family: 'Creepster', cursive; font-size: 2rem; color: #ff3030;
+      letter-spacing: 2px; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6);
       margin-bottom: 4px;
     }
-    #intro-card .intro-sub {
-      font-family: sans-serif; font-size: 0.78rem; color: #9a9a9a;
-      margin-bottom: 14px;
-    }
-    #intro-card ol {
-      text-align: left; margin: 0 0 14px; padding-left: 4px;
-      list-style: none; counter-reset: step;
-    }
+    #intro-card .intro-sub { font-family: sans-serif; font-size: 0.78rem; color: #9a9a9a; margin-bottom: 14px; }
+    #intro-card ol { text-align: left; margin: 0 0 14px; list-style: none; counter-reset: step; }
     #intro-card ol li {
-      font-family: sans-serif; font-size: 0.9rem; line-height: 1.45;
-      color: #dcdcdc; margin-bottom: 10px; padding-left: 34px; position: relative;
-      counter-increment: step;
+      font-family: sans-serif; font-size: 0.9rem; line-height: 1.45; color: #dcdcdc;
+      margin-bottom: 10px; padding-left: 34px; position: relative; counter-increment: step;
     }
     #intro-card ol li::before {
-      content: counter(step);
-      position: absolute; left: 0; top: 0;
+      content: counter(step); position: absolute; left: 0; top: 0;
       width: 24px; height: 24px; border-radius: 50%;
       background: #7c1d0e; color: #ffd0c4;
       font-family: 'Creepster', cursive; font-size: 0.95rem;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 8px rgba(255,60,20,0.4);
     }
     #intro-card ol li b { color: #ffd700; }
     #intro-card ol li .lose { color: #ff5555; font-weight: bold; }
-    #intro-card ol li .win  { color: #7fe07f; font-weight: bold; }
+    #intro-card ol li .win  { color: #b574ff; font-weight: bold; }
     #intro-note {
       font-family: sans-serif; font-size: 0.74rem; color: #b98;
       background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
@@ -344,15 +302,27 @@
     #intro-got {
       font-family: 'Creepster', cursive; font-size: 1.3rem; letter-spacing: 1px;
       color: #fff; background: #7c3aed; border: none; border-radius: 10px;
-      padding: 9px 30px; cursor: pointer; transition: filter 0.15s;
+      padding: 9px 30px; cursor: pointer;
     }
     #intro-got:hover { filter: brightness(1.18); }
 
     @media (max-width: 768px) {
-      #tutorial-panel, #mascot-canvas { display: none; }
-      #hud-coin { right: 16px; }
-      .bet-chip { padding: 4px 7px; font-size: 0.8rem; }
-      #intro-card h2 { font-size: 1.7rem; }
+      #phase-panel {
+        left: 0; right: 0; top: auto; bottom: 0; width: auto;
+        border-radius: 14px 14px 0 0; border-left: none; border-right: none; border-bottom: none;
+      }
+      #compass-hint { display: none; }
+      #phase-panel .phase-banner { font-size: 1rem; }
+      /* Keep the title clear of the sound button on a narrow screen. */
+      #title {
+        left: 12px; transform: none; text-align: left;
+        font-size: 1.15rem; letter-spacing: 1px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body.shaking { animation: none; }
+      #jumpscare img { animation: none; opacity: 1; transform: scale(1); }
+      #flash.on { animation: none; opacity: 0.35; }
     }
   </style>
 </head>
@@ -360,9 +330,10 @@
   <div id="map-wrap">
     <svg id="game-svg" viewBox="0 0 1376 768" preserveAspectRatio="xMidYMid meet"
          xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-      <g id="layer-static"></g>
+      <g id="layer-rooms"></g>
+      <g id="layer-furn"></g>
+      <g id="layer-route"></g>
       <g id="layer-tint"></g>
-      <g id="layer-blood"></g>
       <g id="layer-figures"></g>
       <g id="layer-ghost"></g>
       <g id="layer-labels"></g>
@@ -371,58 +342,47 @@
   </div>
 
   <div id="title">👻 Awas Ada Pocong</div>
+  <div id="compass-hint">👻 Ketuk ruangan untuk bersembunyi</div>
 
-  <div id="compass-hint">👻 Ketuk ruangan untuk bertaruh</div>
+  <button id="btn-mute" aria-pressed="true">🔊 Suara: Nyala</button>
 
-  <canvas id="mascot-canvas" width="130" height="130"></canvas>
-
-  <div id="tutorial-panel">
-    <div class="tut-header">RANDOM DOOR</div>
-    <canvas id="tut-canvas" width="172" height="56"></canvas>
-    <div class="tut-body">Hantu pocong lompat di sepanjang lorong sebelum masuk pintu acak.</div>
-    <div id="tutorial-start">→ START</div>
+  <div id="phase-panel">
+    <h2 class="phase-banner" id="phase-banner">FASE 1 · SEMBUNYI</h2>
+    <div id="hiding-timer">Hiding Phase: 01:00</div>
+    <div class="phase-row">User Location: <span id="location-state" class="lock-state none">—</span></div>
+    <div class="phase-row">Player: <span id="player-name">—</span></div>
+    <div id="phase-score">Skor ronde ini: 0 · Streak: 0</div>
+    <button id="btn-confirm" disabled>CONFIRM &amp; PLACE</button>
+    <div id="phase-note">Ketuk ruangan di peta, lalu tekan tombol.</div>
+    <button id="btn-leaderboard">🏆 Leaderboard</button>
   </div>
 
-  <div id="hud-coin">
-    <div class="row1">🪙 <span id="tkn-balance">1000 TKN</span></div>
-    <div class="row2" id="tkn-winnings" style="display:none">+0 TKN</div>
+  <div id="result-banner">
+    <svg id="result-slash" width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+      <circle cx="23" cy="23" r="15" fill="#2a2a2a" stroke="#000" stroke-width="2"/>
+      <line x1="8" y1="8" x2="38" y2="38" stroke="#ff2222" stroke-width="5"/>
+      <line x1="38" y1="8" x2="8" y2="38" stroke="#ff2222" stroke-width="5"/>
+    </svg>
+    <h2 id="result-text">Aman!</h2>
+    <p id="result-sub"></p>
   </div>
 
-  <div id="hud-status">
-    <span id="status-bet">bet: — TKN</span><br>
-    <span id="status-round">round: —</span><br>
-    <span id="status-outcome">status: watching</span>
-  </div>
-  <div id="win-calc">Perhitungan Kemenangan: Modal + 2× Bet</div>
+  <div id="jumpscare"><img src="/assets/pocong.jpg" alt=""></div>
+  <div id="flash"></div>
 
   <div id="dev-controls">
     <div class="dev-label">🛠 Dev Controls (staging)</div>
-    <button id="btn-resolve">⚡ Resolve Round</button>
-    <button id="btn-newround" class="hidden">🔄 New Round</button>
+    <button id="btn-advance">⏭ Next Phase</button>
   </div>
 
-  <div id="win-banner">
-    <h2 id="win-text">You Win!</h2>
-    <p id="win-sub">The Pocong entered Kamar Utama. You were safe!</p>
-  </div>
-
-  <div id="bet-panel">
-    <button id="btn-decrement" class="bet-adj">−</button>
-    <div id="bet-chips">
-      <button class="bet-chip" data-amount="100">100</button>
-      <button class="bet-chip" data-amount="200">200</button>
-      <button class="bet-chip" data-amount="500">500</button>
-      <button class="bet-chip active" data-amount="1000">1000</button>
-      <button class="bet-chip" data-amount="5000">5000</button>
+  <div id="leaderboard-overlay">
+    <div id="leaderboard-card">
+      <h2>🏆 Leaderboard</h2>
+      <div class="lb-sub">Skor terbaik tiap pemain</div>
+      <ul id="leaderboard-list"></ul>
+      <div id="leaderboard-empty">Belum ada skor. Mainkan satu ronde dulu.</div>
+      <button id="leaderboard-close">Tutup</button>
     </div>
-    <button id="btn-increment" class="bet-adj">+</button>
-    <span class="bet-tkn-label">TKN</span>
-  </div>
-
-  <div id="confirm-chip">
-    <span id="confirm-text">Bet 1000 TKN on ...?</span>
-    <button id="confirm-yes">✓ OK</button>
-    <button id="confirm-no">✕</button>
   </div>
 
   <div id="intro-overlay">
@@ -430,11 +390,12 @@
       <h2>👻 Cara Bermain</h2>
       <div class="intro-sub">How to play — Awas Ada Pocong</div>
       <ol>
-        <li>Pilih jumlah taruhan <b>(100–5000 TKN)</b> di panel bawah. <em>(Pick a bet amount.)</em></li>
-        <li>Ketuk sebuah ruangan untuk memasang taruhan di sana. <em>(Tap a room to bet.)</em></li>
-        <li>Pocong memilih <b>pintu acak</b>. Kalau ia masuk ruanganmu — <span class="lose">kamu KALAH 💀</span>. Ruangan lain — <span class="win">kamu MENANG 🎉</span> (Modal + 2× Bet).</li>
+        <li>Kamu punya <b>60 detik</b> untuk bersembunyi. <em>(You have 60 seconds to hide.)</em></li>
+        <li>Ketuk satu ruangan di peta, lalu tekan <b>CONFIRM &amp; PLACE</b> untuk mengunci. <em>(Tap a room, then lock it in.)</em></li>
+        <li>Kalau waktu habis sebelum kamu mengunci, kamu ke <span class="lose">Spectator Lounge</span>. <em>(Timeout sends you to the lounge.)</em></li>
+        <li>Pocong berjalan di <b>Pocong Route</b> ke satu pintu acak. Ruanganmu kena — <span class="lose">kamu ketemu 💀</span>. Ruangan lain — <span class="win">kamu selamat 🎉</span> dan dapat skor. <em>(Get found, or survive and score.)</em></li>
       </ol>
-      <div id="intro-note">🛠 Di staging, pakai <b>Dev Controls</b> di kiri-bawah — <b>Resolve Round</b> lalu <b>New Round</b> — untuk menjalankan ronde sendiri dan melihat Pocong memilih pintu.</div>
+      <div id="intro-note">🛠 Di staging, pakai <b>Dev Controls</b> kiri-bawah untuk melompat ke fase berikutnya.</div>
       <button id="intro-got">Got it 👻</button>
     </div>
   </div>
@@ -454,25 +415,26 @@
     }
     const $ = (id) => document.getElementById(id);
 
-    // ── Room definitions (grid → isometric projection) ─────────────────────────
+    // ── Rooms: 11 hiding rooms + hall tiles ────────────────────────────────────
     const ROOMS = [
       { slug: 'kamar-utama',       label: 'Kamar Utama',       gridX: 0, gridZ: 0, type: 'bedroom'  },
       { slug: 'library',           label: 'Library',           gridX: 1, gridZ: 0, type: 'library'  },
       { slug: 'kamar-asisten',     label: 'Kamar Asisten',     gridX: 2, gridZ: 0, type: 'bedroom'  },
-      { slug: 'laundry-area',      label: 'Laundry Area',      gridX: 3, gridZ: 0, type: 'laundry'  },
+      { slug: null, label: null,   gridX: 3, gridZ: 0, type: 'corridor' },
       { slug: 'kitchen-area',      label: 'Kitchen Area',      gridX: 0, gridZ: 1, type: 'kitchen'  },
       { slug: 'kamar-anak',        label: 'Kamar Anak-Anak',   gridX: 1, gridZ: 1, type: 'playroom' },
-      { slug: 'playing-room',      label: 'Playing Room',      gridX: 2, gridZ: 1, type: 'playroom' },
+      { slug: null, label: null,   gridX: 2, gridZ: 1, type: 'corridor' },
       { slug: 'living-room',       label: 'Living Room',       gridX: 3, gridZ: 1, type: 'living'   },
       { slug: 'kamar-mandi',       label: 'Kamar Mandi',       gridX: 0, gridZ: 2, type: 'bathroom' },
       { slug: 'kamar-mandi-kedua', label: 'Kamar Mandi Kedua', gridX: 1, gridZ: 2, type: 'bathroom' },
       { slug: 'backyard',          label: 'Backyard',          gridX: 2, gridZ: 2, type: 'backyard' },
       { slug: 'gudang',            label: 'Gudang',            gridX: 3, gridZ: 2, type: 'storage'  },
       { slug: 'ruang-baca',        label: 'Ruang Baca',        gridX: 0, gridZ: 3, type: 'reading'  },
-      { slug: null, label: null, gridX: 1, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null, gridX: 2, gridZ: 3, type: 'corridor' },
-      { slug: null, label: null, gridX: 3, gridZ: 3, type: 'corridor' },
+      { slug: null, label: null,   gridX: 1, gridZ: 3, type: 'corridor' },
+      { slug: null, label: null,   gridX: 2, gridZ: 3, type: 'corridor' },
+      { slug: null, label: null,   gridX: 3, gridZ: 3, type: 'corridor' },
     ];
+    const HIDING_SLUGS = ROOMS.filter(r => r.slug).map(r => r.slug);
 
     const ISO = { hw: 108, hh: 62, wallH: 72, ox: 688, oy: 172 };
     function iso(gx, gz) {
@@ -480,15 +442,13 @@
     }
     function ptsStr(arr) { return arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '); }
 
-    // Simple per-type furniture, expressed as small iso cuboids:
-    // [offsetX, offsetY(screen, negative = toward back), halfW, halfDepth, height]
+    // Per-type furniture as small iso cuboids [offX, offY, halfW, halfDepth, height]
     const FURN = {
       bedroom:  [[-46,-14,28,13,24],[36,-6,15,11,30],[8,-30,10,8,16]],
       playroom: [[-40,-10,24,12,10],[36,-4,13,10,20],[2,6,9,9,9]],
       library:  [[-44,-16,30,10,42],[36,-2,18,12,10],[-2,-30,8,8,14]],
       reading:  [[-44,-16,30,10,42],[36,-4,17,12,11],[-2,-28,8,8,14]],
       kitchen:  [[-42,-14,28,11,26],[36,-16,13,10,40],[8,-28,15,7,10]],
-      laundry:  [[-44,-12,16,12,30],[-10,-16,16,12,30],[38,-4,11,10,20]],
       living:   [[-44,-6,30,14,14],[6,-4,20,12,7],[36,-26,17,4,24]],
       bathroom: [[-44,-12,26,12,16],[36,-14,13,9,18],[8,-26,10,8,20]],
       backyard: [[-42,-20,9,9,36],[-42,-44,20,20,4],[32,-2,20,6,8]],
@@ -496,35 +456,31 @@
     };
 
     function drawCuboid(g, cx, cy, hw, hd, h) {
-      // Right-front face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx, cy + hd - h], [cx + hw, cy - h], [cx + hw, cy], [cx, cy + hd]]),
-        fill: '#6a6a68', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: '#9b968a', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
       }));
-      // Left-front face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx - hw, cy - h], [cx, cy + hd - h], [cx, cy + hd], [cx - hw, cy]]),
-        fill: '#8c8c8a', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: '#c3bdae', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
       }));
-      // Top face
       g.appendChild(svgEl('polygon', {
         points: ptsStr([[cx, cy - hd - h], [cx + hw, cy - h], [cx, cy + hd - h], [cx - hw, cy - h]]),
-        fill: '#c6c6c4', stroke: '#111', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
+        fill: '#efeadd', stroke: '#1a1a1a', 'stroke-width': 1.4, 'stroke-linejoin': 'round',
       }));
     }
 
-    // ── Build the static isometric mansion ──────────────────────────────────────
-    const roomGeo = {};          // slug → { cx, cy, floorPts, figureAnchor, ghostRest }
-    const hotspotEls = {};       // slug → <polygon>
-    const corridorCenters = [];
+    // ── Build the isometric blueprint ──────────────────────────────────────────
+    const roomGeo = {};   // slug → { cx, cy, floorPts, figureAnchor, ghostRest }
+    const hotspotEls = {};
 
     (function buildMap() {
-      const staticG   = $('layer-static');
-      const labelsG   = $('layer-labels');
+      const roomsG  = $('layer-rooms');
+      const furnG   = $('layer-furn');
+      const labelsG = $('layer-labels');
       const hotspotsG = $('layer-hotspots');
       const hw = ISO.hw, hh = ISO.hh, wH = ISO.wallH;
 
-      // Painter's order: back (small gx+gz) to front (large gx+gz)
       const ordered = ROOMS.slice().sort((a, b) => (a.gridX + a.gridZ) - (b.gridX + b.gridZ));
 
       for (const r of ordered) {
@@ -537,39 +493,29 @@
         const bottom = [cx, cy + hh];
         const left   = [cx - hw, cy];
 
-        // Back-left wall (rises from the left→top edge)
-        staticG.appendChild(svgEl('polygon', {
+        roomsG.appendChild(svgEl('polygon', {
           points: ptsStr([left, top, [cx, cy - hh - wH], [cx - hw, cy - wH]]),
-          fill: '#9a9a98', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: '#e4dfd0', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
-        // Back-right wall (rises from the top→right edge)
-        staticG.appendChild(svgEl('polygon', {
+        roomsG.appendChild(svgEl('polygon', {
           points: ptsStr([top, right, [cx + hw, cy - wH], [cx, cy - hh - wH]]),
-          fill: '#7c7c7a', stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: '#d6d0bf', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
-        // Floor diamond
-        staticG.appendChild(svgEl('polygon', {
+        roomsG.appendChild(svgEl('polygon', {
           points: ptsStr([top, right, bottom, left]),
-          fill: isCorr ? '#b0b0ae' : '#dcdcda',
-          stroke: '#111', 'stroke-width': 2, 'stroke-linejoin': 'round',
+          fill: isCorr ? '#cfc9b8' : '#fbf9f1', stroke: '#1a1a1a', 'stroke-width': 2, 'stroke-linejoin': 'round',
         }));
 
-        if (isCorr) {
-          corridorCenters.push({ x: cx, y: cy - 6 });
-          continue;
-        }
+        if (isCorr) continue;
 
-        // Furniture (decorative; never intercepts pointer events)
         const set = FURN[r.type] || FURN.bedroom;
-        for (const f of set) drawCuboid(staticG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
+        for (const f of set) drawCuboid(furnG, cx + f[0], cy + f[1], f[2], f[3], f[4]);
 
-        // Label pill above the room
         const lx = cx, ly = cy - hh - wH - 4;
-        const wpx = r.label.length * 6.6 + 14;
         labelsG.appendChild(svgEl('rect', {
-          x: (lx - wpx / 2).toFixed(1), y: (ly - 15).toFixed(1),
-          width: wpx.toFixed(1), height: 17, rx: 5,
-          fill: 'rgba(10,10,10,0.82)', stroke: '#cfcfcf', 'stroke-width': 1,
+          x: (lx - (r.label.length * 6.6 + 14) / 2).toFixed(1), y: (ly - 15).toFixed(1),
+          width: (r.label.length * 6.6 + 14).toFixed(1), height: 17, rx: 5,
+          fill: 'rgba(15,14,11,0.86)', stroke: '#8b8578', 'stroke-width': 1,
         }));
         const t = svgEl('text', {
           x: lx.toFixed(1), y: (ly - 3).toFixed(1),
@@ -579,11 +525,7 @@
         t.textContent = r.label;
         labelsG.appendChild(t);
 
-        // Hotspot = floor diamond
-        const hs = svgEl('polygon', {
-          points: ptsStr([top, right, bottom, left]),
-          class: 'hotspot',
-        });
+        const hs = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'hotspot' });
         hs.dataset.slug = r.slug;
         hotspotsG.appendChild(hs);
         hotspotEls[r.slug] = hs;
@@ -596,15 +538,65 @@
         };
 
         const room = r;
-        hs.addEventListener('pointerenter', () => {
-          if (canBet()) hs.classList.add('hovered');
-        });
+        hs.addEventListener('pointerenter', () => { if (canHide()) hs.classList.add('hovered'); });
         hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
-        hs.addEventListener('click', () => { if (canBet()) showConfirmChip(room); });
+        hs.addEventListener('click', () => { if (canHide()) selectRoom(room); });
       }
     })();
 
-    // ── Player token art (canvas → data URL, cached per initial) ─────────────────
+    // ── Pocong Route: the drawn hallway path, visible in both phases ────────────
+    const ROUTE = [
+      { x: 688, y: 150 }, { x: 702, y: 198 }, { x: 714, y: 246 }, { x: 706, y: 300 },
+      { x: 678, y: 352 }, { x: 662, y: 398 }, { x: 676, y: 446 }, { x: 704, y: 486 },
+      { x: 714, y: 516 }, { x: 700, y: 566 }, { x: 672, y: 610 }, { x: 668, y: 628 },
+      { x: 680, y: 662 }, { x: 688, y: 690 },
+    ];
+    (function drawRoute() {
+      const g = $('layer-route');
+      // A light halo keeps the route legible on the pale hiding map, and the
+      // mid-tone dashed line keeps it legible on the dark hunt map. Visible in
+      // both phases, always.
+      g.appendChild(svgEl('polyline', {
+        points: ROUTE.map(p => p.x + ',' + p.y).join(' '),
+        fill: 'none', stroke: 'rgba(120,102,72,0.45)', 'stroke-width': 9,
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+      }));
+      g.appendChild(svgEl('polyline', {
+        points: ROUTE.map(p => p.x + ',' + p.y).join(' '),
+        fill: 'none', stroke: '#5c5449', 'stroke-width': 3.4, 'stroke-dasharray': '10 7',
+        'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.9,
+      }));
+      for (const p of [ROUTE[3], ROUTE[8]]) {
+        g.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: 4.5, fill: '#5c5449' }));
+      }
+      const lbl = svgEl('text', {
+        x: 726, y: 386, 'font-family': 'sans-serif', 'font-size': 12,
+        'font-weight': 'bold', fill: '#b3000f',
+      });
+      lbl.textContent = 'Pocong Route';
+      g.appendChild(lbl);
+      // North arrow + level title, on a pale chip so both read in either phase.
+      const north = svgEl('g', {});
+      north.appendChild(svgEl('rect', {
+        x: 104, y: 70, width: 52, height: 60, rx: 8,
+        fill: 'rgba(251,249,241,0.92)', stroke: '#1a1a1a', 'stroke-width': 1.5,
+      }));
+      north.appendChild(svgEl('polygon', { points: '120,104 128,130 136,104 128,110', fill: '#14140f' }));
+      const nt = svgEl('text', { x: 130, y: 96, 'text-anchor': 'middle', 'font-family': 'sans-serif', 'font-size': 13, 'font-weight': 'bold', fill: '#14140f' });
+      nt.textContent = 'N';
+      north.appendChild(nt);
+      $('layer-rooms').appendChild(north);
+      const chip = svgEl('rect', {
+        x: 132, y: 624, width: 150, height: 22, rx: 6,
+        fill: 'rgba(251,249,241,0.92)', stroke: '#1a1a1a', 'stroke-width': 1.2,
+      });
+      $('layer-rooms').appendChild(chip);
+      const lvl = svgEl('text', { x: 207, y: 640, 'text-anchor': 'middle', 'font-family': 'sans-serif', 'font-size': 12, 'font-weight': 'bold', fill: '#14140f' });
+      lvl.textContent = 'MANSION LEVEL 1';
+      $('layer-rooms').appendChild(lvl);
+    })();
+
+    // ── Player token art ───────────────────────────────────────────────────────
     const tokenCache = {};
     function playerTokenURL(initial) {
       const key = (initial || '?').toUpperCase().charAt(0);
@@ -613,33 +605,26 @@
       c.width = 68; c.height = 96;
       const ctx = c.getContext('2d');
       const cx = 34;
-      // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.32)';
       ctx.beginPath(); ctx.ellipse(cx, 90, 16, 5, 0, 0, Math.PI * 2); ctx.fill();
-      // Suit body
       ctx.fillStyle = '#2a2a2a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(cx - 13, 88); ctx.lineTo(cx - 9, 52);
       ctx.lineTo(cx + 9, 52);  ctx.lineTo(cx + 13, 88); ctx.closePath();
       ctx.fill(); ctx.stroke();
-      // Red tie
       ctx.fillStyle = '#cc1111';
       ctx.beginPath(); ctx.moveTo(cx, 54); ctx.lineTo(cx - 3, 68);
       ctx.lineTo(cx, 74); ctx.lineTo(cx + 3, 68); ctx.closePath(); ctx.fill();
-      // Head
       ctx.fillStyle = '#e8d6bc';
       ctx.beginPath(); ctx.arc(cx, 44, 11, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
-      // Eyes
       ctx.fillStyle = '#222';
       ctx.beginPath(); ctx.arc(cx - 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + 4, 44, 1.5, 0, Math.PI * 2); ctx.fill();
-      // Hat brim + crown
       ctx.fillStyle = '#141414';
       ctx.beginPath(); ctx.ellipse(cx, 34, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillRect(cx - 10, 18, 20, 16);
       ctx.fillStyle = '#cc1111'; ctx.fillRect(cx - 10, 30, 20, 3);
-      // Initial tag above hat
       ctx.fillStyle = 'rgba(0,0,0,0.82)';
       ctx.beginPath(); ctx.arc(cx, 9, 8, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.4; ctx.stroke();
@@ -652,90 +637,87 @@
       return url;
     }
 
-    // ── Player figures ──────────────────────────────────────────────────────────
+    // ── Figures (other players + the viewer's own avatar) ──────────────────────
     const FIG_W = 26, FIG_H = 37;
     const playerFigures = [];
 
-    function placePlayerTokens(players) {
+    function placeFigures(hides, myHide) {
       const layer = $('layer-figures');
       for (const el of playerFigures) el.remove();
       playerFigures.length = 0;
 
       const counts = {};
-      for (let i = 0; i < Math.min(players.length, 50); i++) {
-        const p = players[i];
+      hides.forEach((p) => {
         const geo = roomGeo[p.room_slug];
-        if (!geo) continue;
+        if (!geo) return;
         counts[p.room_slug] = (counts[p.room_slug] || 0) + 1;
         const n = counts[p.room_slug];
         const ang = (n - 1) * 2.399963;
         const r = Math.min(6 + (n - 1) * 12, 46);
         const px = geo.figureAnchor.x + r * Math.cos(ang);
         const py = geo.figureAnchor.y + r * Math.sin(ang) * 0.52;
-
         const img = svgEl('image', {
           class: 'player-fig',
-          x: (px - FIG_W / 2).toFixed(1),
-          y: (py - FIG_H).toFixed(1),
+          x: (px - FIG_W / 2).toFixed(1), y: (py - FIG_H).toFixed(1),
           width: FIG_W, height: FIG_H,
         });
         img.setAttributeNS(XLINK, 'href', playerTokenURL(p.username ? p.username[0] : '?'));
         img.setAttribute('href', playerTokenURL(p.username ? p.username[0] : '?'));
         img.dataset.slug = p.room_slug;
-        img.dataset.username = p.username || '';
-        // Front-to-back stacking so lower figures overlap correctly
-        img.style.setProperty('--depth', py);
         layer.appendChild(img);
         playerFigures.push(img);
-      }
-      // Sort within layer by y so nearer figures paint on top
-      playerFigures
-        .slice()
-        .sort((a, b) => parseFloat(a.getAttribute('y')) - parseFloat(b.getAttribute('y')))
-        .forEach(el => layer.appendChild(el));
-    }
+      });
 
-    // ── Pocong ghost (2D sprite with fake-3D flair) ─────────────────────────────
+      // Viewer's own avatar: a distinct red-ringed marker in the chosen room.
+      if (myHide && roomGeo[myHide.room_slug]) {
+        const geo = roomGeo[myHide.room_slug];
+        const ax = geo.cx, ay = geo.cy + 4;
+        const ring = svgEl('circle', {
+          cx: ax, cy: ay, r: 15, fill: 'rgba(124,58,237,0.35)',
+          stroke: '#7c3aed', 'stroke-width': 3, class: 'avatar-ring',
+        });
+        const dot = svgEl('circle', { cx: ax, cy: ay, r: 7, fill: '#7c3aed', stroke: '#000', 'stroke-width': 2, class: 'avatar-dot' });
+        layer.appendChild(ring); layer.appendChild(dot);
+        playerFigures.push(ring, dot);
+        myAvatar = { ring, dot, x: ax, y: ay };
+        // Eliminated: slash the avatar so the marker survives a muted or
+        // reduced-motion jump-scare.
+        if (myHide.outcome === 'eliminated') {
+          const slash = svgEl('g', { class: 'avatar-slash' });
+          slash.appendChild(svgEl('line', { x1: ax - 13, y1: ay - 13, x2: ax + 13, y2: ay + 13, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
+          slash.appendChild(svgEl('line', { x1: ax + 13, y1: ay - 13, x2: ax - 13, y2: ay + 13, stroke: '#ff2222', 'stroke-width': 5, 'stroke-linecap': 'round' }));
+          layer.appendChild(slash);
+          playerFigures.push(slash);
+        }
+      } else {
+        myAvatar = null;
+      }
+    }
+    let myAvatar = null;
+
+    // ── Pocong ghost ───────────────────────────────────────────────────────────
     const GHOST_W = 42, GHOST_H = 58;
-    // Soft ground shadow (grows/shrinks with the bob) + the sprite itself.
-    const ghostShadow = svgEl('ellipse', {
-      cx: 0, cy: 0, rx: 20, ry: 6, fill: 'rgba(0,0,0,0.34)',
-    });
+    const ghostShadow = svgEl('ellipse', { cx: 0, cy: 0, rx: 20, ry: 6, fill: 'rgba(0,0,0,0.34)' });
     $('layer-ghost').appendChild(ghostShadow);
     const ghostImg = svgEl('image', { x: 0, y: 0, width: GHOST_W, height: GHOST_H });
     ghostImg.setAttributeNS(XLINK, 'href', '/assets/pocong.jpg');
     ghostImg.setAttribute('href', '/assets/pocong.jpg');
     $('layer-ghost').appendChild(ghostImg);
 
-    // Central hallway: a spine down the middle of the map, spanning the WHOLE
-    // mansion top-to-bottom (front-to-back), not just the last few tiles.
-    // Points are stored as a there-and-back palindrome so the ghost paces the
-    // full corridor and returns smoothly instead of teleporting.
-    const spineX = ISO.ox; // screen-center column (gx == gz)
-    const spine = [
-      { x: spineX,       y: ISO.oy - 12 },   // behind Kamar Utama
-      { x: spineX + 26,  y: ISO.oy + 108 },
-      { x: spineX - 26,  y: ISO.oy + 226 },
-      { x: spineX + 26,  y: ISO.oy + 344 },
-      { x: spineX - 20,  y: ISO.oy + 452 },
-      { x: spineX,       y: ISO.oy + 452 + ISO.hh }, // front corridor edge
-    ];
-    const ghostLoop = spine.concat(spine.slice(1, -1).reverse());
-    let ghostBase = { x: ghostLoop[0].x, y: ghostLoop[0].y };
-    let gSeg = 0, gT = 0;
+    let ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y };
+    const footprints = [];
 
     function renderGhost(gx, gy) {
       const t = performance.now();
-      const lift  = Math.abs(Math.sin(t / 300)) * 16;      // lively hop, returns to floor
-      const sway  = Math.sin(t / 620) * 6;                 // gentle side-to-side
-      const pulse = 1 + Math.sin(t / 240) * 0.05;          // subtle scale breathing
-      const f     = 1 - (lift / 16) * 0.55;                // shadow factor (small when high)
+      const lift  = Math.abs(Math.sin(t / 300)) * 16;
+      const sway  = Math.sin(t / 620) * 6;
+      const pulse = 1 + Math.sin(t / 240) * 0.05;
+      const f     = 1 - (lift / 16) * 0.55;
       ghostShadow.setAttribute('cx', (gx + sway * 0.5).toFixed(1));
       ghostShadow.setAttribute('cy', gy.toFixed(1));
       ghostShadow.setAttribute('rx', (20 * f).toFixed(1));
       ghostShadow.setAttribute('ry', (6 * f).toFixed(1));
       ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.34 * f).toFixed(3) + ')');
-      // Position + scale the sprite around its bottom-center (the feet).
       const px = gx + sway, py = gy - lift;
       ghostImg.setAttribute('transform',
         'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ') ' +
@@ -743,13 +725,49 @@
         'translate(' + (-GHOST_W / 2) + ',' + (-GHOST_H) + ')');
     }
 
+    // The ghost walks the route from the start to the point nearest the target
+    // room's doorway, then steps into it. footprints fade in behind it.
+    let routeStopIndex = ROUTE.length - 1;
+    let gSeg = 0, gT = 0;
+    let ghostWalking = false;
+
+    function nearestRouteIndex(px, py) {
+      let best = 0, bestD = Infinity;
+      ROUTE.forEach((p, i) => {
+        const d = (p.x - px) * (p.x - px) + (p.y - py) * (p.y - py);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      return best;
+    }
+
+    function dropFootprint(x, y) {
+      const fp = svgEl('ellipse', {
+        cx: x.toFixed(1), cy: y.toFixed(1), rx: 5, ry: 3,
+        fill: '#b3000f', opacity: 0.55,
+      });
+      $('layer-ghost').insertBefore(fp, ghostShadow);
+      footprints.push({ el: fp, born: performance.now() });
+    }
+
     function tickGhost() {
-      if (currentState.round?.status !== 'completed' && ghostLoop.length > 1) {
-        gT += 0.016;
-        if (gT >= 1) { gT = 0; gSeg = (gSeg + 1) % ghostLoop.length; }
-        const a = ghostLoop[gSeg];
-        const b = ghostLoop[(gSeg + 1) % ghostLoop.length];
+      const status = currentState.round && currentState.round.status;
+      if (ghostWalking && routeStopIndex > 0) {
+        gT += 0.02;
+        if (gT >= 1) { gT = 0; gSeg += 1; dropFootprint(ROUTE[gSeg].x, ROUTE[gSeg].y); }
+        if (gSeg >= routeStopIndex) { gSeg = routeStopIndex; gT = 0; ghostWalking = false; }
+        const a = ROUTE[gSeg];
+        const b = ROUTE[Math.min(gSeg + 1, routeStopIndex)];
         ghostBase = { x: a.x + (b.x - a.x) * gT, y: a.y + (b.y - a.y) * gT };
+      } else if (status === 'hiding') {
+        // Rest at the start of the route while hiding.
+        ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y - 8 };
+      }
+      const now = performance.now();
+      for (let i = footprints.length - 1; i >= 0; i--) {
+        const fp = footprints[i];
+        const age = (now - fp.born) / 6000;
+        if (age >= 1) { fp.el.remove(); footprints.splice(i, 1); continue; }
+        fp.el.setAttribute('opacity', (0.55 * (1 - age)).toFixed(3));
       }
       renderGhost(ghostBase.x, ghostBase.y);
       requestAnimationFrame(tickGhost);
@@ -757,385 +775,466 @@
     renderGhost(ghostBase.x, ghostBase.y);
     requestAnimationFrame(tickGhost);
 
-    // ── Blood splatter art (canvas → data URL) ──────────────────────────────────
-    let sharedBloodURL = null;
-    function bloodURL() {
-      if (sharedBloodURL) return sharedBloodURL;
-      const c = document.createElement('canvas');
-      c.width = 256; c.height = 256;
-      const ctx = c.getContext('2d');
-      for (let i = 0; i < 9; i++) {
-        const angle = (i / 9) * Math.PI * 2 + 0.3 * (i % 3);
-        const dist  = 28 + (i % 5) * 16;
-        const cx = 128 + Math.cos(angle) * dist;
-        const cy = 128 + Math.sin(angle) * dist;
-        const rx = 14 + (i % 4) * 8;
-        const ry = 9  + (i % 3) * 7;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle + i * 0.4);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#cc0000';
-        ctx.fill();
-        ctx.restore();
+    // ── Audio: ambience bus + a sting on its own gain node (the loudest) ───────
+    const AUDIO = (function () {
+      let ctx = null, ambienceGain = null, stingGain = null;
+      let muted = false, running = false;
+      let breathSrc = null, breathFilter = null, breathGain = null;
+      let beatTimer = null, stepTimer = null;
+      let intensity = 0; // 0..1 proximity
+
+      try { muted = localStorage.getItem('aap_muted_v1') === '1'; } catch (_) {}
+
+      function noiseBuffer(seconds) {
+        const len = Math.floor(ctx.sampleRate * seconds);
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        return buf;
       }
-      ctx.beginPath();
-      ctx.ellipse(128, 128, 42, 36, 0.3, 0, Math.PI * 2);
-      ctx.fillStyle = '#aa0000';
-      ctx.fill();
-      for (let i = 0; i < 6; i++) {
-        const a = i * 1.05;
-        const d = 70 + i * 10;
-        ctx.beginPath();
-        ctx.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 5 + i % 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#cc0000';
-        ctx.fill();
+
+      function ensure() {
+        if (ctx) return true;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC();
+        // Ambience bus: the mute toggle controls exactly this node.
+        ambienceGain = ctx.createGain();
+        ambienceGain.gain.value = muted ? 0 : 0.18;
+        ambienceGain.connect(ctx.destination);
+        // Sting bus: its own node, deliberately above the ambience bus.
+        stingGain = ctx.createGain();
+        stingGain.gain.value = 1.0;
+        stingGain.connect(ctx.destination);
+        return true;
       }
-      sharedBloodURL = c.toDataURL();
-      return sharedBloodURL;
+
+      function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+
+      function beat() {
+        if (!ctx || !running) return;
+        const t = ctx.currentTime;
+        const amp = 0.5 + intensity * 0.5;
+        for (let k = 0; k < 2; k++) {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(k === 0 ? 62 : 48, t + k * 0.16);
+          o.frequency.exponentialRampToValueAtTime(30, t + k * 0.16 + 0.14);
+          g.gain.setValueAtTime(0, t + k * 0.16);
+          g.gain.linearRampToValueAtTime(amp, t + k * 0.16 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + k * 0.16 + 0.2);
+          o.connect(g); g.connect(ambienceGain);
+          o.start(t + k * 0.16); o.stop(t + k * 0.16 + 0.24);
+        }
+        const interval = 1000 - intensity * 460;
+        beatTimer = setTimeout(beat, interval);
+      }
+
+      function step() {
+        if (!ctx || !running) return;
+        const t = ctx.currentTime;
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuffer(0.09);
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 700;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.22 * (0.4 + intensity), t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+        src.connect(f); f.connect(g); g.connect(ambienceGain);
+        src.start(t); src.stop(t + 0.11);
+        stepTimer = setTimeout(step, 700 - intensity * 380);
+      }
+
+      function startBreath() {
+        breathSrc = ctx.createBufferSource();
+        breathSrc.buffer = noiseBuffer(2.2);
+        breathSrc.loop = true;
+        breathFilter = ctx.createBiquadFilter();
+        breathFilter.type = 'bandpass';
+        breathFilter.frequency.value = 520;
+        breathFilter.Q.value = 0.8;
+        breathGain = ctx.createGain();
+        breathGain.gain.value = 0.05;
+        breathSrc.connect(breathFilter); breathFilter.connect(breathGain); breathGain.connect(ambienceGain);
+        breathSrc.start();
+      }
+
+      return {
+        unlocked: false,
+        init() { // call inside a user gesture
+          if (!ensure()) return;
+          resume();
+          if (!running) {
+            running = true;
+            this.unlocked = true;
+            startBreath();
+            beat();
+            step();
+          }
+        },
+        setMuted(m) {
+          muted = m;
+          try { localStorage.setItem('aap_muted_v1', m ? '1' : '0'); } catch (_) {}
+          if (ambienceGain) ambienceGain.gain.value = m ? 0 : 0.18;
+        },
+        isMuted() { return muted; },
+        setIntensity(v) {
+          intensity = Math.max(0, Math.min(1, v));
+          if (breathGain) breathGain.gain.value = 0.04 + intensity * 0.12;
+          if (breathFilter) breathFilter.frequency.value = 420 + intensity * 320;
+        },
+        playSting() {
+          if (!ensure()) return;
+          resume();
+          const t = ctx.currentTime;
+          // Loudest moment in the game: routed through the sting bus at 1.0.
+          const o = ctx.createOscillator();
+          const og = ctx.createGain();
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(880, t);
+          o.frequency.exponentialRampToValueAtTime(90, t + 0.7);
+          og.gain.setValueAtTime(1.0, t);
+          og.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+          o.connect(og); og.connect(stingGain);
+          o.start(t); o.stop(t + 0.82);
+
+          const src = ctx.createBufferSource();
+          src.buffer = noiseBuffer(0.5);
+          const f = ctx.createBiquadFilter();
+          f.type = 'highpass'; f.frequency.value = 300;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(1.0, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+          src.connect(f); f.connect(g); g.connect(stingGain);
+          src.start(t); src.stop(t + 0.52);
+        },
+      };
+    })();
+
+    function applyMuteUI() {
+      const b = $('btn-mute');
+      const m = AUDIO.isMuted();
+      b.textContent = m ? '🔇 Suara: Mati' : '🔊 Suara: Nyala';
+      b.classList.toggle('off', m);
+      b.setAttribute('aria-pressed', String(!m));
     }
+    applyMuteUI();
+
+    $('btn-mute').addEventListener('click', () => {
+      AUDIO.init(); // first gesture unlocks audio
+      AUDIO.setMuted(!AUDIO.isMuted());
+      applyMuteUI();
+    });
+    // Unlock audio on any first interaction too, respecting the stored mute.
+    function unlockAudio() { AUDIO.init(); AUDIO.setMuted(AUDIO.isMuted()); }
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
 
     // ── Game state ──────────────────────────────────────────────────────────────
-    let currentState    = { round: null, bet: null, players: [] };
-    let selectedRoom     = null;
-    let lastRoundId      = null;
-    let lastStatus       = null;
-    let lastPlayersJson  = '';
-    let selectedBetAmount = 1000;
-    const BET_TIERS = [100, 200, 500, 1000, 5000];
+    let currentState = { round: null, my_hide: null, hides: [], stats: null };
+    let selectedRoom = null;
+    let lastRoundId = null, lastStatus = null, lastHidesJson = '';
+    let serverSkewMs = 0;
+    let jumpscareShown = false;
 
-    function canBet() {
-      return currentState.round?.status === 'active' && !currentState.bet;
+    function nowMs() {
+      const local = (window.usernode && window.usernode.now) ? window.usernode.now().getTime() : Date.now();
+      return local + serverSkewMs;
+    }
+    function canHide() {
+      return currentState.round && currentState.round.status === 'hiding' && !currentState.my_hide;
     }
     function refreshHotspotState() {
-      const on = canBet();
       for (const slug in hotspotEls) {
         const hs = hotspotEls[slug];
-        hs.classList.toggle('bettable', on);
-        if (!on) hs.classList.remove('hovered');
+        hs.classList.toggle('bettable', canHide());
+        if (!canHide()) hs.classList.remove('hovered');
+        hs.classList.toggle('locked', !!(currentState.my_hide && currentState.my_hide.room_slug === slug));
       }
     }
 
-    // ── HUD ───────────────────────────────────────────────────────────────────
-    function updateHUD(state) {
-      const { round, bet } = state;
-      if (round) $('status-round').textContent = `round: ${round.round_number}`;
+    function selectRoom(room) {
+      if (!canHide()) return;
+      selectedRoom = room;
+      $('location-state').textContent = room.label;
+      $('location-state').classList.remove('none');
+      $('btn-confirm').disabled = false;
+      $('phase-note').textContent = 'Tekan CONFIRM & PLACE untuk mengunci.';
+    }
 
-      const outcomeEl = $('status-outcome');
-      outcomeEl.className = '';
-
-      if (bet) {
-        $('status-bet').textContent = `bet: ${bet.amount_tkn} TKN`;
-        if (bet.outcome === 'won') {
-          outcomeEl.textContent = 'status: won 🎉';
-          outcomeEl.classList.add('outcome-won');
-          const wEl = $('tkn-winnings');
-          wEl.style.display = 'block';
-          wEl.textContent = `+${bet.amount_tkn} TKN`;
-          $('win-calc').style.display = 'block';
-        } else if (bet.outcome === 'lost') {
-          outcomeEl.textContent = 'status: lost 💀';
-          outcomeEl.classList.add('outcome-lost');
-          $('win-calc').style.display = 'none';
-        } else {
-          outcomeEl.textContent = 'status: bet placed';
-          $('win-calc').style.display = 'none';
-        }
+    // ── Countdown: derived from an absolute end timestamp, every frame ──────────
+    function remainingMs() {
+      const r = currentState.round;
+      if (!r || r.status !== 'hiding' || !r.hiding_ends_at) return 0;
+      return Math.max(0, new Date(r.hiding_ends_at).getTime() - nowMs());
+    }
+    function fmt(ms) {
+      const total = Math.ceil(ms / 1000);
+      const m = String(Math.floor(total / 60)).padStart(2, '0');
+      const s = String(total % 60).padStart(2, '0');
+      return m + ':' + s;
+    }
+    function tickTimer() {
+      const r = currentState.round;
+      const el = $('hiding-timer');
+      if (!r) { el.textContent = 'Hiding Phase: —'; return; }
+      if (r.status === 'hiding') {
+        el.textContent = 'Hiding Phase: ' + fmt(remainingMs());
+        if (remainingMs() <= 0) { pollState(); }
+      } else if (r.status === 'hunt') {
+        el.textContent = 'Pocong Phase';
       } else {
-        $('status-bet').textContent = 'bet: — TKN';
-        outcomeEl.textContent = 'status: watching';
-        $('win-calc').style.display = 'none';
+        el.textContent = 'Round over';
+      }
+    }
+    setInterval(tickTimer, 200);
+    setInterval(() => { if (currentState.round && currentState.round.status === 'hiding') tickTimer(); }, 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) pollState(); });
+    window.addEventListener('pageshow', () => pollState());
+
+    // ── HUD + phase panel ──────────────────────────────────────────────────────
+    function updateHUD() {
+      const { round, my_hide, stats } = currentState;
+      const panel = $('phase-panel');
+      const banner = $('phase-banner');
+      const loc = $('location-state');
+      const confirm = $('btn-confirm');
+
+      if (round) {
+        banner.textContent = round.status === 'hiding' ? 'FASE 1 · SEMBUNYI'
+          : round.status === 'hunt' ? 'FASE 2 · POCONG'
+          : 'HASIL · RONDE ' + round.round_number;
+        $('map-wrap').classList.toggle('hunt', round.status === 'hunt' || round.status === 'resolved');
       }
 
-      const tutStart = $('tutorial-start');
-      if (tutStart) tutStart.style.display = (bet || round?.status !== 'active') ? 'none' : 'block';
-
-      const devPanel = $('dev-controls');
-      if (devPanel.style.display !== 'none') {
-        $('btn-newround').classList.toggle('hidden', round?.status !== 'completed');
+      if (my_hide && my_hide.outcome === 'disqualified') {
+        loc.textContent = 'Spectator Lounge';
+        loc.classList.remove('none');
+      } else if (my_hide && my_hide.room_slug) {
+        loc.textContent = 'LOCKED IN — ' + (ROOMS.find(r => r.slug === my_hide.room_slug) || {}).label;
+        loc.classList.remove('none');
+      } else if (selectedRoom && canHide()) {
+        loc.textContent = selectedRoom.label;
+        loc.classList.remove('none');
+      } else {
+        loc.textContent = '—';
+        loc.classList.add('none');
       }
+
+      confirm.disabled = !canHide();
+      confirm.textContent = (my_hide && my_hide.room_slug) ? 'LOCKED IN' : 'CONFIRM & PLACE';
+      $('phase-note').textContent = canHide()
+        ? (selectedRoom ? 'Tekan CONFIRM & PLACE untuk mengunci.' : 'Ketuk ruangan di peta, lalu tekan tombol.')
+        : (my_hide && my_hide.room_slug ? 'Ruanganmu terkunci.' : '');
+
+      const s = stats || { total_score: 0, current_streak: 0, best_score: 0 };
+      $('phase-score').textContent = 'Skor: ' + (s.total_score || 0) + ' · Streak: ' + (s.current_streak || 0)
+        + ' · Terbaik: ' + (s.best_score || 0);
 
       updateBetChipStates();
     }
+    function updateBetChipStates() { /* retained hook for chip-era DOM; no chips now */ }
 
-    // ── Bet chips ───────────────────────────────────────────────────────────────
-    function updateBetChipStates() {
-      const off = !currentState.round || currentState.round.status !== 'active' || !!currentState.bet;
-      document.querySelectorAll('.bet-chip, .bet-adj').forEach(btn => { btn.disabled = off; });
-      document.querySelectorAll('.bet-chip').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.amount) === selectedBetAmount);
-      });
-    }
+    // ── Result + jump-scare ────────────────────────────────────────────────────
+    function showResult() {
+      const { round, my_hide } = currentState;
+      if (!round || round.status !== 'resolved' || !round.target_room) return;
+      const lbl = (ROOMS.find(r => r.slug === round.target_room) || {}).label || round.target_room;
+      const banner = $('result-banner');
 
-    document.querySelectorAll('.bet-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectedBetAmount = parseInt(btn.dataset.amount);
-        updateBetChipStates();
-        if (selectedRoom) showConfirmChip(selectedRoom);
-      });
-    });
-    $('btn-decrement').addEventListener('click', () => {
-      const idx = BET_TIERS.indexOf(selectedBetAmount);
-      if (idx > 0) { selectedBetAmount = BET_TIERS[idx - 1]; updateBetChipStates(); }
-    });
-    $('btn-increment').addEventListener('click', () => {
-      const idx = BET_TIERS.indexOf(selectedBetAmount);
-      if (idx < BET_TIERS.length - 1) { selectedBetAmount = BET_TIERS[idx + 1]; updateBetChipStates(); }
-    });
-
-    // ── Confirm chip ──────────────────────────────────────────────────────────
-    function showConfirmChip(room) {
-      selectedRoom = room;
-      $('confirm-text').textContent = `Bet ${selectedBetAmount} TKN on ${room.label}?`;
-      $('confirm-chip').classList.add('visible');
-    }
-    function hideConfirmChip() {
-      $('confirm-chip').classList.remove('visible');
-      selectedRoom = null;
-    }
-
-    $('confirm-yes').addEventListener('click', async () => {
-      if (!selectedRoom) return;
-      const room = selectedRoom;
-      hideConfirmChip();
-      try {
-        const res = await fetch('/api/game/bet', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ room_slug: room.slug, amount_tkn: selectedBetAmount }),
-        });
-        if (res.ok) await pollState();
-        else { const err = await res.json(); alert(err.error || 'Bet failed'); }
-      } catch (e) { console.error(e); }
-    });
-    $('confirm-no').addEventListener('click', hideConfirmChip);
-
-    // ── Win state ───────────────────────────────────────────────────────────────
-    function applyWinState(state) {
-      const { round, bet } = state;
-      if (!round || round.status !== 'completed' || !round.winner_room) return;
-      const geo = roomGeo[round.winner_room];
-
-      // Red tint + blood splatter on the winner room floor
-      const tintLayer = $('layer-tint');
-      const bloodLayer = $('layer-blood');
-      tintLayer.innerHTML = '';
-      bloodLayer.innerHTML = '';
-      if (geo) {
-        tintLayer.appendChild(svgEl('polygon', {
-          points: geo.floorPts, fill: 'rgba(255,0,0,0.28)',
-        }));
-        const bw = 150, bh = 130;
-        const blood = svgEl('image', {
-          x: (geo.cx - bw / 2).toFixed(1),
-          y: (geo.cy - bh / 2 + 6).toFixed(1),
-          width: bw, height: bh, opacity: 0.92,
-        });
-        blood.setAttributeNS(XLINK, 'href', bloodURL());
-        blood.setAttribute('href', bloodURL());
-        bloodLayer.appendChild(blood);
-      }
-
-      // Tint player figures: grey in winner room, gold elsewhere
-      for (const el of playerFigures) {
-        el.classList.remove('dim', 'safe');
-        el.classList.add(el.dataset.slug === round.winner_room ? 'dim' : 'safe');
-      }
-
-      // Park the ghost in the winner room
-      if (geo) ghostBase = { x: geo.ghostRest.x, y: geo.ghostRest.y };
-
-      // Banner
-      const winText = $('win-text');
-      const winSub  = $('win-sub');
-      const banner  = $('win-banner');
-
-      if (bet?.outcome === 'won') {
-        winText.textContent = 'You Win! 🎉';
-        winText.style.color = '#ff2222';
-        const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
-        winSub.textContent = `The Pocong entered ${lbl}. You were safe!`;
+      if (my_hide && my_hide.outcome === 'eliminated') {
+        banner.classList.remove('safe');
+        banner.classList.add('found');
+        $('result-text').textContent = 'KAMU DITEMUKAN';
+        $('result-sub').textContent = 'Pocong masuk ke ' + lbl + '. Kamu ke Spectator Lounge.';
         banner.style.display = 'block';
-      } else if (bet?.outcome === 'lost') {
-        winText.textContent = 'You Lose! 💀';
-        winText.style.color = '#888';
-        winSub.textContent = 'The Pocong found you...';
+        triggerJumpscare();
+      } else if (my_hide && my_hide.outcome === 'disqualified') {
+        banner.classList.remove('safe');
+        banner.classList.add('found');
+        $('result-text').textContent = 'WAKTU HABIS';
+        $('result-sub').textContent = 'Kamu tidak sempat mengunci ruangan. Kamu di Spectator Lounge.';
+        banner.style.display = 'block';
+      } else if (my_hide && my_hide.outcome === 'survived') {
+        banner.classList.remove('found');
+        banner.classList.add('safe');
+        $('result-text').textContent = 'SELAMAT! 🎉';
+        $('result-sub').textContent = 'Pocong masuk ke ' + lbl + '. Kamu aman. +' + (my_hide.points_awarded || 0) + ' poin.';
         banner.style.display = 'block';
       } else {
-        const lbl = ROOMS.find(r => r.slug === round.winner_room)?.label || round.winner_room;
-        winText.textContent = '👻 Pocong!';
-        winText.style.color = '#888';
-        winSub.textContent = `Entered ${lbl}!`;
+        banner.classList.remove('found');
+        banner.classList.add('safe');
+        $('result-text').textContent = '👻 Pocong!';
+        $('result-sub').textContent = 'Pocong masuk ke ' + lbl + '.';
         banner.style.display = 'block';
       }
-
-      document.body.classList.add('shaking');
-      setTimeout(() => document.body.classList.remove('shaking'), 600);
+      $('btn-mute').classList.remove('off');
+      applyMuteUI();
     }
 
-    function clearWinState() {
-      $('layer-tint').innerHTML = '';
-      $('layer-blood').innerHTML = '';
-      for (const el of playerFigures) el.classList.remove('dim', 'safe');
-      $('win-banner').style.display = 'none';
-      $('win-calc').style.display = 'none';
-      $('tkn-winnings').style.display = 'none';
-      const wt = $('win-text');
-      if (wt) { wt.style.color = ''; }
+    function triggerJumpscare() {
+      if (jumpscareShown) return;
+      jumpscareShown = true;
+      AUDIO.playSting();
+      const flash = $('flash');
+      flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
+      const js = $('jumpscare');
+      js.classList.add('on');
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduce) document.body.classList.add('shaking');
+      setTimeout(() => {
+        document.body.classList.remove('shaking');
+        js.classList.remove('on');
+      }, reduce ? 1200 : 950);
     }
 
-    // ── Poll ──────────────────────────────────────────────────────────────────
+    function clearResult() {
+      $('result-banner').style.display = 'none';
+      $('result-banner').classList.remove('safe');
+      $('result-banner').classList.remove('found');
+      $('flash').classList.remove('on');
+      $('jumpscare').classList.remove('on');
+      jumpscareShown = false;
+    }
+
+    // ── Leaderboard ────────────────────────────────────────────────────────────
+    async function openLeaderboard() {
+      try {
+        const res = await fetch('/api/game/leaderboard', { headers: authHeaders });
+        const { leaderboard } = await res.json();
+        const list = $('leaderboard-list');
+        list.innerHTML = '';
+        if (!leaderboard || !leaderboard.length) {
+          $('leaderboard-empty').style.display = 'block';
+        } else {
+          $('leaderboard-empty').style.display = 'none';
+          leaderboard.forEach((row) => {
+            const li = document.createElement('li');
+            const name = document.createElement('span');
+            name.className = 'lb-name';
+            name.textContent = row.username;
+            const score = document.createElement('span');
+            score.className = 'lb-score';
+            score.textContent = row.best_score + ' poin';
+            const streak = document.createElement('span');
+            streak.className = 'lb-streak';
+            streak.textContent = 'streak ' + row.current_streak;
+            li.appendChild(name); li.appendChild(score); li.appendChild(streak);
+            list.appendChild(li);
+          });
+        }
+        $('leaderboard-overlay').classList.add('show');
+      } catch (e) { console.warn('Leaderboard error:', e.message); }
+    }
+    $('btn-leaderboard').addEventListener('click', openLeaderboard);
+    $('leaderboard-close').addEventListener('click', () => $('leaderboard-overlay').classList.remove('show'));
+    $('leaderboard-overlay').addEventListener('click', (e) => {
+      if (e.target === $('leaderboard-overlay')) $('leaderboard-overlay').classList.remove('show');
+    });
+
+    // ── Confirm & place ────────────────────────────────────────────────────────
+    $('btn-confirm').addEventListener('click', async () => {
+      AUDIO.init();
+      if (!selectedRoom || !canHide()) return;
+      try {
+        const res = await fetch('/api/game/hide', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ room_slug: selectedRoom.slug }),
+        });
+        if (res.ok) { await pollState(); }
+        else { const err = await res.json(); $('phase-note').textContent = err.error || 'Gagal mengunci.'; }
+      } catch (e) { console.warn(e); }
+    });
+
+    // ── Poll ───────────────────────────────────────────────────────────────────
     async function pollState() {
       try {
         const res = await fetch('/api/game/state', { headers: authHeaders });
         if (!res.ok) return;
         const state = await res.json();
+        if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
-        updateHUD(state);
 
-        const roundChanged   = state.round?.id !== lastRoundId;
-        const statusChanged  = state.round?.status !== lastStatus;
-        const pJson          = JSON.stringify(state.players || []);
-        const playersChanged = pJson !== lastPlayersJson;
+        const roundChanged  = state.round && state.round.id !== lastRoundId;
+        const statusChanged = (state.round && state.round.status) !== lastStatus;
+        const hidesJson     = JSON.stringify(state.hides || []);
 
-        if (roundChanged || statusChanged || playersChanged) {
-          if (roundChanged || statusChanged) clearWinState();
-          placePlayerTokens(state.players || []);
-          if (state.round?.status === 'completed') applyWinState(state);
-          lastRoundId     = state.round?.id;
-          lastStatus      = state.round?.status;
-          lastPlayersJson = pJson;
+        if (roundChanged || statusChanged) clearResult();
+
+        if (state.round && state.round.status === 'hunt' && state.round.target_room) {
+          const geo = roomGeo[state.round.target_room];
+          if (geo) {
+            routeStopIndex = nearestRouteIndex(geo.cx, geo.cy);
+            if (statusChanged || roundChanged) { gSeg = 0; gT = 0; ghostWalking = true; }
+          }
+          // Proximity drives the heartbeat and breathing.
+          const dist = my_hide_room_geo();
+          if (dist) {
+            const stop = ROUTE[routeStopIndex];
+            const d = Math.hypot(stop.x - dist.cx, stop.y - dist.cy);
+            AUDIO.setIntensity(Math.max(0, 1 - d / 420));
+          } else {
+            AUDIO.setIntensity(0.2);
+          }
+        } else {
+          AUDIO.setIntensity(0);
         }
+
+        placeFigures(state.hides || [], state.my_hide);
+        updateHUD();
+        if (state.round && state.round.status === 'resolved') showResult();
+
+        lastRoundId = state.round && state.round.id;
+        lastStatus  = state.round && state.round.status;
+        lastHidesJson = hidesJson;
         refreshHotspotState();
       } catch (e) { console.warn('Poll error:', e.message); }
     }
-    pollState();
-    setInterval(pollState, 3000);
-
-    // ── Dev controls ──────────────────────────────────────────────────────────
-    async function callAdvance() {
-      const res = await fetch('/api/game/advance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'advance failed'); }
-      return res.json();
+    function my_hide_room_geo() {
+      const mh = currentState.my_hide;
+      return mh && roomGeo[mh.room_slug] ? roomGeo[mh.room_slug] : null;
     }
 
-    $('btn-resolve').addEventListener('click', async () => {
-      try { await callAdvance(); await callAdvance(); await pollState(); }
-      catch (e) { alert(e.message); }
-    });
-    $('btn-newround').addEventListener('click', async () => {
-      try { await callAdvance(); await pollState(); }
-      catch (e) { alert(e.message); }
-    });
+    pollState();
+    setInterval(pollState, 2000);
 
+    // ── Dev controls ───────────────────────────────────────────────────────────
+    $('btn-advance').addEventListener('click', async () => {
+      try {
+        await fetch('/api/game/advance', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: '{}' });
+        await pollState();
+      } catch (e) { console.warn(e); }
+    });
     fetch('/api/game/env')
       .then(r => r.json())
-      .then(({ isStaging }) => {
-        if (isStaging) $('dev-controls').style.display = 'block';
-      })
+      .then(({ isStaging }) => { if (isStaging) $('dev-controls').style.display = 'block'; })
       .catch(() => {});
 
-    // ── Mascot drawing ────────────────────────────────────────────────────────
-    (function drawMascot() {
-      const mc = $('mascot-canvas');
-      if (!mc) return;
-      const ctx = mc.getContext('2d');
-      const cx = 65, cy = 65;
-
-      ctx.beginPath(); ctx.arc(cx, cy, 62, 0, Math.PI * 2);
-      ctx.fillStyle = '#111'; ctx.fill();
-      ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.stroke();
-
-      ctx.beginPath(); ctx.ellipse(cx, cy + 18, 28, 34, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0f0f0'; ctx.fill();
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(cx - 26, cy + 4 + i * 10);
-        ctx.bezierCurveTo(cx - 8, cy + 2 + i * 10, cx + 8, cy + 6 + i * 10, cx + 26, cy + 4 + i * 10);
-        ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.stroke();
-      }
-
-      ctx.beginPath(); ctx.ellipse(cx, cy - 12, 20, 23, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0f0f0'; ctx.fill();
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-      ctx.beginPath();
-      ctx.rect(cx - 18, cy - 48, 36, 20);
-      ctx.fillStyle = '#1a1a1a'; ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-
-      ctx.beginPath(); ctx.ellipse(cx, cy - 28, 26, 5, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1a1a'; ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-
-      ctx.beginPath(); ctx.rect(cx - 18, cy - 30, 36, 4);
-      ctx.fillStyle = '#cc0000'; ctx.fill();
-
-      ctx.fillStyle = '#222';
-      ctx.beginPath(); ctx.arc(cx - 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + 7, cy - 14, 3, 0, Math.PI * 2); ctx.fill();
-
-      ctx.beginPath(); ctx.arc(cx, cy - 8, 8, 0.1, Math.PI - 0.1);
-      ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-    })();
-
-    // ── Tutorial illustration ─────────────────────────────────────────────────
-    (function drawTutorial() {
-      const tc = $('tut-canvas');
-      if (!tc) return;
-      const ctx = tc.getContext('2d');
-
-      function pocong(x, y, s) {
-        s = s || 1;
-        ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-        ctx.beginPath(); ctx.ellipse(0, 8, 8, 12, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#f0f0f0'; ctx.fill();
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.beginPath(); ctx.ellipse(0, -8, 7, 8, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#f0f0f0'; ctx.fill();
-        ctx.strokeStyle = '#222'; ctx.lineWidth = 1.5; ctx.stroke();
-        ctx.fillStyle = '#333';
-        ctx.beginPath(); ctx.arc(-2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc( 2.5, -9, 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-      }
-
-      pocong(22, 28);
-      pocong(150, 28);
-
-      ctx.beginPath(); ctx.moveTo(38, 28); ctx.lineTo(128, 28);
-      ctx.strokeStyle = '#cc0000'; ctx.lineWidth = 2; ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(122, 22); ctx.lineTo(134, 28); ctx.lineTo(122, 34);
-      ctx.closePath(); ctx.fillStyle = '#cc0000'; ctx.fill();
-    })();
-
-    // ── How-to-play intro overlay (first visit only) ────────────────────────────
+    // ── Intro overlay (first visit only) ───────────────────────────────────────
     (function introOverlay() {
-      const INTRO_KEY = 'aap_intro_seen_v1';
+      const INTRO_KEY = 'aap_intro_seen_v2';
       const overlay = $('intro-overlay');
       if (!overlay) return;
-
       let seen = false;
       try { seen = localStorage.getItem(INTRO_KEY) === '1'; } catch (_) {}
-
       function dismiss() {
         overlay.classList.remove('show');
         try { localStorage.setItem(INTRO_KEY, '1'); } catch (_) {}
       }
-
       if (!seen) overlay.classList.add('show');
-
       $('intro-got').addEventListener('click', dismiss);
-      // Tapping the dark backdrop (outside the card) also dismisses.
       overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); });
+    })();
+
+    // Player name in the panel, from the token payload when available.
+    (function showName() {
+      try {
+        const payload = token ? JSON.parse(atob(token.split('.')[1])) : null;
+        if (payload && payload.username) $('player-name').textContent = payload.username;
+      } catch (_) {}
     })();
   </script>
 </body>

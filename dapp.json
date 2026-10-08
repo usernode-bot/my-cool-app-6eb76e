@@ -1,6 +1,7 @@
 {
   "icon": { "image": "brand/icon.png" },
   "name": "Awas Ada Pocong",
+  "description": "Hide from the Pocong in a haunted mansion and score by surviving.",
   "secrets": [],
   "visibility": {
     "build": "private",
@@ -13,9 +14,33 @@
       "expectSelector": "#title"
     },
     {
+      "id": "game.hiding-phase",
+      "name": "Hiding phase shows the countdown, the map and the controls",
+      "path": "/",
+      "expectSelector": "#hiding-timer",
+      "expectText": "Hiding Phase:",
+      "visual": true,
+      "impact": ["public/**", "server.js"]
+    },
+    {
+      "name": "Mute toggle is present",
+      "path": "/",
+      "expectSelector": "#btn-mute"
+    },
+    {
+      "name": "Pocong Route is drawn on the map",
+      "path": "/",
+      "expectText": "Pocong Route"
+    },
+    {
       "name": "Game state API returns round data",
       "path": "/api/game/state",
       "expectText": "round"
+    },
+    {
+      "name": "Leaderboard API returns a leaderboard",
+      "path": "/api/game/leaderboard",
+      "expectText": "leaderboard"
     }
   ]
 }
