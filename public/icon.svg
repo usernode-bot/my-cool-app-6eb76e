@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Awas Ada Pocong app icon: an original cartoon pocong on a round slate badge. Transparent outside the badge. -->
+  <defs>
+    <radialGradient id="badge" cx="0.42" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#3a4760"/>
+      <stop offset="1" stop-color="#161c29"/>
+    </radialGradient>
+    <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d8c69c"/>
+      <stop offset="1" stop-color="#a99266"/>
+    </linearGradient>
+    <radialGradient id="face" cx="0.45" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#f1eedf"/>
+      <stop offset="1" stop-color="#c9ccb6"/>
+    </radialGradient>
+    <clipPath id="bodyClip">
+      <path d="M190 236 C168 290 170 342 188 384 C198 410 204 438 198 464 L222 448 L236 472 L253 452 L270 474 L285 451 L304 468 L307 438 C316 400 338 340 326 280 C322 256 312 240 300 234 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- badge -->
+  <circle cx="256" cy="272" r="206" fill="url(#badge)" stroke="#5a6883" stroke-width="8"/>
+  <circle cx="256" cy="272" r="190" fill="none" stroke="#0f141e" stroke-opacity="0.45" stroke-width="3"/>
+
+  <g stroke="#1b140e" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <!-- wispy trailing tail -->
+    <path d="M214 418 C180 456 128 470 94 444 C76 430 66 406 44 408 C34 410 30 420 38 426 C26 424 24 404 40 396 C64 386 86 404 104 420 C128 440 168 430 206 392 Z" fill="url(#cloth)"/>
+
+    <!-- body -->
+    <path d="M190 236 C168 290 170 342 188 384 C198 410 204 438 198 464 L222 448 L236 472 L253 452 L270 474 L285 451 L304 468 L307 438 C316 400 338 340 326 280 C322 256 312 240 300 234 Z" fill="url(#cloth)"/>
+  </g>
+
+  <!-- wrapping bands, clipped to the body -->
+  <g clip-path="url(#bodyClip)" fill="none" stroke-linecap="round">
+    <g stroke="#8c7650" stroke-width="16" stroke-opacity="0.45">
+      <path d="M176 288 C230 296 280 316 334 346"/>
+      <path d="M334 282 C280 296 226 320 176 350"/>
+      <path d="M180 360 C232 370 280 388 326 414"/>
+      <path d="M326 356 C276 372 230 396 186 426"/>
+    </g>
+    <g stroke="#1b140e" stroke-width="4.5">
+      <path d="M176 280 C230 288 280 308 334 338"/>
+      <path d="M334 274 C280 288 226 312 176 342"/>
+      <path d="M180 352 C232 362 280 380 326 406"/>
+      <path d="M326 348 C276 364 230 388 186 418"/>
+    </g>
+    <!-- dirt -->
+    <g fill="#7d6847" fill-opacity="0.5" stroke="none">
+      <ellipse cx="292" cy="306" rx="10" ry="5"/>
+      <ellipse cx="212" cy="378" rx="8" ry="4"/>
+      <ellipse cx="276" cy="430" rx="11" ry="5"/>
+      <ellipse cx="226" cy="318" rx="5" ry="3"/>
+      <ellipse cx="300" cy="396" rx="6" ry="3"/>
+    </g>
+  </g>
+
+  <g stroke="#1b140e" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+    <!-- knot gather -->
+    <path d="M236 124 C224 108 200 98 206 76 C210 62 224 60 230 68 C234 54 250 50 258 60 C266 50 284 54 286 68 C296 62 310 72 304 88 C298 104 282 110 276 124 Z" fill="url(#cloth)"/>
+    <!-- hood -->
+    <path d="M256 118 C204 118 176 160 176 206 C176 248 206 276 256 278 C306 276 336 248 336 206 C336 160 308 118 256 118 Z" fill="url(#cloth)"/>
+    <!-- tie -->
+    <path d="M226 116 C244 126 268 126 286 116 L284 136 C266 144 246 144 228 136 Z" fill="#b8a277"/>
+    <!-- face opening -->
+    <path d="M256 156 C222 156 202 182 202 214 C202 246 226 264 256 264 C286 264 310 246 310 214 C310 182 290 156 256 156 Z" fill="url(#face)" stroke-width="6"/>
+  </g>
+  <!-- knot creases -->
+  <g fill="none" stroke="#1b140e" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.8">
+    <path d="M244 82 C246 96 248 106 248 116"/>
+    <path d="M270 82 C268 96 266 106 266 116"/>
+    <path d="M196 186 C192 210 196 236 210 252"/>
+    <path d="M316 186 C320 210 316 236 302 252"/>
+  </g>
+
+  <!-- face: tired dark rings, mismatched round eyes, an "ooo" howl -->
+  <g fill="#4a3f52" fill-opacity="0.55">
+    <ellipse cx="232" cy="206" rx="22" ry="21"/>
+    <ellipse cx="282" cy="203" rx="24" ry="23"/>
+  </g>
+  <g fill="#ffffff" stroke="#1b140e" stroke-width="3.5">
+    <circle cx="232" cy="206" r="14"/>
+    <circle cx="282" cy="203" r="17"/>
+  </g>
+  <g fill="#1b140e">
+    <circle cx="227" cy="210" r="5"/>
+    <circle cx="277" cy="207" r="6"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="225" cy="207.5" r="1.6"/>
+    <circle cx="275" cy="204.5" r="2"/>
+  </g>
+  <g fill="none" stroke="#1b140e" stroke-width="4" stroke-linecap="round">
+    <path d="M216 182 C224 178 234 180 242 186"/>
+    <path d="M268 180 C278 172 292 172 300 180"/>
+  </g>
+  <ellipse cx="216" cy="236" rx="9" ry="5" fill="#d98f8a" fill-opacity="0.45"/>
+  <ellipse cx="298" cy="234" rx="9" ry="5" fill="#d98f8a" fill-opacity="0.45"/>
+  <path d="M256 232 C246 232 242 242 244 250 C246 258 266 258 268 250 C270 242 266 232 256 232 Z" fill="#4a1d24" stroke="#1b140e" stroke-width="3.5"/>
+  <path d="M248 252 C252 246 260 246 264 252 C260 256 252 256 248 252 Z" fill="#d9636c"/>
+</svg>
