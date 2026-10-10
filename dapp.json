@@ -84,6 +84,11 @@
       "name": "Party state API returns the party, its members and its round",
       "path": "/api/party/DEMO1/state",
       "expectText": "\"code\":\"DEMO1\""
+    },
+    {
+      "name": "Pocong app icon is served for the favicon",
+      "path": "/icon.svg",
+      "expectSelector": "clipPath#bodyClip"
     }
   ]
 }
