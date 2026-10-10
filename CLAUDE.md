@@ -266,6 +266,34 @@ Tables (all public): `parties`, `party_members`, `party_rounds`
 (`UNIQUE(party_id, round_number)`), `party_hides`. Staging seeds party
 `DEMO1` with four fake members and one resolved round.
 
+### Wallet bind gate
+
+A signed-in player binds the wallet Homeroom links to their account
+(`req.user.usernode_pubkey`) before they can hide or play a party. It sits on
+top of the iframe JWT, which stays the sign-in.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/wallet/me` | public | `{ signed_in, linked_wallet, bound, binding, signing_required }`; signed out answers `signed_in: false` only. `bound` needs the binding's address to equal the current `usernode_pubkey`. |
+| POST | `/api/wallet/challenge` | yes | One-time nonce + server-composed message (5 min). 400 `no_linked_wallet`. |
+| POST | `/api/wallet/bind` | yes | `{ nonce, signature?, pubkey? }`. Consumes the nonce atomically (409 `challenge_invalid`), 409 `wallet_mismatch`, 401 `bad_signature`, 400 `signature_required`. |
+
+`requireBoundWallet` (403 `wallet_not_bound`) guards `POST /api/game/hide`,
+`/api/game/daring`, `/api/party`, and the party `join`, `start`, `hide`,
+`daring` routes. GETs and `advance` are not gated, so spectating works.
+
+Homeroom's bridge refuses `signMessage` from inside app frames ("Signing from
+inside apps isn't available yet") and publishes no `ut1` signature scheme, so
+`verifyWalletSignature` returns false and `SIGNING_REQUIRED = false`: a bind
+with no signature is stored as method `linked`. The page still tries
+`window.signMessage` first. Flip `SIGNING_REQUIRED` and implement the verifier
+once the platform supports signing (then `linked` rows count as unbound).
+
+The gate (`#wallet-gate`) reuses the intro card's look and sits under the
+intro overlay, so a first visit shows the intro first. "Just watch" closes it
+for the visit; a 403 `wallet_not_bound` reopens it. Bound players see
+"Wallet ut1q8f…k3vd · bound" in the signature box.
+
 ### Authenticated endpoints
 
 | Method | Path | Body | Description |
@@ -358,6 +386,20 @@ CREATE TABLE player_stats (
 );
 ```
 
+```sql
+-- wallet_bindings / wallet_challenges: both COMMENT 'staging:private'.
+CREATE TABLE wallet_bindings (
+  user_id INTEGER PRIMARY KEY, username VARCHAR(255) NOT NULL,
+  wallet_address VARCHAR(128) NOT NULL, method VARCHAR(16) NOT NULL, -- signature | linked
+  signed_message TEXT, signature TEXT, bound_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE wallet_challenges (
+  nonce VARCHAR(64) PRIMARY KEY, user_id INTEGER NOT NULL,
+  wallet_address VARCHAR(128) NOT NULL, message TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ
+);
+```
+
 `bets` and `presses` still exist (created by earlier migrations, with their old
 rows preserved) but nothing reads or writes them. Dropping them is deferred.
 
@@ -423,6 +465,8 @@ UTC.
   (the avatars tremble; the hunt only speeds the tremble up).
 - WebSocket real-time updates (the 2s poll stays).
 - A leaderboard that recomputes from full history for a long-lived season.
+- Real wallet signature verification (`SIGNING_REQUIRED = true`) once the
+  platform allows in-app `signMessage` and documents how to verify it.
 
 ### Other notes
 

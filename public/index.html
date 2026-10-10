@@ -382,17 +382,17 @@
     }
     #intro-overlay.show { display: flex; }
     @keyframes introFade { from { opacity: 0; } to { opacity: 1; } }
-    #intro-card {
+    #intro-card, .intro-card {
       max-width: 420px; width: 100%;
       background: linear-gradient(160deg, #17171a, #101012);
       border: 2px solid #ff2222; border-radius: 16px; padding: 22px 24px 20px;
       box-shadow: 0 0 44px rgba(255,0,0,0.35); color: #e8e8e8; text-align: center;
     }
-    #intro-card h2 {
+    #intro-card h2, .intro-card h2 {
       font-family: 'Creepster', cursive; font-size: 2rem; color: #ff3030;
       letter-spacing: 2px; text-shadow: 2px 2px 0 #000, 0 0 16px rgba(255,0,0,0.6); margin-bottom: 4px;
     }
-    #intro-card .intro-sub { font-size: 0.78rem; color: #9a9a9a; margin-bottom: 14px; }
+    #intro-card .intro-sub, .intro-card .intro-sub { font-size: 0.78rem; color: #9a9a9a; margin-bottom: 14px; }
     #intro-card ol { text-align: left; margin: 0 0 14px; list-style: none; counter-reset: step; }
     #intro-card ol li {
       font-size: 0.9rem; line-height: 1.45; color: #dcdcdc;
@@ -407,7 +407,7 @@
     #intro-card ol li b { color: #ffd700; }
     #intro-card ol li .lose { color: #ff5555; font-weight: bold; }
     #intro-card ol li .win  { color: #b574ff; font-weight: bold; }
-    #intro-note {
+    #intro-note, .intro-note {
       font-size: 0.74rem; color: #b98; background: rgba(255,120,40,0.08); border: 1px solid #5a3a20;
       border-radius: 8px; padding: 8px 10px; margin-bottom: 16px; line-height: 1.4;
     }
@@ -416,6 +416,34 @@
       color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 30px; cursor: pointer;
     }
     #intro-got:hover { filter: brightness(1.18); }
+
+    /* Wallet bind gate: the intro card's look. It sits under the intro, so on
+       a first visit the intro shows first and closing it reveals the gate. */
+    #wallet-gate {
+      display: none; position: fixed; inset: 0; z-index: 45;
+      background: rgba(4,4,6,0.82); align-items: center; justify-content: center; padding: 20px;
+      animation: introFade 0.25s ease-out;
+    }
+    #wallet-gate.show { display: flex; }
+    #wallet-addr {
+      font-family: monospace; font-size: 0.95rem; background: #000; border: 1px solid #5a3a20;
+      border-radius: 8px; padding: 8px; color: #ffd700; margin-bottom: 10px; word-break: break-all;
+    }
+    #wallet-addr:empty { display: none; }
+    #wallet-gate-text { font-size: 0.9rem; line-height: 1.45; color: #dcdcdc; text-align: left; margin-bottom: 12px; }
+    #wallet-gate-note { text-align: left; }
+    #wallet-gate-note.err { color: #ff8a80; border-color: #7a2020; background: rgba(255,40,40,0.08); }
+    #btn-bind {
+      font-family: 'Creepster', cursive; font-size: 1.3rem; letter-spacing: 1px;
+      color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 9px 30px; cursor: pointer;
+    }
+    #btn-bind:hover:not(:disabled) { filter: brightness(1.18); }
+    #btn-bind:disabled { opacity: 0.45; cursor: default; }
+    #btn-just-watch {
+      display: block; margin: 10px auto 0; background: none; border: none;
+      color: #9a9a9a; font-size: 0.82rem; text-decoration: underline; cursor: pointer;
+    }
+    .sig-wallet { font-size: 0.64rem; color: #5b21b6; margin-top: 2px; }
 
     @media (max-width: 768px) {
       body { overflow: auto; }
@@ -605,6 +633,18 @@
       </ol>
       <div id="intro-note">🛠 Di staging, pakai <b>Dev Controls</b> kiri-bawah untuk melompat ke fase berikutnya.</div>
       <button id="intro-got">Got it 👻</button>
+    </div>
+  </div>
+
+  <div id="wallet-gate" role="dialog" aria-modal="true" aria-labelledby="wallet-gate-title">
+    <div class="intro-card wallet-card">
+      <h2 id="wallet-gate-title">🔐 Ikat Dompetmu</h2>
+      <div class="intro-sub">Bind your wallet to play Awas Ada Pocong</div>
+      <div id="wallet-addr"></div>
+      <p id="wallet-gate-text"></p>
+      <div id="wallet-gate-note" class="intro-note"></div>
+      <button id="btn-bind">BIND WALLET</button>
+      <button id="btn-just-watch">Just watch</button>
     </div>
   </div>
 
@@ -1633,6 +1673,7 @@
       });
       let data = {};
       try { data = await res.json(); } catch (_) {}
+      if (!res.ok && data.error === 'wallet_not_bound') { WALLET.open(); throw new Error('Bind your wallet to play in a party.'); }
       if (!res.ok) throw new Error(data.error === 'account_required' ? 'Open the app inside Homeroom to play in a party.' : (data.error || 'Something went wrong. Try again.'));
       return data;
     }
@@ -1767,7 +1808,11 @@
           body: JSON.stringify({ room_slug: selectedRoom.slug }),
         });
         if (res.ok) { await pollState(); }
-        else { const err = await res.json(); $('phase-note').textContent = err.error || 'Could not lock the room.'; }
+        else {
+          const err = await res.json();
+          if (err.error === 'wallet_not_bound') { WALLET.open(); $('phase-note').textContent = 'Bind your wallet to hide.'; }
+          else $('phase-note').textContent = err.error || 'Could not lock the room.';
+        }
       } catch (e) { console.warn(e); }
     });
 
@@ -1783,7 +1828,11 @@
           body: JSON.stringify({ room_slug: slug }),
         });
         if (res.ok) { await pollState(); }
-        else { const err = await res.json(); $('daring-note').textContent = err.error || 'Could not set the daring pick.'; }
+        else {
+          const err = await res.json();
+          if (err.error === 'wallet_not_bound') { WALLET.open(); $('daring-note').textContent = 'Bind your wallet to dare a second room.'; }
+          else $('daring-note').textContent = err.error || 'Could not set the daring pick.';
+        }
       } catch (e) { console.warn(e); }
     });
 
@@ -1894,6 +1943,121 @@
         ? parts[0].charAt(0) + parts[1].charAt(0)
         : myUsername.replace(/[^a-z0-9]/gi, '').slice(0, 2);
       $('sig-initials').textContent = (initials || '?').toUpperCase();
+    })();
+
+    // ── Wallet bind gate ───────────────────────────────────────────────────────
+    // A signed-in player binds the wallet Homeroom links to their account
+    // before they can hide or play a party. The server issues a one-time
+    // challenge; the bridge is asked to sign it, and while Homeroom refuses
+    // signing inside apps (and signing is not required) the bind goes through
+    // on the linked wallet alone. "Just watch" closes the gate for this visit;
+    // any gated action that answers wallet_not_bound reopens it.
+    const WALLET = (function walletGate() {
+      const gate = $('wallet-gate');
+      const btn = $('btn-bind');
+      const note = $('wallet-gate-note');
+      let status = null;
+      let busy = false;
+      const ERRORS = {
+        no_linked_wallet: 'Your Homeroom account has no wallet linked yet. Link one in Homeroom, then come back.',
+        challenge_invalid: 'That bind code expired. Tap the button to try again.',
+        wallet_mismatch: 'The wallet linked to your Homeroom account changed. Reopen the app and try again.',
+        bad_signature: 'The signature did not match this wallet. Nothing was bound.',
+        signature_required: 'Your wallet has to sign the message to bind it. Nothing was bound.',
+      };
+      function shortAddr(a) { return a && a.length > 12 ? a.slice(0, 6) + '…' + a.slice(-4) : (a || ''); }
+      function setNote(text, isErr) { note.textContent = text; note.classList.toggle('err', !!isErr); }
+      function render() {
+        const linked = status && status.linked_wallet;
+        $('wallet-addr').textContent = linked ? shortAddr(linked) : '';
+        btn.textContent = status && status.signing_required ? 'SIGN & BIND' : 'BIND WALLET';
+        btn.disabled = !linked || busy;
+        if (!linked) {
+          $('wallet-gate-text').innerHTML = 'Akunmu belum punya dompet. <em>(Your Homeroom account has no wallet linked yet. Link one in Homeroom, then come back.)</em>';
+          setNote('You can still watch rounds without a wallet.');
+        } else {
+          $('wallet-gate-text').innerHTML = 'Ikat dompet ini ke permainan, sekali saja. <em>(Bind this wallet to the game, once. If Homeroom lets your wallet sign, it signs a short message with a one-time code. No coins move and nothing is spent.)</em>';
+          if (!note.classList.contains('err')) setNote('You can still watch rounds without binding. You need a bound wallet to hide.');
+        }
+        const line = document.querySelector('.sig-wallet');
+        if (status && status.bound && status.binding) {
+          const el = line || document.createElement('div');
+          el.className = 'sig-wallet';
+          el.textContent = 'Wallet ' + shortAddr(status.binding.wallet_address) + ' · bound';
+          if (!line) $('signature').appendChild(el);
+        } else if (line) line.remove();
+      }
+      function open() {
+        if (!status || status.bound) return;
+        render();
+        gate.classList.add('show');
+      }
+      function close() { gate.classList.remove('show'); }
+      async function api(method, path, body) {
+        const res = await fetch(path, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        return { ok: res.ok, data };
+      }
+      function trySign(message) {
+        if (typeof window.signMessage !== 'function') return Promise.reject(new Error('Signing is not available here.'));
+        return Promise.race([
+          Promise.resolve().then(() => window.signMessage(message)),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('The wallet did not answer. Try again.')), 30000)),
+        ]);
+      }
+      async function challenge() {
+        const ch = await api('POST', '/api/wallet/challenge', {});
+        if (!ch.ok) throw new Error(ERRORS[ch.data.error] || ch.data.error || 'Could not start the bind. Try again.');
+        return ch.data;
+      }
+      async function bind() {
+        if (busy || !status || !status.linked_wallet) return;
+        AUDIO.init();
+        busy = true; render(); setNote('Binding your wallet…');
+        try {
+          let ch = await challenge();
+          let signed = null, signError = null;
+          try { signed = await trySign(ch.message); } catch (e) { signError = (e && e.message) || String(e); }
+          let r;
+          if (signed && signed.signature) {
+            r = await api('POST', '/api/wallet/bind', { nonce: ch.nonce, signature: signed.signature, pubkey: signed.pubkey || null });
+            // A signature the server cannot verify yet: fall back to the linked
+            // wallet while signing is optional, on a fresh challenge.
+            if (!r.ok && r.data.error === 'bad_signature' && !status.signing_required) {
+              ch = await challenge();
+              r = await api('POST', '/api/wallet/bind', { nonce: ch.nonce });
+            }
+          } else if (status.signing_required) {
+            throw new Error(signError || ERRORS.signature_required);
+          } else {
+            r = await api('POST', '/api/wallet/bind', { nonce: ch.nonce });
+          }
+          if (!r.ok) {
+            const msg = ERRORS[r.data.error] || r.data.error || 'Could not bind the wallet. Try again.';
+            throw new Error(signError ? msg + ' (' + signError + ')' : msg);
+          }
+          status = r.data;
+          busy = false; setNote(''); render(); close();
+        } catch (e) {
+          busy = false; render(); setNote((e && e.message) || 'Could not bind the wallet. Try again.', true);
+        }
+      }
+      btn.addEventListener('click', bind);
+      $('btn-just-watch').addEventListener('click', close);
+      // Ask the server who is signed in: a guest or tokenless visit answers
+      // signed_in: false and never sees the gate.
+      api('GET', '/api/wallet/me').then((r) => {
+        if (!r.ok || !r.data.signed_in) return;
+        status = r.data;
+        render();
+        if (!status.bound) open();
+      }).catch(() => {});
+      return { open };
     })();
   </script>
 </body>
