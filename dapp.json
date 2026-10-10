@@ -1,5 +1,7 @@
 {
-  "icon": { "image": "brand/icon.png" },
+  "icon": {
+    "image": "brand/icon.png"
+  },
   "name": "Awas Ada Pocong",
   "description": "Hide from the Pocong in a haunted mansion and score by surviving.",
   "secrets": [],
@@ -20,7 +22,10 @@
       "expectSelector": "#hiding-timer",
       "expectText": "Hiding Phase:",
       "visual": true,
-      "impact": ["public/**", "server.js"]
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
     },
     {
       "name": "Blueprint map renders with its title and the eleven room buttons",
@@ -78,7 +83,10 @@
       "expectSelector": "#party-scoreboard li:nth-child(4)",
       "expectText": "Party code: DEMO1",
       "visual": true,
-      "impact": ["public/index.html", "server.js"]
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
     },
     {
       "name": "Party state API returns the party, its members and its round",
@@ -96,12 +104,19 @@
       "path": "/",
       "expectSelector": "#wallet-gate #btn-bind",
       "visual": true,
-      "impact": ["public/index.html", "server.js"]
+      "impact": [
+        "public/index.html",
+        "server.js"
+      ]
     },
     {
       "name": "Wallet status API answers (signed out here)",
       "path": "/api/wallet/me",
       "expectText": "linked_wallet"
     }
-  ]
+  ],
+  "governance": {
+    "approvers": "invited",
+    "approvals": "default"
+  }
 }
