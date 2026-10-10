@@ -89,6 +89,19 @@
       "name": "Pocong app icon is served for the favicon",
       "path": "/icon.svg",
       "expectSelector": "clipPath#bodyClip"
+    },
+    {
+      "id": "wallet.gate",
+      "name": "Wallet bind gate is on the page",
+      "path": "/",
+      "expectSelector": "#wallet-gate #btn-bind",
+      "visual": true,
+      "impact": ["public/index.html", "server.js"]
+    },
+    {
+      "name": "Wallet status API answers (signed out here)",
+      "path": "/api/wallet/me",
+      "expectText": "linked_wallet"
     }
   ]
 }

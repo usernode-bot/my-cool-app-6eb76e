@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,6 +15,8 @@ const PUBLIC_API_PATHS = new Set([
   '/api/game/state',
   '/api/game/env',
   '/api/game/leaderboard',
+  // Answers a signed-out caller with signed_in: false and nothing else.
+  '/api/wallet/me',
 ]);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
 // A party's state is readable like the open round's (a username, a room slug
@@ -286,9 +289,125 @@ app.get('/api/game/state', async (req, res) => {
   }
 });
 
+// ── Wallet bind gate ─────────────────────────────────────────────────────────
+// On top of the Homeroom iframe JWT (which stays the sign-in), a player binds
+// the wallet Homeroom links to their account (req.user.usernode_pubkey) before
+// they can hide or play a party. The bind consumes a one-time server-issued
+// challenge. Homeroom does not yet let apps request signMessage from inside
+// the frame, nor publish how to verify a ut1 signature, so until it does a
+// bind without a signature is accepted as method 'linked' (the address comes
+// from the platform-signed JWT). Flip SIGNING_REQUIRED once signing exists.
+const SIGNING_REQUIRED = false;
+const CHALLENGE_MS = 5 * 60 * 1000;
+
+// The platform has not published the ut1 signature scheme (a platform report
+// was drafted for in-app signMessage plus a verify scheme). Never guess an
+// algorithm, and never accept the bridge's local mock signatures.
+function verifyWalletSignature(_address, _message, signature) {
+  if (typeof signature !== 'string' || signature.startsWith('mock_signature_')) return false;
+  return false;
+}
+
+async function walletStatus(user) {
+  const linked = user.usernode_pubkey || null;
+  const r = await pool.query(
+    `SELECT wallet_address, method, bound_at FROM wallet_bindings WHERE user_id=$1`,
+    [user.id]
+  );
+  const binding = r.rows[0] || null;
+  const bound = !!(binding && linked && binding.wallet_address === linked &&
+    (!SIGNING_REQUIRED || binding.method === 'signature'));
+  return { linked_wallet: linked, bound, binding, signing_required: SIGNING_REQUIRED };
+}
+
+async function requireBoundWallet(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'account_required' });
+  try {
+    const st = await walletStatus(req.user);
+    if (!st.bound) return res.status(403).json({ error: 'wallet_not_bound' });
+    next();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+app.get('/api/wallet/me', async (req, res) => {
+  if (!req.user) {
+    return res.json({ signed_in: false, linked_wallet: null, bound: false, binding: null, signing_required: SIGNING_REQUIRED });
+  }
+  try {
+    res.json({ signed_in: true, ...(await walletStatus(req.user)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/wallet/challenge', async (req, res) => {
+  const wallet = req.user.usernode_pubkey;
+  if (!wallet) return res.status(400).json({ error: 'no_linked_wallet' });
+  try {
+    await pool.query(`DELETE FROM wallet_challenges WHERE expires_at < $1`, [new Date(req.now.getTime() - 24 * 3600 * 1000)]);
+    const nonce = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(req.now.getTime() + CHALLENGE_MS);
+    const message = [
+      'Awas Ada Pocong wants to bind this wallet to your player.',
+      'App: usernode:app:' + process.env.USERNODE_APP_ID,
+      `User: ${req.user.username} (#${req.user.id})`,
+      'Wallet: ' + wallet,
+      'Nonce: ' + nonce,
+      'Issued: ' + req.now.toISOString(),
+      'This is not a payment and moves no coins.',
+    ].join('\n');
+    await pool.query(
+      `INSERT INTO wallet_challenges (nonce, user_id, wallet_address, message, expires_at)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [nonce, req.user.id, wallet, message, expiresAt]
+    );
+    res.json({ nonce, message, expires_at: expiresAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/wallet/bind', async (req, res) => {
+  const { nonce, signature, pubkey } = req.body || {};
+  if (typeof nonce !== 'string' || !nonce) return res.status(400).json({ error: 'challenge_invalid' });
+  const hasSig = typeof signature === 'string' && signature.length > 0;
+  if (!hasSig && SIGNING_REQUIRED) return res.status(400).json({ error: 'signature_required' });
+  try {
+    const ch = await pool.query(
+      `UPDATE wallet_challenges SET used_at=$3
+       WHERE nonce=$1 AND user_id=$2 AND used_at IS NULL AND expires_at > $3
+       RETURNING wallet_address, message`,
+      [nonce, req.user.id, req.now]
+    );
+    if (!ch.rows.length) return res.status(409).json({ error: 'challenge_invalid' });
+    const { wallet_address, message } = ch.rows[0];
+    if (!req.user.usernode_pubkey || wallet_address !== req.user.usernode_pubkey ||
+        (pubkey != null && pubkey !== wallet_address)) {
+      return res.status(409).json({ error: 'wallet_mismatch' });
+    }
+    if (hasSig && !verifyWalletSignature(wallet_address, message, signature)) {
+      return res.status(401).json({ error: 'bad_signature' });
+    }
+    const method = hasSig ? 'signature' : 'linked';
+    await pool.query(
+      `INSERT INTO wallet_bindings (user_id, username, wallet_address, method, signed_message, signature, bound_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (user_id) DO UPDATE SET username=EXCLUDED.username, wallet_address=EXCLUDED.wallet_address,
+         method=EXCLUDED.method, signed_message=EXCLUDED.signed_message, signature=EXCLUDED.signature,
+         bound_at=EXCLUDED.bound_at`,
+      [req.user.id, req.user.username, wallet_address, method, message, hasSig ? signature : null, req.now]
+    );
+    res.json({ ok: true, signed_in: true, ...(await walletStatus(req.user)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Lock in a hiding room (authenticated) ────────────────────────────────────
 
-app.post('/api/game/hide', async (req, res) => {
+app.post('/api/game/hide', requireBoundWallet, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'account_required', action: 'hide in a room' });
   const { room_slug } = req.body || {};
   if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
@@ -317,7 +436,7 @@ app.post('/api/game/hide', async (req, res) => {
 // multiplies the round's points by 1.5. One daring pick per round, hiding
 // phase only, never the locked room itself.
 
-app.post('/api/game/daring', async (req, res) => {
+app.post('/api/game/daring', requireBoundWallet, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'account_required', action: 'dare a second room' });
   const { room_slug } = req.body || {};
   if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
@@ -506,7 +625,7 @@ async function resolvePartyRound(round) {
   }
 }
 
-app.post('/api/party', async (req, res) => {
+app.post('/api/party', requireBoundWallet, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'account_required', action: 'create a party' });
   try {
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -530,7 +649,7 @@ app.post('/api/party', async (req, res) => {
   }
 });
 
-app.post('/api/party/:code/join', async (req, res) => {
+app.post('/api/party/:code/join', requireBoundWallet, async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'account_required', action: 'join a party' });
   try {
     const party = await findParty(req.params.code);
@@ -627,7 +746,7 @@ async function partyForMember(req, res, action) {
   return party;
 }
 
-app.post('/api/party/:code/start', async (req, res) => {
+app.post('/api/party/:code/start', requireBoundWallet, async (req, res) => {
   try {
     const party = await partyForMember(req, res, 'start a party round');
     if (!party) return;
@@ -647,7 +766,7 @@ async function livePartyHidingRound(partyId, now) {
   return round;
 }
 
-app.post('/api/party/:code/hide', async (req, res) => {
+app.post('/api/party/:code/hide', requireBoundWallet, async (req, res) => {
   const { room_slug } = req.body || {};
   try {
     const party = await partyForMember(req, res, 'hide in a room');
@@ -667,7 +786,7 @@ app.post('/api/party/:code/hide', async (req, res) => {
   }
 });
 
-app.post('/api/party/:code/daring', async (req, res) => {
+app.post('/api/party/:code/daring', requireBoundWallet, async (req, res) => {
   const { room_slug } = req.body || {};
   try {
     const party = await partyForMember(req, res, 'dare a second room');
@@ -867,8 +986,46 @@ async function migrate() {
     )
   `);
 
+  // ── Wallet bind gate tables. Private: they tie a user to a wallet (auth
+  // material), so staging copies the schema without the rows.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS wallet_bindings (
+      user_id INTEGER PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      wallet_address VARCHAR(128) NOT NULL,
+      method VARCHAR(16) NOT NULL,
+      signed_message TEXT,
+      signature TEXT,
+      bound_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`COMMENT ON TABLE wallet_bindings IS 'staging:private'`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS wallet_challenges (
+      nonce VARCHAR(64) PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      wallet_address VARCHAR(128) NOT NULL,
+      message TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`COMMENT ON TABLE wallet_challenges IS 'staging:private'`);
+
   // ── Staging seed data ─────────────────────────────────────────────────────
   if (IS_STAGING) {
+    // Fake players' bindings (background data only; never the viewer's).
+    const fakeBindings = [
+      [900001, 'staging-demo-user'], [900002, 'staging-user-01'], [900003, 'staging-user-02'],
+      [900004, 'staging-user-03'], [900005, 'staging-user-04'],
+    ];
+    for (const [uid, username] of fakeBindings) {
+      await pool.query(
+        `INSERT INTO wallet_bindings (user_id, username, wallet_address, method)
+         VALUES ($1,$2,$3,'linked') ON CONFLICT (user_id) DO NOTHING`,
+        [uid, username, 'ut1staging' + uid]
+      );
+    }
     const existing = await pool.query(`SELECT COUNT(*) FROM rounds`);
     if (existing.rows[0].count === '0') {
       const now = new Date();
