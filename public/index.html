@@ -417,6 +417,23 @@
     }
     #intro-got:hover { filter: brightness(1.18); }
 
+    /* Start page: shown on every load. Only its Mulai button starts the game;
+       the state poll's walk and result visuals stay off until then. */
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 52;
+      background: rgba(4,4,6,0.92); display: flex; align-items: center; justify-content: center; padding: 20px;
+      animation: introFade 0.25s ease-out;
+    }
+    #start-overlay.hidden { display: none; }
+    #start-overlay .intro-card h2 { font-size: 2.4rem; margin-bottom: 6px; }
+    .start-tagline { font-size: 0.9rem; color: #dcdcdc; line-height: 1.45; margin-bottom: 18px; }
+    .start-tagline em { color: #9a9a9a; }
+    #btn-start {
+      font-family: 'Creepster', cursive; font-size: 1.5rem; letter-spacing: 1px;
+      color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 10px 40px; cursor: pointer;
+    }
+    #btn-start:hover { filter: brightness(1.18); }
+
     /* Wallet bind gate: the intro card's look. It sits under the intro, so on
        a first visit the intro shows first and closing it reveals the gate. */
     #wallet-gate {
@@ -621,6 +638,14 @@
     </div>
   </div>
 
+  <div id="start-overlay" role="dialog" aria-modal="true" aria-labelledby="start-title">
+    <div class="intro-card">
+      <h2 id="start-title">👻 Awas Ada Pocong</h2>
+      <p class="start-tagline">Sembunyi di rumah tua, jangan sampai ketemu Pocong! <em>(Hide in the old mansion and don't get found!)</em></p>
+      <button id="btn-start">Mulai</button>
+    </div>
+  </div>
+
   <div id="intro-overlay">
     <div id="intro-card">
       <h2>👻 Cara Bermain</h2>
@@ -653,6 +678,10 @@
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || '';
     const authHeaders = token ? { 'x-usernode-token': token } : {};
+    // The start page is up until Mulai is tapped; while it is, the poll still
+    // refreshes the panel and the party scoreboard but no walk, result banner
+    // or jump-scare may start behind the overlay.
+    let startOpen = !!document.getElementById('start-overlay');
     let myUsername = null;
     try {
       const part = token ? token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/') : '';
@@ -1870,7 +1899,7 @@
         if (roundChanged) selectedRoom = null;
 
         if (state.round && state.round.status === 'hunt' && state.round.target_room) {
-          if (statusChanged || roundChanged) startWalk(state.round.target_room);
+          if ((statusChanged || roundChanged) && !startOpen) startWalk(state.round.target_room);
           // Proximity drives the heartbeat and breathing.
           const mine = my_hide_room_geo();
           if (mine && lastTargetEnd) {
@@ -1886,7 +1915,7 @@
 
         placeFigures(state.hides || [], state.my_hide);
         updateHUD();
-        if (state.round && state.round.status === 'resolved') {
+        if (state.round && state.round.status === 'resolved' && !startOpen) {
           if (resultVisible()) showResult(); else clearResult();
         }
 
@@ -1914,6 +1943,22 @@
       .then(r => r.json())
       .then(({ isStaging }) => { if (isStaging) $('dev-controls').style.display = 'block'; })
       .catch(() => {});
+
+    // ── Start page (every load) ────────────────────────────────────────────────
+    // Mulai is the only way past it: no backdrop click, no remembered key. The
+    // tap doubles as the first gesture, so ambience can start with the game.
+    (function startOverlay() {
+      const overlay = $('start-overlay');
+      if (!overlay) return;
+      const btn = $('btn-start');
+      if (btn) btn.focus();
+      btn.addEventListener('click', () => {
+        startOpen = false;
+        overlay.classList.add('hidden');
+        AUDIO.init(); // first gesture unlocks audio
+        pollState();
+      });
+    })();
 
     // ── Intro overlay (first visit only) ───────────────────────────────────────
     (function introOverlay() {
