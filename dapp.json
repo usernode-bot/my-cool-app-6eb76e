@@ -9,6 +9,12 @@
   },
   "tests": [
     {
+      "name": "Start page shows the title and the Mulai button",
+      "path": "/",
+      "expectSelector": "#start-overlay #btn-start",
+      "expectText": "Mulai"
+    },
+    {
       "name": "Game loads with no errors",
       "path": "/",
       "expectSelector": "#title"

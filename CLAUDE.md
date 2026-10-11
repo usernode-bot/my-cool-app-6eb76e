@@ -192,6 +192,7 @@ and the page scrolls.
 
 | Element | Where | Description |
 |---|---|---|
+| `#start-overlay` | fixed overlay, above the intro (z 52) | Start page shown on every load: title, tagline and one **Mulai** button. Only Mulai dismisses it (no backdrop click, no localStorage key); the poll's walk, result banner and jump-scare stay off while it is up. |
 | `#map-banner` | centre of the map, over the hallway (top of the map during the hunt) | Dark banner: "HIDING PHASE" + "Remaining Hiding Time" + `#hiding-timer`; "POCONG PHASE" / "ROUND OVER" later |
 | `#btn-mute` | top-right of the map | Sound toggle: "🔊 Suara: Nyala" / "🔇 Suara: Mati". Always visible, both phases. |
 | `#dev-controls` | bottom-left of the map (bottom-right on phones) | Staging-only Next Phase button |
@@ -424,7 +425,10 @@ All fake identities, `ON CONFLICT DO NOTHING`, gated on `if (IS_STAGING)`.
 
 ## 11. Polling
 
-`setInterval(pollState, 2000)`. Each poll refreshes the phase, the figures, the
+`setInterval(pollState, 2000)`. While the start page is up (`startOpen`),
+`pollState` still fetches and renders state, but never starts the Pocong walk,
+the result banner or the jump-scare; the poll right after Mulai brings those
+back. Each poll refreshes the phase, the figures, the
 HUD and, on a resolved round, the result banner. `visibilitychange` and
 `pageshow` trigger an immediate poll so a returning tab re-reads the truth.
 The countdown is re-derived from `hiding_ends_at` on every frame and never
