@@ -800,6 +800,7 @@
       <div id="wallet-bind">
         <div class="pp-label">Your wallet</div>
         <div id="wallet-bind-addr"></div>
+        <button type="button" id="wallet-unbind-btn" class="pp-btn" hidden>Unbind</button>
         <div id="wallet-bind-text">Bind your wallet now</div>
         <div id="wallet-bind-bal"></div>
         <button type="button" id="wallet-bind-btn" class="pp-btn primary" hidden>Bind Wallet</button>
@@ -2659,6 +2660,25 @@
       }
       btn.addEventListener('click', bind);
       $('btn-just-watch').addEventListener('click', close);
+      // One tap clears the app's binding (never the Homeroom link). The gate
+      // does not reopen here: any gated action that answers wallet_not_bound
+      // reopens it, which works because open() rechecks status.bound.
+      async function unbind() {
+        if (busy || !status || !status.bound) return { ok: false, error: '' };
+        busy = true;
+        try {
+          const r = await api('POST', '/api/wallet/unbind', {});
+          if (!r.ok) throw new Error('Could not unbind the wallet. Try again.');
+          status = r.data;
+          setNote('');
+          render();
+          return { ok: true, status };
+        } catch (e) {
+          return { ok: false, error: (e && e.message) || 'Could not unbind the wallet. Try again.' };
+        } finally {
+          busy = false;
+        }
+      }
       // Ask the server who is signed in: a guest or tokenless visit answers
       // signed_in: false and never sees the gate.
       async function load() {
@@ -2676,6 +2696,7 @@
         load,
         getStatus: () => status,
         bind,
+        unbind,
       };
     })();
 
@@ -2692,6 +2713,7 @@
       const textEl = $('wallet-bind-text');
       const balEl = $('wallet-bind-bal');
       const btn = $('wallet-bind-btn');
+      const unbindBtn = $('wallet-unbind-btn');
       const noteEl = $('wallet-bind-note');
       const BALANCE_TIMEOUT_MS = 13000; // clears getWalletState's own 12s ceiling
 
@@ -2720,18 +2742,20 @@
         ]);
       }
       // The live balance comes from the platform's wallet feed. Never reject
-      // out: an unavailable feed is a note, not a page error.
+      // out: an unavailable feed is a note, not a page error. A fetch still
+      // running from before an unbind must not write into the panel, so it
+      // only writes while the wallet is still bound.
       async function fetchBalance() {
         if (!(window.usernode && typeof window.usernode.getWalletState === 'function')) {
-          balanceNote('No balance available here.');
+          if (WALLET.getStatus() && WALLET.getStatus().bound) balanceNote('No balance available here.');
           return;
         }
         balanceLoading();
         try {
           const st = await withTimeout(window.usernode.getWalletState(), BALANCE_TIMEOUT_MS);
-          balanceFromState(st);
+          if (WALLET.getStatus() && WALLET.getStatus().bound) balanceFromState(st);
         } catch (_) {
-          balanceNote('No balance available here.');
+          if (WALLET.getStatus() && WALLET.getStatus().bound) balanceNote('No balance available here.');
         }
       }
       function render(status) {
@@ -2741,6 +2765,7 @@
           textEl.textContent = 'Open inside Homeroom to bind a wallet.';
           btn.hidden = false;
           btn.disabled = true;
+          unbindBtn.hidden = true;
           setNote('');
           return;
         }
@@ -2748,12 +2773,15 @@
         addrEl.textContent = linked ? fullAddr(linked) : '';
         if (status.bound && status.binding) {
           btn.hidden = true;
+          unbindBtn.hidden = false;
+          unbindBtn.disabled = false;
           textEl.textContent = 'Bound wallet';
           fetchBalance();
           return;
         }
         showBalance('');
         btn.hidden = false;
+        unbindBtn.hidden = true;
         btn.disabled = !linked;
         btn.textContent = status.signing_required ? 'Sign & Bind Wallet' : 'Bind Wallet';
         if (linked) {
@@ -2770,6 +2798,7 @@
         textEl.textContent = 'Loading your wallet…';
         btn.hidden = false;
         btn.disabled = true;
+        unbindBtn.hidden = true;
         const st = await WALLET.load();
         render(st || { signed_in: false });
         return st;
@@ -2787,6 +2816,19 @@
         }
       }
       btn.addEventListener('click', doBind);
+      async function doUnbind() {
+        if (unbindBtn.disabled) return;
+        unbindBtn.disabled = true;
+        setNote('Unbinding your wallet…');
+        const res = await WALLET.unbind();
+        if (res && res.ok) {
+          render(res.status);
+        } else {
+          render(WALLET.getStatus());
+          setNote((res && res.error) || 'Could not unbind the wallet. Try again.', true);
+        }
+      }
+      unbindBtn.addEventListener('click', doUnbind);
       async function open() {
         $('wallet-sheet').classList.add('show');
         await refresh();
