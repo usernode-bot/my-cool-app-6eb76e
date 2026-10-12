@@ -202,6 +202,7 @@ and the page scrolls.
 | `#wallet-action-sheet` | poster sheet (z 56) | Explains that Swap and Withdraw are not open yet. |
 | `#map-banner` | centre of the map, over the hallway (top of the map during the hunt) | Dark banner: "HIDING PHASE" + "Remaining Hiding Time" + `#hiding-timer`; "POCONG PHASE" / "ROUND OVER" later |
 | `#btn-mute` | top-right of the map | Sound toggle: "🔊 Suara: Nyala" / "🔇 Suara: Mati". Always visible, both phases. |
+| `#btn-back` | top-right of the map, under `#btn-mute` | Back button: "← Kembali". Re-shows the start poster (`showStartPage()`, the reverse of `leaveStartPage()`); the round keeps running and the poster suppresses the walk, banner and jump-scare as on load. Always visible, both phases. |
 | `#dev-controls` | bottom-left of the map (bottom-right on phones) | Staging-only Next Phase button |
 | `#title` | top of the side panel | "Awas Ada Pocong" in Creepster over a double rule |
 | Current Game Phase | panel step 1 | `#phase-banner`: "Hiding Phase: 00:39", "Pocong Phase: the hunt", "Round N over" |

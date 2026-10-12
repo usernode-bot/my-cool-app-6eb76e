@@ -147,14 +147,16 @@
     #map-banner-sub { font-size: 0.74rem; color: #d8ccb0; margin-top: 2px; }
     #hiding-timer { font-family: monospace; font-size: 1.05rem; font-weight: bold; color: #fff; margin-left: 4px; }
 
-    /* Sound toggle: fixed to the map's top-right corner, both phases */
-    #btn-mute {
-      position: absolute; top: 12px; right: 12px; z-index: 15;
+    /* Sound toggle and back button: fixed to the map's top-right corner, both phases */
+    #btn-mute, #btn-back {
+      position: absolute; right: 12px; z-index: 15;
       font-family: 'Creepster', cursive; font-size: 0.9rem; letter-spacing: 1px;
       color: #ffd700; background: rgba(10,10,10,0.9); border: 1px solid #c8a800;
       border-radius: 7px; padding: 6px 12px; cursor: pointer; transition: all 0.15s;
     }
-    #btn-mute:hover { background: #2a2a2a; }
+    #btn-mute { top: 12px; }
+    #btn-back { top: 52px; }
+    #btn-mute:hover, #btn-back:hover { background: #2a2a2a; }
     #btn-mute.off { color: #888; border-color: #555; }
 
     #dev-controls {
@@ -210,7 +212,7 @@
     }
     #room-grid button:hover:not(:disabled) { background: #3a3129; }
     #room-grid button:focus-visible, #btn-confirm:focus-visible, #btn-daring:focus-visible,
-    #btn-leaderboard:focus-visible, #btn-mute:focus-visible, select:focus-visible {
+    #btn-leaderboard:focus-visible, #btn-back:focus-visible, #btn-mute:focus-visible, select:focus-visible {
       outline: 2px solid #ffd700; outline-offset: 2px;
     }
     #room-grid button:disabled { cursor: default; opacity: 0.55; }
@@ -579,7 +581,8 @@
       #map-banner-title { font-size: 1rem; letter-spacing: 2px; }
       #map-banner-sub { font-size: 0.62rem; }
       #hiding-timer { font-size: 0.85rem; }
-      #btn-mute { font-size: 0.78rem; padding: 5px 9px; }
+      #btn-mute, #btn-back { font-size: 0.78rem; padding: 5px 9px; }
+      #btn-back { top: 46px; }
       #dev-controls { bottom: 8px; left: auto; right: 8px; padding: 6px 8px; }
       #dev-controls button { font-size: 0.85rem; }
     }
@@ -635,6 +638,8 @@
       </div>
 
       <button id="btn-mute" aria-pressed="true">🔊 Suara: Nyala</button>
+
+      <button id="btn-back" type="button" aria-label="Kembali ke halaman awal">← Kembali</button>
 
       <div id="dev-controls">
         <div class="dev-label">🛠 Dev Controls (staging)</div>
@@ -2441,6 +2446,20 @@
     }
 
     // ── Start page: the poster and its four shortcuts ──────────────────────────
+    // The map's back button returns to the poster: the reverse of leaving it.
+    // The round keeps running on the server; with startOpen back up the poll
+    // again suppresses the walk, the result banner and the jump-scare, and any
+    // scare or banner on screen is cleared so nothing shows over the poster.
+    function showStartPage() {
+      const poster = $('start-poster');
+      if (!poster || startOpen) return;
+      startOpen = true;
+      if (window.__closePosterSheets) window.__closePosterSheets();
+      clearResult();
+      poster.classList.remove('hidden');
+      $('start-play').focus();
+    }
+    $('btn-back').addEventListener('click', showStartPage);
     function leaveStartPage() {
       const poster = $('start-poster');
       if (!startOpen) return;
