@@ -11,6 +11,57 @@
   },
   "tests": [
     {
+      "name": "Start poster is shown with the four shortcuts",
+      "path": "/",
+      "expectSelector": "#start-poster #start-play"
+    },
+    {
+      "name": "Start poster artwork is wired to the asset path",
+      "path": "/",
+      "expectSelector": "#start-poster #start-poster-art"
+    },
+    {
+      "name": "Play Game offers the three difficulties",
+      "path": "/",
+      "expectSelector": "#difficulty-step #diff-diehard"
+    },
+    {
+      "name": "Settings sheet has the sound slider and the disabled ghost chooser",
+      "path": "/",
+      "expectSelector": "#settings-sheet:has(#sound-slider):has(#ghost-raminom[disabled])"
+    },
+    {
+      "name": "Winner history shows a difficulty and a ghost per row",
+      "path": "/",
+      "expectSelector": "#leaderboard-list li:first-child .lb-streak"
+    },
+    {
+      "id": "start.wallet-card",
+      "name": "Wallet card lists the three tokens with Swap and Withdraw",
+      "path": "/",
+      "expectSelector": "#wallet-card .wallet-row:nth-child(3) #wallet-withdraw-tkn",
+      "visual": true,
+      "impact": [
+        "public/**",
+        "server.js"
+      ]
+    },
+    {
+      "name": "Winner history API returns winners",
+      "path": "/api/game/leaderboard",
+      "expectText": "\"winners\""
+    },
+    {
+      "name": "Run state API answers",
+      "path": "/api/game/run/state",
+      "expectText": "difficulty_options"
+    },
+    {
+      "name": "Settings API answers",
+      "path": "/api/settings",
+      "expectText": "\"sound_volume\""
+    },
+    {
       "name": "Game loads with no errors",
       "path": "/",
       "expectSelector": "#title"
@@ -66,7 +117,7 @@
       "expectText": "\"status\":\"hiding\",\"target_room\":null,\"hiding_ends_at\":\"20"
     },
     {
-      "name": "Leaderboard API returns a leaderboard",
+      "name": "Leaderboard API returns winner history",
       "path": "/api/game/leaderboard",
       "expectText": "leaderboard"
     },
@@ -107,6 +158,21 @@
       "impact": [
         "public/index.html",
         "server.js"
+      ]
+    },
+    {
+      "name": "Wallet sheet has the bind control",
+      "path": "/",
+      "expectSelector": "#wallet-bind #wallet-bind-btn"
+    },
+    {
+      "id": "wallet.bind-panel",
+      "name": "Wallet sheet shows the bind address and live balance panel",
+      "path": "/",
+      "expectSelector": "#wallet-bind #wallet-bind-bal",
+      "visual": true,
+      "impact": [
+        "public/index.html"
       ]
     },
     {
