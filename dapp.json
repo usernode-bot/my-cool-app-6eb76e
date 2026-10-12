@@ -102,6 +102,11 @@
       "expectSelector": "#btn-mute"
     },
     {
+      "name": "Back to start button is on the map",
+      "path": "/",
+      "expectSelector": "#map-wrap #btn-back"
+    },
+    {
       "name": "Pocong Route is drawn on the map",
       "path": "/",
       "expectText": "Pocong Route"
