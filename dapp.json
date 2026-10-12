@@ -166,6 +166,11 @@
       "expectSelector": "#wallet-bind #wallet-bind-btn"
     },
     {
+      "name": "Wallet sheet has the unbind control",
+      "path": "/",
+      "expectSelector": "#wallet-bind #wallet-unbind-btn"
+    },
+    {
       "id": "wallet.bind-panel",
       "name": "Wallet sheet shows the bind address and live balance panel",
       "path": "/",

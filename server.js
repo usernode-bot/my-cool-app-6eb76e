@@ -514,6 +514,19 @@ app.post('/api/wallet/bind', async (req, res) => {
   }
 });
 
+// Clearing the bind is the caller's own undo: it only removes their row, so it
+// sits behind the auth middleware but not behind requireBoundWallet — a player
+// whose linked wallet changed must still be able to clear the stale row.
+app.post('/api/wallet/unbind', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM wallet_bindings WHERE user_id=$1`, [req.user.id]);
+    await pool.query(`DELETE FROM wallet_challenges WHERE user_id=$1 AND used_at IS NULL`, [req.user.id]);
+    res.json({ ok: true, signed_in: true, ...(await walletStatus(req.user)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Lock in a hiding room (authenticated) ────────────────────────────────────
 
 app.post('/api/game/hide', requireBoundWallet, async (req, res) => {
