@@ -306,7 +306,7 @@
 
     /* Leaderboard sheet */
     #leaderboard-overlay {
-      display: none; position: fixed; inset: 0; z-index: 40;
+      display: none; position: fixed; inset: 0; z-index: 56;
       background: rgba(4,4,6,0.72); align-items: center; justify-content: center; padding: 20px;
     }
     #leaderboard-overlay.show { display: flex; }
@@ -417,22 +417,109 @@
     }
     #intro-got:hover { filter: brightness(1.18); }
 
-    /* Start page: shown on every load. Only its Mulai button starts the game;
-       the state poll's walk and result visuals stay off until then. */
-    #start-overlay {
-      position: fixed; inset: 0; z-index: 52;
-      background: rgba(4,4,6,0.92); display: flex; align-items: center; justify-content: center; padding: 20px;
+    /* Start page: the game poster, shown on every load. Only its START begins
+       the game; the poll's walk and result visuals stay off until then. */
+    #start-poster {
+      position: fixed; inset: 0; z-index: 52; background: #0e0c0a; overflow: hidden;
       animation: introFade 0.25s ease-out;
     }
-    #start-overlay.hidden { display: none; }
-    #start-overlay .intro-card h2 { font-size: 2.4rem; margin-bottom: 6px; }
-    .start-tagline { font-size: 0.9rem; color: #dcdcdc; line-height: 1.45; margin-bottom: 18px; }
-    .start-tagline em { color: #9a9a9a; }
-    #btn-start {
-      font-family: 'Creepster', cursive; font-size: 1.5rem; letter-spacing: 1px;
-      color: #fff; background: #7c3aed; border: none; border-radius: 10px; padding: 10px 40px; cursor: pointer;
+    #start-poster.hidden { display: none; }
+    /* Full-bleed backdrop: the same artwork, blurred, so the letterbox bands
+       above and below the fitted square read as the poster's own dark blur. */
+    .poster-blur {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; filter: blur(18px) brightness(0.5); transform: scale(1.08);
     }
-    #btn-start:hover { filter: brightness(1.18); }
+    /* The fitted square the artwork and the shortcuts live on. Sized to the
+       largest square that fits the viewport, so the poster is shown whole and
+       its baked-in caption is never cropped. */
+    .poster-frame {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      height: min(100%, 100vw); width: min(100%, 100vh); aspect-ratio: 1 / 1;
+      overflow: hidden;
+    }
+    #start-poster-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    .poster-scrim {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 100%);
+    }
+    /* The four shortcuts, about two-thirds down, clear of the poster's badge. */
+    .start-shortcuts {
+      position: absolute; left: 50%; transform: translateX(-50%); bottom: 22%;
+      width: min(86%, 460px); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    #start-poster .pp-btn {
+      margin-bottom: 0; font-size: 1.05rem; padding: 13px 0;
+      background: rgba(28,23,19,0.9); box-shadow: 0 4px 14px rgba(0,0,0,0.65);
+    }
+    /* Fallback: if the poster file is missing or replaced with something odd the
+       two image layers hide and today's intro card returns, with the same four
+       shortcuts, so the start page always has a title and a way in. */
+    #start-poster.fallback #start-poster-art, #start-poster.fallback .poster-blur, #start-poster.fallback .poster-scrim { display: none; }
+    #start-poster.fallback .poster-frame { background: #0e0c0a; }
+    .poster-fallback { display: none; }
+    #start-poster.fallback .poster-fallback {
+      display: block; position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      width: calc(100% - 32px);
+    }
+
+    /* Sheets over the poster: the difficulty chooser, Settings, Leaderboard and
+       Wallet open behind the app's dim, above the poster. */
+    .poster-sheet {
+      display: none; position: fixed; inset: 0; z-index: 56;
+      background: rgba(4,4,6,0.82); align-items: center; justify-content: center; padding: 20px;
+      animation: introFade 0.25s ease-out;
+    }
+    .poster-sheet.show { display: flex; }
+    .sheet-card { max-width: 420px; text-align: left; }
+    .sheet-card h2 { font-size: 1.6rem; text-align: center; }
+    .sheet-sub { font-size: 0.72rem; color: #999; text-align: center; margin-bottom: 12px; }
+    .sheet-close {
+      display: block; width: 100%; margin-top: 12px;
+      font-family: 'Creepster', cursive; font-size: 1rem; color: #fff;
+      background: #7c3aed; border: none; border-radius: 9px; padding: 8px 0; cursor: pointer;
+    }
+    .sheet-close:hover { filter: brightness(1.18); }
+    /* Both choosers are three-way, unlike the panel's two-column mode switch. */
+    #difficulty-step, #ghost-step { grid-template-columns: 1fr 1fr 1fr; }
+    #difficulty-help { min-height: 3.4em; }
+    #difficulty-start { margin-top: 12px; }
+    #difficulty-note { margin-top: 8px; }
+    #sound-slider { width: 100%; margin: 2px 0 6px; accent-color: #7c3aed; }
+    #sound-readout { font-size: 0.72rem; color: #b5a88c; margin-bottom: 12px; }
+    #ghost-note { margin-top: 8px; }
+    #settings-sheet .pp-label { margin-top: 12px; }
+
+    /* Wallet card: the leaderboard card's gold look, a row per token. */
+    #wallet-card {
+      width: 100%; max-width: 420px; background: linear-gradient(160deg, #17171a, #101012);
+      border: 2px solid #c8a800; border-radius: 14px; padding: 18px 18px 14px; color: #e8e8e8;
+    }
+    #wallet-card h2 {
+      font-family: 'Creepster', cursive; font-size: 1.6rem; color: #ffd700;
+      letter-spacing: 2px; text-align: center; margin-bottom: 4px;
+    }
+    .wallet-row { display: flex; align-items: center; gap: 6px; padding: 9px 2px; border-bottom: 1px solid #2a2a2a; }
+    .wallet-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+    .wallet-btn {
+      font-family: 'Creepster', cursive; font-size: 0.82rem; letter-spacing: 1px; color: #e8d9b5;
+      background: #2e2721; border: 1px solid #6b5a42; border-radius: 6px; padding: 5px 10px; cursor: pointer;
+    }
+    .wallet-btn:hover { background: #3a3129; }
+    .wallet-tok { color: #ddd; font-size: 0.9rem; white-space: nowrap; }
+    .wallet-bal { margin-left: auto; font-family: monospace; font-size: 0.95rem; color: #ffd700; }
+    #wallet-card .intro-note { margin: 12px 0 10px; }
+    #wallet-action-card {
+      width: 100%; max-width: 380px; background: linear-gradient(160deg, #17171a, #101012);
+      border: 2px solid #c8a800; border-radius: 14px; padding: 18px 18px 14px; color: #e8e8e8;
+    }
+    #wallet-action-card h2 {
+      font-family: 'Creepster', cursive; font-size: 1.5rem; color: #ffd700;
+      letter-spacing: 2px; text-align: center; margin-bottom: 8px;
+    }
+    #wallet-action-text { font-size: 0.82rem; color: #dcdcdc; line-height: 1.5; margin-bottom: 6px; }
+    #wallet-address { font-size: 0.7rem; color: #999; text-align: center; margin-bottom: 10px; word-break: break-all; }
+    #wallet-native { font-size: 0.72rem; color: #b5a88c; margin-bottom: 4px; }
 
     /* Wallet bind gate: the intro card's look. It sits under the intro, so on
        a first visit the intro shows first and closing it reveals the gate. */
@@ -631,18 +718,106 @@
   <div id="leaderboard-overlay">
     <div id="leaderboard-card">
       <h2>🏆 Leaderboard</h2>
-      <div class="lb-sub">Skor terbaik tiap pemain</div>
+      <div class="lb-sub">Winner history</div>
       <ul id="leaderboard-list"></ul>
       <div id="leaderboard-empty">Belum ada skor. Mainkan satu ronde dulu.</div>
       <button id="leaderboard-close">Tutup</button>
     </div>
   </div>
 
-  <div id="start-overlay" role="dialog" aria-modal="true" aria-labelledby="start-title">
-    <div class="intro-card">
-      <h2 id="start-title">👻 Awas Ada Pocong</h2>
-      <p class="start-tagline">Sembunyi di rumah tua, jangan sampai ketemu Pocong! <em>(Hide in the old mansion and don't get found!)</em></p>
-      <button id="btn-start">Mulai</button>
+  <div id="start-poster" role="dialog" aria-modal="true" aria-label="Awas Ada Pocong">
+    <img class="poster-blur" id="start-poster-blur" src="/assets/poster.jpg" alt="" aria-hidden="true">
+    <div class="poster-frame">
+      <img id="start-poster-art" src="/assets/poster.jpg" alt="Awas Ada Pocong">
+      <div class="poster-scrim"></div>
+      <div class="poster-fallback intro-card">
+        <h2>Awas Ada Pocong</h2>
+        <p class="start-tagline">Sembunyi di rumah tua, jangan sampai ketemu Pocong! <em>(Hide in the old mansion and don't get found!)</em></p>
+      </div>
+      <div class="start-shortcuts">
+        <button type="button" id="start-play" class="pp-btn primary">Play Game</button>
+        <button type="button" id="start-settings" class="pp-btn">Settings</button>
+        <button type="button" id="start-leaderboard" class="pp-btn">Leaderboard</button>
+        <button type="button" id="start-wallet" class="pp-btn">Wallet</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="difficulty-sheet" class="poster-sheet" role="dialog" aria-modal="true" aria-labelledby="difficulty-title">
+    <div class="intro-card sheet-card">
+      <h2 id="difficulty-title">Play Game</h2>
+      <div class="pp-label">Difficulty</div>
+      <div id="difficulty-step" class="mode-switch" role="group" aria-label="Difficulty">
+        <button type="button" id="diff-novice" aria-pressed="true">Novice</button>
+        <button type="button" id="diff-challenging" aria-pressed="false">Challenging</button>
+        <button type="button" id="diff-diehard" aria-pressed="false">DieHard</button>
+      </div>
+      <p class="pp-help" id="difficulty-help"></p>
+      <button type="button" id="difficulty-start" class="pp-btn primary">START</button>
+      <div class="pp-note" id="difficulty-note"></div>
+      <button type="button" class="sheet-close" data-close-sheet="difficulty-sheet">Tutup</button>
+    </div>
+  </div>
+
+  <div id="settings-sheet" class="poster-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="intro-card sheet-card">
+      <h2 id="settings-title">Settings</h2>
+      <div class="pp-label">Sound</div>
+      <input type="range" id="sound-slider" min="0" max="100" step="1" value="50" aria-label="Sound">
+      <div id="sound-readout">50</div>
+      <div class="pp-label">Ghost enemy</div>
+      <div id="ghost-step" class="mode-switch" role="group" aria-label="Ghost enemy">
+        <button type="button" id="ghost-pocong" aria-pressed="true">Pocong</button>
+        <button type="button" id="ghost-sumala" aria-pressed="false">Sumala</button>
+        <button type="button" id="ghost-raminom" aria-pressed="false">Raminom</button>
+      </div>
+      <div class="pp-note" id="ghost-note"></div>
+      <button type="button" class="sheet-close" data-close-sheet="settings-sheet">Tutup</button>
+    </div>
+  </div>
+
+  <div id="wallet-sheet" class="poster-sheet" role="dialog" aria-modal="true" aria-labelledby="wallet-card-title">
+    <div id="wallet-card">
+      <h2 id="wallet-card-title">Wallet</h2>
+      <div class="sheet-sub">Your balances</div>
+      <div id="wallet-rows">
+      <div class="wallet-row" data-token="$POINTS">
+        <div class="wallet-btns">
+          <button type="button" class="wallet-btn" data-wallet="swap" aria-label="Swap $POINTS">Swap</button>
+          <button type="button" class="wallet-btn" data-wallet="withdraw" aria-label="Withdraw $POINTS">Withdraw</button>
+        </div>
+        <span class="wallet-tok">$POINTS</span>
+        <span class="wallet-bal" id="wallet-bal-points">8,420</span>
+      </div>
+      <div class="wallet-row" data-token="$H4NTU">
+        <div class="wallet-btns">
+          <button type="button" class="wallet-btn" data-wallet="swap" aria-label="Swap $H4NTU">Swap</button>
+          <button type="button" class="wallet-btn" data-wallet="withdraw" aria-label="Withdraw $H4NTU">Withdraw</button>
+        </div>
+        <span class="wallet-tok">$H4NTU</span>
+        <span class="wallet-bal" id="wallet-bal-h4ntu">842</span>
+      </div>
+      <div class="wallet-row" data-token="$TKN">
+        <div class="wallet-btns">
+          <button type="button" class="wallet-btn" data-wallet="swap" id="wallet-swap-tkn" aria-label="Swap $TKN">Swap</button>
+          <button type="button" class="wallet-btn" data-wallet="withdraw" id="wallet-withdraw-tkn" aria-label="Withdraw $TKN">Withdraw</button>
+        </div>
+        <span class="wallet-tok">$TKN</span>
+        <span class="wallet-bal" id="wallet-bal-tkn">0</span>
+      </div>
+      </div>
+      <div id="wallet-address"></div>
+      <div id="wallet-native"></div>
+      <div class="intro-note">Swap and Withdraw are not open yet: the platform has no token swap, token withdrawal or fee support. Nothing here moves coins.</div>
+      <button type="button" class="sheet-close" id="wallet-close">Tutup</button>
+    </div>
+  </div>
+
+  <div id="wallet-action-sheet" class="poster-sheet" role="dialog" aria-modal="true" aria-labelledby="wallet-action-title">
+    <div id="wallet-action-card">
+      <h2 id="wallet-action-title">Swap</h2>
+      <p id="wallet-action-text"></p>
+      <button type="button" class="sheet-close" data-close-sheet="wallet-action-sheet">Tutup</button>
     </div>
   </div>
 
@@ -678,16 +853,55 @@
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token') || '';
     const authHeaders = token ? { 'x-usernode-token': token } : {};
-    // The start page is up until Mulai is tapped; while it is, the poll still
+    // The start page is up until START is tapped; while it is, the poll still
     // refreshes the panel and the party scoreboard but no walk, result banner
-    // or jump-scare may start behind the overlay.
-    let startOpen = !!document.getElementById('start-overlay');
+    // or jump-scare may start behind the poster.
+    let startOpen = !!document.getElementById('start-poster');
     let myUsername = null;
     try {
       const part = token ? token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/') : '';
       const payload = part ? JSON.parse(atob(part)) : null;
       if (payload && payload.username) myUsername = String(payload.username);
     } catch (_) {}
+
+    // ── Poster start page: difficulty, the four shortcuts and its sheets ───────
+    // The artwork is a plain static file: one constant, swapped later with no
+    // code change. The ghost art is not in the repo yet, so every ghost path
+    // falls back to the Pocong's image (the publisher replaces the files).
+    const POSTER_ASSET = '/assets/poster.jpg';
+    const GHOST_ART = { pocong: '/assets/pocong.jpg', sumala: '/assets/sumala.png', raminom: '/assets/raminom.png' };
+    const GHOST_LABEL = { pocong: 'Pocong', sumala: 'Sumala', raminom: 'Raminom' };
+    function ghostLabel(key) { return GHOST_LABEL[key] || GHOST_LABEL.pocong; }
+    const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Attic' };
+    const DIFFICULTY_LABEL = { novice: 'Novice', challenging: 'Challenging', diehard: 'DieHard' };
+    const DIFFICULTY_HELP = {
+      novice: 'One mansion floor, all 11 rooms, one Pocong.',
+      challenging: 'Floor 2 with 6 rooms and one Pocong. Win it to unlock Sumala.',
+      diehard: 'Floor 2 with 3 rooms and 2 Pocong, then the Attic, where only one room survives. Win it to unlock Raminom.',
+    };
+    const DIFF_FLOORS = {
+      novice: [{ floor: 1, rooms: 11 }, { floor: 1, rooms: 11 }],
+      challenging: [{ floor: 2, rooms: 6 }],
+      diehard: [{ floor: 2, rooms: 3 }, { floor: 3, rooms: 3 }],
+    };
+    // The run's rooms in the same order the server fences them (ROOMS order).
+    function ROOM_ORDER() { return ROOMS.map((r) => r.slug); }
+
+    let chosenDifficulty = 'novice';
+    let settings = { sound_volume: 50, ghost_enemy: 'pocong', ghosts: [] };
+    let settingsLoaded = false;
+    // In run mode, currentState is the run's own round (from /api/game/run/state).
+    function isRun() { return sessionStorage.getItem('aap_run') === '1'; }
+    function setRun(on) { try { if (on) sessionStorage.setItem('aap_run', '1'); else sessionStorage.removeItem('aap_run'); } catch (_) {} }
+    // A run's rounds are fenced to the first `rooms_left` of the 11 slugs, the
+    // same set the server draws from.
+    function runRoomsLeft() {
+      const r = (isRun() && currentState.round) ? currentState.round.rooms_left : null;
+      return r || ROOM_ORDER().length;
+    }
+    function allowedRooms() { return ROOM_ORDER().slice(0, runRoomsLeft()); }
+    function roomAllowed(slug) { return allowedRooms().includes(slug); }
+    function ghostsUnlocked() { return (settings.ghosts || []).reduce((m, g) => (m[g.key] = g.unlocked, m), { pocong: true }); }
 
     const SVGNS = 'http://www.w3.org/2000/svg';
     function svgEl(tag, attrs) {
@@ -1150,6 +1364,31 @@
       $('layer-ghost').appendChild(g);
       return g;
     })();
+    // The walk draws one SVG figure; when the chosen hunter is not the Pocong
+    // (whose art is not in the repo yet) the figure is hidden and the chosen
+    // hunter is shown where it stands, using its own image.
+    let ghostImg = null;
+    function ghostArtFor(key) { return GHOST_ART[key] || GHOST_ART.pocong; }
+    function applyGhostArt() {
+      const key = settings.ghost_enemy || 'pocong';
+      const isPocong = key === 'pocong';
+      ghostG.style.display = isPocong ? '' : 'none';
+      ghostShadow.style.display = isPocong ? '' : 'none';
+      if (!isPocong && !ghostImg) {
+        ghostShadow.style.display = '';
+        const img = document.createElementNS(SVGNS, 'image');
+        img.setAttribute('width', 46);
+        img.setAttribute('height', 46);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        img.setAttribute('href', ghostArtFor(key));
+        $('layer-ghost').appendChild(img);
+        ghostImg = img;
+      }
+      if (ghostImg) {
+        ghostImg.style.display = isPocong ? 'none' : '';
+        ghostImg.setAttribute('href', ghostArtFor(key));
+      }
+    }
 
     let ghostBase = { x: ROUTE[0].x, y: ROUTE[0].y };
     const footprints = [];
@@ -1166,6 +1405,10 @@
       ghostShadow.setAttribute('ry', (5.5 * f).toFixed(1));
       ghostShadow.setAttribute('fill', 'rgba(0,0,0,' + (0.3 * f).toFixed(3) + ')');
       ghostG.setAttribute('transform', 'translate(' + (gx + sway).toFixed(1) + ',' + (gy - lift).toFixed(1) + ') scale(' + pulse.toFixed(3) + ')');
+      if (ghostImg && ghostImg.style.display !== 'none') {
+        ghostImg.setAttribute('x', (gx + sway - 23).toFixed(1));
+        ghostImg.setAttribute('y', (gy - lift - 46).toFixed(1));
+      }
     }
 
     // The ghost walks the route from the entrance to the point nearest the
@@ -1183,15 +1426,28 @@
       });
       return best;
     }
-    function startWalk(slug) {
-      const geo = roomGeo[slug];
-      if (!geo) return;
-      const stop = nearestRouteIndex(geo.door.x, geo.door.y);
-      const pts = ROUTE.slice(0, stop + 1).concat([geo.door, geo.inside]);
+    // The walk visits every target the round drew: the route to the nearest of
+    // them, then the nearest of each of the rest in turn. One drawn hunter
+    // walks the whole path; every target room is lit when it arrives.
+    function walkSlugs() {
+      const r = currentState.round;
+      if (r && Array.isArray(r.target_rooms) && r.target_rooms.length) return r.target_rooms.filter((s) => roomGeo[s]);
+      return r && r.target_room && roomGeo[r.target_room] ? [r.target_room] : [];
+    }
+    function startWalk(slugs) {
+      const ordered = (Array.isArray(slugs) ? slugs : [slugs]).filter((s) => roomGeo[s]);
+      if (!ordered.length) return;
+      const geos = ordered.map((s) => roomGeo[s]);
+      const first = geos[0];
+      const legs = [ROUTE.slice(0, nearestRouteIndex(first.door.x, first.door.y) + 1), first.door, first.inside];
+      for (let i = 1; i < geos.length; i++) {
+        legs.push(geos[i].door, geos[i].inside);
+      }
+      const pts = legs;
       const cum = [0];
       for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
       walk = { pts, cum, total: cum[cum.length - 1], start: performance.now(), dropped: 0 };
-      lastTargetEnd = geo.door;
+      lastTargetEnd = geos[geos.length - 1].door;
       ghostWalking = true;
     }
     function walkPoint(dist) {
@@ -1241,11 +1497,20 @@
     const AUDIO = (function () {
       let ctx = null, ambienceGain = null, stingGain = null;
       let muted = false, running = false;
+      let volume = 0.5; // 0..1, the slider's position; drives ambienceGain
       let breathSrc = null, breathFilter = null, breathGain = null;
       let beatTimer = null, stepTimer = null;
       let intensity = 0; // 0..1 proximity
 
       try { muted = localStorage.getItem('aap_muted_v1') === '1'; } catch (_) {}
+      try {
+        const v = localStorage.getItem('aap_volume_v1');
+        if (v !== null && Number.isFinite(Number(v))) volume = Math.max(0, Math.min(1, Number(v) / 100));
+      } catch (_) {}
+
+      // The ambience bus at slider position 50 is exactly the 0.18 gain the
+      // app had before the slider existed.
+      function ambienceLevel() { return muted ? 0 : volume * 0.36; }
 
       function noiseBuffer(seconds) {
         const len = Math.floor(ctx.sampleRate * seconds);
@@ -1262,7 +1527,7 @@
         ctx = new AC();
         // Ambience bus: the mute toggle controls exactly this node.
         ambienceGain = ctx.createGain();
-        ambienceGain.gain.value = muted ? 0 : 0.18;
+        ambienceGain.gain.value = ambienceLevel();
         ambienceGain.connect(ctx.destination);
         // Sting bus: its own node, deliberately above the ambience bus.
         stingGain = ctx.createGain();
@@ -1337,11 +1602,18 @@
           }
         },
         setMuted(m) {
-          muted = m;
+          muted = !!m;
           try { localStorage.setItem('aap_muted_v1', m ? '1' : '0'); } catch (_) {}
-          if (ambienceGain) ambienceGain.gain.value = m ? 0 : 0.18;
+          if (ambienceGain) ambienceGain.gain.value = ambienceLevel();
         },
         isMuted() { return muted; },
+        // The slider's position (0..1). The sting bus is deliberately not on
+        // this gain, so the jump-scare stays the loudest moment at any level.
+        setVolume(v) {
+          volume = Math.max(0, Math.min(1, Number(v) || 0));
+          if (ambienceGain) ambienceGain.gain.value = ambienceLevel();
+        },
+        getVolume() { return volume; },
         setIntensity(v) {
           intensity = Math.max(0, Math.min(1, v));
           if (breathGain) breathGain.gain.value = 0.04 + intensity * 0.12;
@@ -1386,8 +1658,8 @@
 
     $('btn-mute').addEventListener('click', () => {
       AUDIO.init(); // first gesture unlocks audio
-      AUDIO.setMuted(!AUDIO.isMuted());
-      applyMuteUI();
+      const silent = settings.sound_volume === 0 || AUDIO.isMuted();
+      setSound(silent ? lastAudibleVolume : 0, true);
     });
     // Unlock audio on any first interaction too, respecting the stored mute.
     function unlockAudio() { AUDIO.init(); AUDIO.setMuted(AUDIO.isMuted()); }
@@ -1421,6 +1693,7 @@
     }
     function isParty() { return mode === 'party'; }
     function apiBase() {
+      if (isRun()) return '/api/game/run';
       return isParty() && partyCode ? '/api/party/' + encodeURIComponent(partyCode) : '/api/game';
     }
     function isPartyMember() { return !!(currentState.party && currentState.party.is_member); }
@@ -1433,6 +1706,12 @@
       if (isParty() && !isPartyMember()) return false;
       return !!(currentState.round && currentState.round.status === 'hiding' && !currentState.my_hide);
     }
+    function targetRooms() {
+      const r = currentState.round;
+      if (!r) return [];
+      if (Array.isArray(r.target_rooms) && r.target_rooms.length) return r.target_rooms;
+      return r.target_room ? [r.target_room] : [];
+    }
     function canDare() {
       const mh = currentState.my_hide;
       return !!(currentState.round && currentState.round.status === 'hiding' && mh && mh.room_slug && !mh.daring_room_slug);
@@ -1444,14 +1723,17 @@
     function refreshHotspotState() {
       const mh = currentState.my_hide;
       const r = currentState.round;
+      const targets = targetLit() ? targetRooms() : [];
       for (const slug in hotspotEls) {
         const hs = hotspotEls[slug];
-        hs.classList.toggle('bettable', canHide());
-        if (!canHide()) hs.classList.remove('hovered');
-        hs.classList.toggle('selected', !!(canHide() && selectedRoom && selectedRoom.slug === slug));
+        const usable = canHide() && roomAllowed(slug);
+        hs.classList.toggle('bettable', usable);
+        if (!usable) hs.classList.remove('hovered');
+        hs.classList.toggle('selected', !!(usable && selectedRoom && selectedRoom.slug === slug));
         hs.classList.toggle('locked', !!(mh && mh.room_slug === slug));
         hs.classList.toggle('daring', !!(mh && mh.daring_room_slug === slug));
-        hs.classList.toggle('target', !!(targetLit() && r.target_room === slug));
+        hs.classList.toggle('target', targets.includes(slug));
+        hs.classList.toggle('fenced', !roomAllowed(slug));
       }
     }
 
@@ -1501,6 +1783,14 @@
       const s = String(total % 60).padStart(2, '0');
       return m + ':' + s;
     }
+    // A solo run is a level, not just a round: its floor and the rooms still in
+    // play lead the phase line, so a DieHard player can see the Attic is next.
+    function runPrefix() {
+      const r = currentState.round;
+      if (!isRun() || !r) return '';
+      return (FLOOR_LABELS[r.floor] || ('Floor ' + r.floor)) + ' · ' +
+        (r.rooms_left || ROOM_ORDER().length) + ' rooms · ';
+    }
     function tickTimer() {
       const r = currentState.round;
       const timer = $('hiding-timer');
@@ -1510,17 +1800,18 @@
         banner.textContent = isParty() ? 'Party lobby' : 'Hiding Phase: --:--';
         return;
       }
+      const lead = runPrefix();
       if (r.status === 'hiding') {
         const t = fmt(remainingMs());
         timer.textContent = t;
-        banner.textContent = 'Hiding Phase: ' + t;
+        banner.textContent = lead + 'Hiding Phase: ' + t;
         if (remainingMs() <= 0) { pollState(); }
       } else if (r.status === 'hunt') {
         timer.textContent = '00:00';
-        banner.textContent = 'Pocong Phase: the hunt';
+        banner.textContent = lead + 'Pocong Phase: the hunt';
       } else {
         timer.textContent = roomLabel(r.target_room);
-        banner.textContent = 'Round ' + r.round_number + ' over';
+        banner.textContent = lead + 'Round ' + r.round_number + ' over';
       }
     }
     setInterval(tickTimer, 200);
@@ -1635,8 +1926,15 @@
 
     // ── Party panel ────────────────────────────────────────────────────────────
     function renderParty() {
-      $('mode-open').setAttribute('aria-pressed', String(!isParty()));
+      $('mode-open').setAttribute('aria-pressed', String(!isParty() && !isRun()));
       $('mode-party').setAttribute('aria-pressed', String(isParty()));
+      if (isRun()) {
+        // A solo run is not a party and not the open round: no party setup,
+        // lobby or scoreboard on the panel.
+        $('party-setup').hidden = true;
+        $('party-info').hidden = true;
+        return;
+      }
       const p = currentState.party;
       $('party-setup').hidden = !(isParty() && !partyCode);
       $('party-info').hidden = !(isParty() && partyCode && p);
@@ -1682,6 +1980,9 @@
 
     function switchMode(nextMode, nextCode) {
       mode = nextMode;
+      // The panel's two modes are the shared open round and a party; a solo run
+      // is neither, so switching leaves it behind (Play Game starts it again).
+      setRun(false);
       partyCode = nextMode === 'party' ? (nextCode || null) : partyCode;
       saveMode();
       currentState = { round: null, my_hide: null, hides: [], stats: null, party: null };
@@ -1769,6 +2070,8 @@
     function triggerJumpscare() {
       if (jumpscareShown) return;
       jumpscareShown = true;
+      const jsImg = $('jumpscare').querySelector('img');
+      if (jsImg) jsImg.src = ghostArtFor(settings.ghost_enemy || 'pocong');
       AUDIO.playSting();
       const flash = $('flash');
       flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
@@ -1791,39 +2094,50 @@
       jumpscareShown = false;
     }
 
-    // ── Leaderboard ────────────────────────────────────────────────────────────
+    // ── Leaderboard: the winner history ────────────────────────────────────────
+    // One row per cleared run: who won, what the run was worth, on which
+    // difficulty and against which hunter. Newest win first.
+    async function renderWinnerHistory() {
+      const res = await fetch('/api/game/leaderboard', { headers: authHeaders });
+      const { winners } = await res.json();
+      const list = $('leaderboard-list');
+      list.innerHTML = '';
+      if (!winners || !winners.length) {
+        $('leaderboard-empty').style.display = 'block';
+        return;
+      }
+      $('leaderboard-empty').style.display = 'none';
+      winners.forEach((row) => {
+        const li = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'lb-name';
+        name.textContent = row.username;
+        const score = document.createElement('span');
+        score.className = 'lb-score';
+        score.textContent = Number(row.points).toLocaleString('en-US') + ' poin';
+        const meta = document.createElement('span');
+        meta.className = 'lb-streak';
+        meta.textContent = (DIFFICULTY_LABEL[row.difficulty] || row.difficulty) + ' · ' +
+          ghostLabel(row.ghost_enemy);
+        li.appendChild(name); li.appendChild(score); li.appendChild(meta);
+        list.appendChild(li);
+      });
+    }
+    // The card is filled as the page loads, so it is ready the instant it is
+    // opened and its rows are in the document for the regression check.
+    renderWinnerHistory().catch(() => {});
     async function openLeaderboard() {
-      try {
-        const res = await fetch('/api/game/leaderboard', { headers: authHeaders });
-        const { leaderboard } = await res.json();
-        const list = $('leaderboard-list');
-        list.innerHTML = '';
-        if (!leaderboard || !leaderboard.length) {
-          $('leaderboard-empty').style.display = 'block';
-        } else {
-          $('leaderboard-empty').style.display = 'none';
-          leaderboard.forEach((row) => {
-            const li = document.createElement('li');
-            const name = document.createElement('span');
-            name.className = 'lb-name';
-            name.textContent = row.username;
-            const score = document.createElement('span');
-            score.className = 'lb-score';
-            score.textContent = row.best_score + ' poin';
-            const streak = document.createElement('span');
-            streak.className = 'lb-streak';
-            streak.textContent = 'streak ' + row.current_streak;
-            li.appendChild(name); li.appendChild(score); li.appendChild(streak);
-            list.appendChild(li);
-          });
-        }
-        $('leaderboard-overlay').classList.add('show');
-      } catch (e) { console.warn('Leaderboard error:', e.message); }
+      try { await renderWinnerHistory(); } catch (e) { console.warn('Leaderboard error:', e.message); }
+      $('leaderboard-overlay').classList.add('show');
     }
     $('btn-leaderboard').addEventListener('click', openLeaderboard);
-    $('leaderboard-close').addEventListener('click', () => $('leaderboard-overlay').classList.remove('show'));
+    function closeLeaderboard() {
+      $('leaderboard-overlay').classList.remove('show');
+      if (window.__closePosterSheets) window.__closePosterSheets();
+    }
+    $('leaderboard-close').addEventListener('click', closeLeaderboard);
     $('leaderboard-overlay').addEventListener('click', (e) => {
-      if (e.target === $('leaderboard-overlay')) $('leaderboard-overlay').classList.remove('show');
+      if (e.target === $('leaderboard-overlay')) closeLeaderboard();
     });
 
     // ── Confirm & place ────────────────────────────────────────────────────────
@@ -1877,6 +2191,23 @@
     async function pollState() {
       if (isParty() && !partyCode) { updateHUD(); refreshHotspotState(); return; }
       const base = apiBase();
+      // A run that has just ended (won or lost) drops back to the shared open
+      // round, so the panel never sits on a finished run.
+      if (isRun()) {
+        try {
+          const rr = await fetch('/api/game/run/state', { headers: authHeaders });
+          if (rr.ok) {
+            const st = await rr.json();
+            if (!st.run) {
+              setRun(false);
+              clearResult();
+              currentState = { round: null, my_hide: null, hides: [], stats: null };
+              lastRoundId = null; lastStatus = null; selectedRoom = null;
+              ghostWalking = false; walk = null;
+            }
+          }
+        } catch (_) {}
+      }
       try {
         const res = await fetch(base + '/state', { headers: authHeaders });
         if (base !== apiBase()) return; // the mode changed while this was in flight
@@ -1899,7 +2230,11 @@
         if (roundChanged) selectedRoom = null;
 
         if (state.round && state.round.status === 'hunt' && state.round.target_room) {
-          if ((statusChanged || roundChanged) && !startOpen) startWalk(state.round.target_room);
+          if ((statusChanged || roundChanged) && !startOpen) {
+            const tg = (state.round.target_rooms && state.round.target_rooms.length)
+              ? state.round.target_rooms : [state.round.target_room];
+            startWalk(tg);
+          }
           // Proximity drives the heartbeat and breathing.
           const mine = my_hide_room_geo();
           if (mine && lastTargetEnd) {
@@ -1944,21 +2279,240 @@
       .then(({ isStaging }) => { if (isStaging) $('dev-controls').style.display = 'block'; })
       .catch(() => {});
 
-    // ── Start page (every load) ────────────────────────────────────────────────
-    // Mulai is the only way past it: no backdrop click, no remembered key. The
-    // tap doubles as the first gesture, so ambience can start with the game.
-    (function startOverlay() {
-      const overlay = $('start-overlay');
-      if (!overlay) return;
-      const btn = $('btn-start');
-      if (btn) btn.focus();
-      btn.addEventListener('click', () => {
-        startOpen = false;
-        overlay.classList.add('hidden');
-        AUDIO.init(); // first gesture unlocks audio
-        pollState();
+    // ── Settings: the sound slider and the ghost chooser ───────────────────────
+    // The slider maps to the ambience bus only: volume 0 is the same silence the
+    // mute button gives, 50 is the level the app had before (its gain was 0.18),
+    // and the elimination sting is never on this bus. The ghost chooser picks the
+    // hunter; the server clamps a ghost the player has not unlocked.
+    const VOLUME_KEY = 'aap_volume_v1';
+    let lastAudibleVolume = 50;
+    // The slider is the single writer for the ambience level: 0 is the silence
+    // the mute button gives, 50 is the level the app had before the slider, and
+    // the two controls can never disagree because mute is just volume 0.
+    function setSound(v, persist) {
+      v = Math.max(0, Math.min(100, Math.round(v)));
+      settings.sound_volume = v;
+      if (v > 0) lastAudibleVolume = v;
+      AUDIO.setVolume(v / 100);
+      AUDIO.setMuted(v === 0);
+      const sl = $('sound-slider');
+      if (sl) sl.value = String(v);
+      if ($('sound-readout')) $('sound-readout').textContent = v === 0 ? '0 (silent ambience)' : String(v);
+      if ($('btn-mute')) applyMuteUI();
+      if (persist) saveSettings();
+    }
+    // How a locked hunter is earned. Shown beside the dimmed name, so a player
+    // can see the rule without having to guess it.
+    function ghostUnlockLine(key) {
+      return key === 'sumala'
+        ? 'Sumala stays locked until you win Floor 2.'
+        : 'Raminom stays locked until you win Floor 3.';
+    }
+    function renderSettings() {
+      const sl = $('sound-slider');
+      sl.value = String(settings.sound_volume);
+      $('sound-readout').textContent = settings.sound_volume === 0 ? '0 (silent ambience)' : String(settings.sound_volume);
+      const unlocked = ghostsUnlocked();
+      for (const key of ['pocong', 'sumala', 'raminom']) {
+        const b = $('ghost-' + key);
+        b.setAttribute('aria-pressed', String(settings.ghost_enemy === key));
+        b.disabled = !unlocked[key];
+        b.title = unlocked[key] ? '' : ghostUnlockLine(key);
+      }
+      const locked = ['sumala', 'raminom'].filter((k) => !unlocked[k]).map(ghostUnlockLine);
+      $('ghost-note').textContent = locked.length
+        ? locked.join(' ')
+        : ghostLabel(settings.ghost_enemy) + ' is the hunter.';
+    }
+    function chooseGhost(key) {
+      const unlocked = ghostsUnlocked();
+      if (!unlocked[key]) { $('ghost-note').textContent = ghostUnlockLine(key); return; }
+      settings.ghost_enemy = key;
+      applyGhostArt();
+      saveSettings();
+      renderSettings();
+    }
+    async function saveSettings() {
+      try {
+        localStorage.setItem(VOLUME_KEY, String(settings.sound_volume));
+        localStorage.setItem('aap_ghost_v1', settings.ghost_enemy || 'pocong');
+      } catch (_) {}
+      if (!authHeaders['x-usernode-token']) return; // signed out: keep them client-side
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ sound_volume: settings.sound_volume, ghost_enemy: settings.ghost_enemy }),
+        });
+        if (res.ok) applySettings(await res.json());
+      } catch (e) { console.warn('Settings save failed:', e.message); }
+    }
+    function applySettings(data) {
+      if (!data) return;
+      if (typeof data.sound_volume === 'number') settings.sound_volume = data.sound_volume;
+      if (data.ghost_enemy) settings.ghost_enemy = data.ghost_enemy;
+      if (data.ghosts) settings.ghosts = data.ghosts;
+      setSound(settings.sound_volume, false);
+      applyGhostArt();
+      renderSettings();
+    }
+    async function loadSettings() {
+      let vol = null, ghost = 'pocong';
+      try {
+        const v = localStorage.getItem(VOLUME_KEY); if (v !== null) vol = Number(v);
+        const g = localStorage.getItem('aap_ghost_v1'); if (g) ghost = g;
+      } catch (_) {}
+      // Before the slider existed the only control was the mute toggle, in
+      // aap_muted_v1. A stored mute becomes volume 0 so it survives.
+      if (vol === null || !Number.isFinite(vol)) {
+        let wasMuted = false;
+        try { wasMuted = localStorage.getItem('aap_muted_v1') === '1'; } catch (_) {}
+        vol = wasMuted ? 0 : 50;
+      }
+      settings.sound_volume = vol;
+      settings.ghost_enemy = ghost;
+      setSound(settings.sound_volume, false);
+      renderSettings();
+      applyGhostArt();
+      try {
+        const res = await fetch('/api/settings', { headers: authHeaders });
+        if (res.ok) applySettings(await res.json());
+      } catch (_) {}
+      settingsLoaded = true;
+    }
+
+    // ── Play Game: start the chosen difficulty's run ───────────────────────────
+    // Novice is the shared open round; the other two open a run of their own.
+    async function startDifficulty(difficulty) {
+      $('difficulty-note').textContent = '';
+      if (difficulty === 'novice') {
+        setRun(false);
+        try { await fetch(apiBaseSwitch('open') + '/state', { headers: authHeaders }); } catch (_) {}
+        return leaveStartPage();
+      }
+      if (!authHeaders['x-usernode-token']) {
+        $('difficulty-note').textContent = 'Open the app inside Homeroom to play.';
+        return;
+      }
+      try {
+        const res = await fetch('/api/game/run/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ difficulty }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (data.error === 'wallet_not_bound') { WALLET.open(); $('difficulty-note').textContent = 'Bind your wallet to play.'; return; }
+          $('difficulty-note').textContent = data.error || 'Could not start. Try again.';
+          return;
+        }
+        setRun(true);
+        leaveStartPage();
+      } catch (e) { $('difficulty-note').textContent = 'Could not start. Try again.'; }
+    }
+    // The state path for a mode without mutating the current one (used to warm
+    // the open round's poll before leaving the poster for a Novice game).
+    function apiBaseSwitch(next) {
+      if (next === 'run') return '/api/game/run';
+      if (next === 'party' && partyCode) return '/api/party/' + encodeURIComponent(partyCode);
+      return '/api/game';
+    }
+
+    // ── Start page: the poster and its four shortcuts ──────────────────────────
+    function leaveStartPage() {
+      const poster = $('start-poster');
+      if (!startOpen) return;
+      startOpen = false;
+      if (poster) poster.classList.add('hidden');
+      AUDIO.init(); // first gesture unlocks audio
+      pollState();
+    }
+    (function startPage() {
+      const poster = $('start-poster');
+      if (!poster) return;
+      const art = $('start-poster-art');
+      // Fallback so a missing or replaced poster file never blanks the start
+      // page: the intro card returns with the same four shortcuts.
+      function fallback() { poster.classList.add('fallback'); }
+      art.addEventListener('error', fallback);
+      $('start-poster-blur').src = POSTER_ASSET;
+      if (art.complete && art.naturalWidth === 0) fallback();
+
+      $('start-play').focus();
+
+      const sheetIds = ['difficulty-sheet', 'settings-sheet', 'wallet-sheet',
+                        'wallet-action-sheet', 'leaderboard-overlay'];
+      function openSheet(id) { closeSheets(); $(id).classList.add('show'); }
+      function closeSheets() { for (const id of sheetIds) $(id).classList.remove('show'); }
+      document.querySelectorAll('[data-close-sheet]').forEach((b) => {
+        b.addEventListener('click', () => $(b.dataset.closeSheet).classList.remove('show'));
       });
+      window.__closePosterSheets = closeSheets;
+      window.__openPosterSheet = openSheet;
+
+      function renderDifficulty() {
+        for (const key of ['novice', 'challenging', 'diehard']) {
+          $('diff-' + key).setAttribute('aria-pressed', String(chosenDifficulty === key));
+        }
+        $('difficulty-help').innerHTML = DIFFICULTY_HELP[chosenDifficulty] +
+          ' <span class="pp-opt">Saved player resumes on their floor.</span>';
+      }
+      for (const key of ['novice', 'challenging', 'diehard']) {
+        $('diff-' + key).addEventListener('click', () => { chosenDifficulty = key; renderDifficulty(); });
+      }
+      renderDifficulty();
+      $('start-play').addEventListener('click', () => { renderDifficulty(); openSheet('difficulty-sheet'); });
+      $('difficulty-start').addEventListener('click', () => startDifficulty(chosenDifficulty));
+
+      $('sound-slider').addEventListener('input', () => setSound(Number($('sound-slider').value), false));
+      $('sound-slider').addEventListener('change', () => saveSettings());
+      $('start-settings').addEventListener('click', () => { renderSettings(); openSheet('settings-sheet'); });
+      for (const key of ['pocong', 'sumala', 'raminom']) {
+        $('ghost-' + key).addEventListener('click', () => chooseGhost(key));
+      }
+
+      $('start-leaderboard').addEventListener('click', () => openLeaderboard());
+      $('start-wallet').addEventListener('click', () => openWallet());
+      // Swap and Withdraw are honest placeholders: the platform has no token
+      // swap, token withdrawal or fee support, so each one only explains that.
+      document.querySelectorAll('.wallet-btn').forEach((b) => b.addEventListener('click', () => {
+        const row = b.closest('.wallet-row');
+        const token = row ? row.dataset.token : '';
+        const action = b.dataset.wallet === 'swap' ? 'Swap' : 'Withdraw';
+        $('wallet-action-title').textContent = action + ' ' + token;
+        $('wallet-action-text').textContent = (action === 'Swap'
+          ? 'Swap is not open yet: the platform provides no token swap, no pair and no rate. '
+          : 'Withdraw is not open yet: the platform cannot send a named token, only the chain token, and quotes no fee. ') +
+          'Nothing here moves coins and no balance is credited or taken.';
+        if (window.__openPosterSheet) window.__openPosterSheet('wallet-action-sheet');
+        else $('wallet-action-sheet').classList.add('show');
+      }));
+      $('wallet-close').addEventListener('click', () => $('wallet-sheet').classList.remove('show'));
+
+      loadSettings();
     })();
+
+    // ── Wallet card ────────────────────────────────────────────────────────────
+    // Display only. Nothing here is credited or taken: there is no balance table,
+    // so the figures are the last known ones, and the native figure comes from
+    // the bridge when the page runs inside the mobile app.
+    async function openWallet() {
+      $('wallet-native').textContent = '';
+      try {
+        const res = await fetch('/api/wallet/me', { headers: authHeaders });
+        const w = await res.json();
+        $('wallet-address').textContent = w.bound && w.binding
+          ? 'Wallet ' + String(w.binding.wallet_address).slice(0, 10) + '… bound'
+          : (w.signed_in ? 'No wallet bound yet.' : 'Open inside Homeroom to bind a wallet.');
+      } catch (_) { $('wallet-address').textContent = ''; }
+      $('wallet-sheet').classList.add('show');
+      try {
+        if (window.usernode && window.usernode.getWalletState) {
+          const st = await window.usernode.getWalletState();
+          if (st && st.tokenAmount != null) {
+            $('wallet-native').textContent = 'Native ' + (st.tokenSymbol || 'TKN') + ': ' + st.tokenAmount;
+          }
+        }
+      } catch (_) {}
+    }
 
     // ── Intro overlay (first visit only) ───────────────────────────────────────
     (function introOverlay() {
