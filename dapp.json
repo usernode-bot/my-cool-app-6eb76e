@@ -161,6 +161,21 @@
       ]
     },
     {
+      "name": "Wallet sheet has the bind control",
+      "path": "/",
+      "expectSelector": "#wallet-bind #wallet-bind-btn"
+    },
+    {
+      "id": "wallet.bind-panel",
+      "name": "Wallet sheet shows the bind address and live balance panel",
+      "path": "/",
+      "expectSelector": "#wallet-bind #wallet-bind-bal",
+      "visual": true,
+      "impact": [
+        "public/index.html"
+      ]
+    },
+    {
       "name": "Wallet status API answers (signed out here)",
       "path": "/api/wallet/me",
       "expectText": "linked_wallet"

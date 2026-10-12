@@ -198,7 +198,7 @@ and the page scrolls.
 | `#start-poster` | fixed overlay, above the intro (z 52) | Start page (launch screen) shown on every load: the game poster (`/assets/poster.jpg`) top-to-bottom as a fitted square on a blurred cover backdrop, with the four shortcut buttons — **Play Game**, **Settings**, **Leaderboard**, **Wallet** — two-thirds down the poster, above the "Only on Homeroom" caption baked into the artwork. `#start-play` starts the game. No shortcut dismisses the poster (no backdrop click, no localStorage key); the poll's walk, result banner and jump-scare stay off while it is up. `#start-play` opens `#difficulty-sheet`. If the poster file is missing the element gets `.fallback` and shows the intro card (`#start-overlay`-style) instead, with the same four buttons. |
 | `#difficulty-sheet` | poster sheet (z 56) | **Play Game**: the three-way difficulty chooser `#difficulty-step` (Novice / Challenging / DieHard), the per-difficulty help line `#difficulty-help`, `#difficulty-start` START, and `#difficulty-note`. |
 | `#settings-sheet` | poster sheet (z 56) | **Settings**: the sound slider `#sound-slider` (0-100, `#sound-readout`) and the three-way ghost chooser `#ghost-step` (Pocong / Sumala / Raminom). `#ghost-note` shows the locked line for any locked hunter. |
-| `#wallet-sheet` | poster sheet (z 56) | **Wallet** (display-only): three token rows ($POINTS, $H4NTU, $TKN) with their demo balances and each row's Swap / Withdraw buttons, which open `#wallet-action-sheet`. |
+| `#wallet-sheet` | poster sheet (z 56) | **Wallet**: the real-wallet panel `#wallet-bind` (the `#wallet-bind-btn` Bind Wallet control with the detail line "Bind your wallet now" while the linked wallet is unbound, then the bound `#wallet-bind-addr` and the live `#wallet-bind-bal` from `usernode.getWalletState()`), then three display-only token rows ($POINTS, $H4NTU, $TKN) with their demo balances and each row's Swap / Withdraw buttons, which open `#wallet-action-sheet`. |
 | `#wallet-action-sheet` | poster sheet (z 56) | Explains that Swap and Withdraw are not open yet. |
 | `#map-banner` | centre of the map, over the hallway (top of the map during the hunt) | Dark banner: "HIDING PHASE" + "Remaining Hiding Time" + `#hiding-timer`; "POCONG PHASE" / "ROUND OVER" later |
 | `#btn-mute` | top-right of the map | Sound toggle: "🔊 Suara: Nyala" / "🔇 Suara: Mati". Always visible, both phases. |
@@ -628,14 +628,20 @@ UTC.
 
 - **No wagering.** No stake, no wallet signing, no slash, no multiplier payout,
   no coin balance. Points, streak and leaderboard only.
-- **The Wallet card is display-only** (amended this change; the old blanket "no
-  TKN amount or balance copy" rule is scoped here). The start page's Wallet
-  button may show a token row with a static demo figure and disabled-ish Swap /
-  Withdraw buttons, but nothing is transactional: no code path moves coins, the
-  figures are page constants, and the buttons only open a sheet that says the
-  platform has no swap, withdrawal or fee support. Never add a real balance
-  read, a wager, a stake, a payout or a fee. Platform content rules forbid
-  gambling and simulated gambling, so this stays strictly a labelled preview.
+- **The Wallet token rows are display-only** (the old blanket "no TKN amount
+  or balance copy" rule is scoped here). The $POINTS / $H4NTU / $TKN rows show
+  page-constant demo figures and disabled-ish Swap / Withdraw buttons; nothing
+  is transactional and the buttons only open a sheet that says the platform has
+  no swap, withdrawal or fee support.
+- **The wallet panel reads the real wallet, read-only.** `#wallet-bind` in the
+  Wallet sheet reuses the bind gate's flow (`WALLET.load` / `WALLET.bind`) to
+  offer "Bind Wallet" while the linked wallet is unbound, and once bound shows
+  the bound address and the live balance from `usernode.getWalletState()` (the
+  same platform wallet feed the platform's own Settings -> Wallet section
+  shows). Showing the address and balance is a read, not a transaction: no code
+  path moves coins. Never add a wager, a stake, a payout, a fee or a token
+  transfer. Platform content rules forbid gambling and simulated gambling, so
+  the token rows stay a labelled preview and the wallet panel stays read-only.
 - `HIDING_ROOMS` in `server.js` and the slugged `ROOMS` entries in
   `index.html` are the single source of truth for the 11 hiding rooms and must
   stay in sync. A new room needs both.

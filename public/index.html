@@ -518,8 +518,25 @@
       letter-spacing: 2px; text-align: center; margin-bottom: 8px;
     }
     #wallet-action-text { font-size: 0.82rem; color: #dcdcdc; line-height: 1.5; margin-bottom: 6px; }
-    #wallet-address { font-size: 0.7rem; color: #999; text-align: center; margin-bottom: 10px; word-break: break-all; }
-    #wallet-native { font-size: 0.72rem; color: #b5a88c; margin-bottom: 4px; }
+
+    /* Wallet sheet bind panel: the real wallet (its address and live balance)
+       above the token preview. The bind button is the sheet's one primary
+       action; it appears only while a linked wallet is still unbound. */
+    #wallet-bind { margin-bottom: 14px; }
+    #wallet-card .pp-label { margin: 0 0 7px; }
+    #wallet-bind-addr {
+      font-family: monospace; font-size: 0.82rem; color: #ffd700; word-break: break-all;
+      background: #000; border: 1px solid #5a3a20; border-radius: 8px; padding: 7px 9px; margin-bottom: 8px;
+    }
+    #wallet-bind-addr:empty { display: none; }
+    #wallet-bind-text { font-size: 0.86rem; line-height: 1.45; color: #dcdcdc; margin-bottom: 8px; }
+    #wallet-bind-bal {
+      display: none; font-family: monospace; font-size: 0.95rem; color: #ffd700;
+      background: #110e0c; border: 1px solid #5a3a20; border-radius: 8px; padding: 7px 9px; margin-bottom: 8px;
+    }
+    #wallet-bind-bal.show { display: block; }
+    #wallet-bind-btn { margin-top: 2px; }
+    #wallet-bind-note.err { color: #ff8a80; }
 
     /* Wallet bind gate: the intro card's look. It sits under the intro, so on
        a first visit the intro shows first and closing it reveals the gate. */
@@ -780,6 +797,14 @@
     <div id="wallet-card">
       <h2 id="wallet-card-title">Wallet</h2>
       <div class="sheet-sub">Your balances</div>
+      <div id="wallet-bind">
+        <div class="pp-label">Your wallet</div>
+        <div id="wallet-bind-addr"></div>
+        <div id="wallet-bind-text">Bind your wallet now</div>
+        <div id="wallet-bind-bal"></div>
+        <button type="button" id="wallet-bind-btn" class="pp-btn primary" hidden>Bind Wallet</button>
+        <div id="wallet-bind-note" class="intro-note" hidden></div>
+      </div>
       <div id="wallet-rows">
       <div class="wallet-row" data-token="$POINTS">
         <div class="wallet-btns">
@@ -806,8 +831,6 @@
         <span class="wallet-bal" id="wallet-bal-tkn">0</span>
       </div>
       </div>
-      <div id="wallet-address"></div>
-      <div id="wallet-native"></div>
       <div class="intro-note">Swap and Withdraw are not open yet: the platform has no token swap, token withdrawal or fee support. Nothing here moves coins.</div>
       <button type="button" class="sheet-close" id="wallet-close">Tutup</button>
     </div>
@@ -2490,29 +2513,13 @@
       loadSettings();
     })();
 
-    // ── Wallet card ────────────────────────────────────────────────────────────
-    // Display only. Nothing here is credited or taken: there is no balance table,
-    // so the figures are the last known ones, and the native figure comes from
-    // the bridge when the page runs inside the mobile app.
-    async function openWallet() {
-      $('wallet-native').textContent = '';
-      try {
-        const res = await fetch('/api/wallet/me', { headers: authHeaders });
-        const w = await res.json();
-        $('wallet-address').textContent = w.bound && w.binding
-          ? 'Wallet ' + String(w.binding.wallet_address).slice(0, 10) + '… bound'
-          : (w.signed_in ? 'No wallet bound yet.' : 'Open inside Homeroom to bind a wallet.');
-      } catch (_) { $('wallet-address').textContent = ''; }
-      $('wallet-sheet').classList.add('show');
-      try {
-        if (window.usernode && window.usernode.getWalletState) {
-          const st = await window.usernode.getWalletState();
-          if (st && st.tokenAmount != null) {
-            $('wallet-native').textContent = 'Native ' + (st.tokenSymbol || 'TKN') + ': ' + st.tokenAmount;
-          }
-        }
-      } catch (_) {}
-    }
+    // ── Wallet sheet ───────────────────────────────────────────────────────────
+    // The sheet's real-wallet panel (the bind control, then the bound address and
+    // its live balance) is WALLET_SHEET at the bottom of the script. It reads the
+    // same wallet state and calls the same bind the bind gate uses, and the live
+    // balance is the platform's wallet feed (usernode.getWalletState), the same
+    // source the platform's own Settings -> Wallet section shows.
+    function openWallet() { WALLET_SHEET.open(); }
 
     // ── Intro overlay (first visit only) ───────────────────────────────────────
     (function introOverlay() {
@@ -2615,7 +2622,7 @@
         return ch.data;
       }
       async function bind() {
-        if (busy || !status || !status.linked_wallet) return;
+        if (busy || !status || !status.linked_wallet) return { ok: false, error: '' };
         AUDIO.init();
         busy = true; render(); setNote('Binding your wallet…');
         try {
@@ -2642,21 +2649,149 @@
           }
           status = r.data;
           busy = false; setNote(''); render(); close();
+          return { ok: true, status };
         } catch (e) {
-          busy = false; render(); setNote((e && e.message) || 'Could not bind the wallet. Try again.', true);
+          busy = false; render();
+          const msg = (e && e.message) || 'Could not bind the wallet. Try again.';
+          setNote(msg, true);
+          return { ok: false, error: msg };
         }
       }
       btn.addEventListener('click', bind);
       $('btn-just-watch').addEventListener('click', close);
       // Ask the server who is signed in: a guest or tokenless visit answers
       // signed_in: false and never sees the gate.
-      api('GET', '/api/wallet/me').then((r) => {
-        if (!r.ok || !r.data.signed_in) return;
+      async function load() {
+        const r = await api('GET', '/api/wallet/me');
+        if (!r.ok || !r.data.signed_in) return null;
         status = r.data;
         render();
-        if (!status.bound) open();
-      }).catch(() => {});
-      return { open };
+        return status;
+      }
+      load().then((st) => { if (st && !st.bound) open(); }).catch(() => {});
+      // The wallet sheet reuses the gate's own state and bind: one wallet flow,
+      // not a second implementation.
+      return {
+        open,
+        load,
+        getStatus: () => status,
+        bind,
+      };
+    })();
+
+    // ── Wallet sheet bind panel ────────────────────────────────────────────────
+    // The start page's Wallet sheet shows the real wallet: while the linked
+    // wallet is still unbound it offers the bind (the same one-shot bind the
+    // gate runs); once bound it shows the bound address and its live balance.
+    // The balance is the platform's wallet feed, usernode.getWalletState(), the
+    // same source the platform's own Settings -> Wallet section shows. It works
+    // in the mobile app and in the platform shell; outside both it is null, and
+    // the panel says so instead of guessing a figure.
+    const WALLET_SHEET = (function walletSheet() {
+      const addrEl = $('wallet-bind-addr');
+      const textEl = $('wallet-bind-text');
+      const balEl = $('wallet-bind-bal');
+      const btn = $('wallet-bind-btn');
+      const noteEl = $('wallet-bind-note');
+      const BALANCE_TIMEOUT_MS = 13000; // clears getWalletState's own 12s ceiling
+
+      function fullAddr(a) { return a ? String(a) : ''; }
+      function setNote(text, isErr) {
+        noteEl.textContent = text || '';
+        noteEl.hidden = !text;
+        noteEl.classList.toggle('err', !!isErr);
+      }
+      function showBalance(text) { balEl.textContent = text || ''; balEl.classList.toggle('show', !!text); }
+      // Balance states: loading (a blank line, no figure), the live figure from
+      // the feed, or an honest note when the feed has nothing to give.
+      function balanceLoading() { balEl.textContent = 'Loading balance…'; balEl.classList.add('show'); }
+      function balanceNote(text) { balEl.textContent = text; balEl.classList.add('show'); }
+      function balanceFromState(st) {
+        if (st && st.tokenAmount != null) {
+          showBalance('Balance: ' + (st.tokenSymbol || 'TKN') + ' ' + st.tokenAmount);
+        } else {
+          balanceNote('No balance available here.');
+        }
+      }
+      function withTimeout(promise, ms) {
+        return Promise.race([
+          Promise.resolve().then(() => promise),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+        ]);
+      }
+      // The live balance comes from the platform's wallet feed. Never reject
+      // out: an unavailable feed is a note, not a page error.
+      async function fetchBalance() {
+        if (!(window.usernode && typeof window.usernode.getWalletState === 'function')) {
+          balanceNote('No balance available here.');
+          return;
+        }
+        balanceLoading();
+        try {
+          const st = await withTimeout(window.usernode.getWalletState(), BALANCE_TIMEOUT_MS);
+          balanceFromState(st);
+        } catch (_) {
+          balanceNote('No balance available here.');
+        }
+      }
+      function render(status) {
+        if (!status || !status.signed_in) {
+          addrEl.textContent = '';
+          showBalance('');
+          textEl.textContent = 'Open inside Homeroom to bind a wallet.';
+          btn.hidden = false;
+          btn.disabled = true;
+          setNote('');
+          return;
+        }
+        const linked = status.linked_wallet;
+        addrEl.textContent = linked ? fullAddr(linked) : '';
+        if (status.bound && status.binding) {
+          btn.hidden = true;
+          textEl.textContent = 'Bound wallet';
+          fetchBalance();
+          return;
+        }
+        showBalance('');
+        btn.hidden = false;
+        btn.disabled = !linked;
+        btn.textContent = status.signing_required ? 'Sign & Bind Wallet' : 'Bind Wallet';
+        if (linked) {
+          textEl.textContent = 'Bind your wallet now';
+        } else {
+          textEl.textContent = 'Your Homeroom account has no wallet linked yet. Link one in Homeroom, then come back.';
+        }
+        setNote('');
+      }
+      async function refresh() {
+        addrEl.textContent = '';
+        showBalance('');
+        setNote('');
+        textEl.textContent = 'Loading your wallet…';
+        btn.hidden = false;
+        btn.disabled = true;
+        const st = await WALLET.load();
+        render(st || { signed_in: false });
+        return st;
+      }
+      async function doBind() {
+        if (btn.disabled) return;
+        setNote('Binding your wallet…');
+        const res = await WALLET.bind();
+        if (res && res.ok) {
+          render(res.status);
+          setNote('');
+        } else {
+          render(WALLET.getStatus());
+          setNote((res && res.error) || 'Could not bind the wallet. Try again.', true);
+        }
+      }
+      btn.addEventListener('click', doBind);
+      async function open() {
+        $('wallet-sheet').classList.add('show');
+        await refresh();
+      }
+      return { open, refresh };
     })();
   </script>
 </body>
