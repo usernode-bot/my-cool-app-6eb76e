@@ -76,6 +76,9 @@ The app reasons in **UTC** (there is no per-group timezone logic).
     ├── index.html             # ENTIRE game — the SVG map + all UI (single file)
     └── assets/
         ├── pocong.jpg         # Pocong photo, used only by the jump-scare overlay
+        ├── poster.jpg         # Start-page poster (the game artwork, 1024x1024)
+        ├── sumala.png         # Sumala hunter art (transparent), the 2nd ghost
+        ├── raminom.png        # Raminom hunter art (transparent), the 3rd ghost
         ├── hatch.png          # 128x128 diagonal-hatch texture (currently unused)
         └── ui-reference.png   # Reference screenshot from the design phase (ignore)
 ```
@@ -192,7 +195,11 @@ and the page scrolls.
 
 | Element | Where | Description |
 |---|---|---|
-| `#start-overlay` | fixed overlay, above the intro (z 52) | Start page shown on every load: title, tagline and one **Mulai** button. Only Mulai dismisses it (no backdrop click, no localStorage key); the poll's walk, result banner and jump-scare stay off while it is up. |
+| `#start-poster` | fixed overlay, above the intro (z 52) | Start page (launch screen) shown on every load: the game poster (`/assets/poster.jpg`) top-to-bottom as a fitted square on a blurred cover backdrop, with the four shortcut buttons — **Play Game**, **Settings**, **Leaderboard**, **Wallet** — two-thirds down the poster, above the "Only on Homeroom" caption baked into the artwork. `#start-play` starts the game. No shortcut dismisses the poster (no backdrop click, no localStorage key); the poll's walk, result banner and jump-scare stay off while it is up. `#start-play` opens `#difficulty-sheet`. If the poster file is missing the element gets `.fallback` and shows the intro card (`#start-overlay`-style) instead, with the same four buttons. |
+| `#difficulty-sheet` | poster sheet (z 56) | **Play Game**: the three-way difficulty chooser `#difficulty-step` (Novice / Challenging / DieHard), the per-difficulty help line `#difficulty-help`, `#difficulty-start` START, and `#difficulty-note`. |
+| `#settings-sheet` | poster sheet (z 56) | **Settings**: the sound slider `#sound-slider` (0-100, `#sound-readout`) and the three-way ghost chooser `#ghost-step` (Pocong / Sumala / Raminom). `#ghost-note` shows the locked line for any locked hunter. |
+| `#wallet-sheet` | poster sheet (z 56) | **Wallet** (display-only): three token rows ($POINTS, $H4NTU, $TKN) with their demo balances and each row's Swap / Withdraw buttons, which open `#wallet-action-sheet`. |
+| `#wallet-action-sheet` | poster sheet (z 56) | Explains that Swap and Withdraw are not open yet. |
 | `#map-banner` | centre of the map, over the hallway (top of the map during the hunt) | Dark banner: "HIDING PHASE" + "Remaining Hiding Time" + `#hiding-timer`; "POCONG PHASE" / "ROUND OVER" later |
 | `#btn-mute` | top-right of the map | Sound toggle: "🔊 Suara: Nyala" / "🔇 Suara: Mati". Always visible, both phases. |
 | `#dev-controls` | bottom-left of the map (bottom-right on phones) | Staging-only Next Phase button |
@@ -206,19 +213,28 @@ and the page scrolls.
 | `#jumpscare` + `#flash` | fixed overlays | The elimination scare |
 | `#leaderboard-overlay` | centered overlay | Top-20 leaderboard |
 
-### Sound toggle (hard requirement)
+### Sound controls (hard requirement)
 
 `#btn-mute` is fixed to the top-right corner of the map, is present in both
-phases, and is the single master control for all ambience (heartbeat,
-footsteps, breathing). Its state persists in `localStorage` under
-`aap_muted_v1`. It never controls the jump-scare sting.
+phases, and together with the Settings slider is a master control for all
+ambience (heartbeat, footsteps, breathing). They share one stored volume:
+
+- `aap_volume_v1` is the ambience level (0-100, default 50). The Settings
+  slider writes it.
+- `aap_muted_v1` is the mute flag; a legacy visit that only has it is migrated
+  to volume 0 on load.
+- `setSound(v, persist)` is the one writer; the mute button toggles between 0
+  and the last audible level. A slider move off 0 clears the mute flag.
+
+Neither control touches the jump-scare sting.
 
 ### Audio graph
 
 `AUDIO` (an IIFE in `index.html`) builds a Web Audio graph:
 
-- `ambienceGain` (gain 0.18 when unmuted, 0 when muted) is the bus the mute
-  toggle controls. Heartbeat, footsteps and breathing all connect to it.
+- `ambienceGain` is the bus the sound controls drive. Its gain is
+  `(volume / 100) * 0.36`, so the default volume 50 is the old fixed 0.18 and
+  volume 0 is silence. Heartbeat, footsteps and breathing all connect to it.
 - `stingGain` (gain 1.0) is a **separate** node the mute toggle never touches.
   `playSting()` routes the jump-scare through it, so the sting is the single
   loudest moment by construction and muting cannot silence it.
@@ -233,14 +249,19 @@ footsteps, breathing). Its state persists in `localStorage` under
 |---|---|---|
 | GET | `/health` | `{ status: 'ok' }` (503 once shutting down) |
 | GET | `/api/game/env` | `{ isStaging, hidingMs, huntMs }` |
-| GET | `/api/game/state` | The current round, the caller's hide, all hides, the caller's stats |
-| GET | `/api/game/leaderboard` | `{ leaderboard: [...top 20 by best_score] }` |
+| GET | `/api/game/state` | The current open round, the caller's hide, all hides, the caller's stats |
+| GET | `/api/game/leaderboard` | `{ leaderboard: [...top 20 by best_score], winners: [...top 20 cleared runs, newest first] }` |
+| GET | `/api/game/run/state` | The caller's active solo run and its current round (signed out: `run: null` and the difficulty options) |
+| GET | `/api/settings` | `{ sound_volume, ghost_enemy, ghosts:[{key,label,unlocked}] }` (signed out: the app defaults) |
 
 `/api/game/state` response shape:
 
 ```json
 {
-  "round": { "id": 7, "round_number": 7, "status": "hiding", "target_room": null, "hiding_ends_at": "...", "hunt_ends_at": null },
+  "round": { "id": 7, "round_number": 7, "status": "hiding", "target_room": null,
+             "hiding_ends_at": "...", "hunt_ends_at": null,
+             "target_rooms": [], "difficulty": "novice", "floor": 1,
+             "rooms_left": 11, "ghost_enemy": "pocong" },
   "my_hide": null,
   "hides": [{ "username": "staging-demo-user", "room_slug": "library", "outcome": "pending", "points_awarded": 0 }],
   "stats": { "total_score": 1240, "best_score": 1240, "current_streak": 3 },
@@ -248,9 +269,68 @@ footsteps, breathing). Its state persists in `localStorage` under
 }
 ```
 
+The extra round fields (`target_rooms`, `difficulty`, `floor`, `rooms_left`,
+`ghost_enemy`) are appended AFTER the fields that were already here, so the
+serialized order the existing regression check pins is unchanged. A row written
+by an older version is normalized up to the current defaults at read time by
+`normalizeRoundShape` (columns are only ever raised, never lowered, so an
+existing `ghost_enemy` survives).
+
 `my_hide.outcome` may be `pending`, `survived`, `eliminated`, or
 `disqualified`. A player who never locked gets `disqualified` computed at read
 time in any post-hiding phase, so it works even though no row exists for them.
+
+### Solo runs — Play Game's three difficulties
+
+`Play Game` opens a **run**: a sequence of floors on its own clock, apart from
+the shared open round, so players on different difficulties never share a
+round. Novice is the shared open round (all 11 rooms, one Pocong); Challenging
+and DieHard get their own run whose rounds are fenced to `rooms_left` of the
+same 11 slugs (rooms are fenced off, not deleted, so the map and `roomGeo` are
+untouched and the 11-room source of truth is not forked).
+
+| Difficulty | Floors (floor · rooms in play · Pocong) | Score factor |
+|---|---|---|
+| Novice | 1 · 11 · 1 | x1 |
+| Challenging | 2 · 6 · 1 | x2 |
+| DieHard | 2 · 3 · 2, then 3 (Attic) · 3 · 2 | x3 |
+
+A floor is cleared by surviving the round in which the whole floor was in play;
+the run is won when its last floor is cleared (a `wins` row is written), or
+lost when the player is eliminated. A lost run stays saved on its floor, so the
+next START of that difficulty resumes it. Only one run is active per user: a
+START on another difficulty parks the current one as lost.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/game/run/state` | public | `{ run, round, my_hide, hides, stats, difficulty_options, result_ms, server_now }`; `run` is null signed out or with no active run |
+| POST | `/api/game/run/start` | bound wallet | `{ difficulty }`. Novice reuses the shared open round (no run); the others resume or open the first floor. 400 unknown difficulty |
+| POST | `/api/game/run/hide` | bound wallet | As `/api/game/hide`, but restricted to the floor's rooms (400 `That room is not on this floor`) |
+| POST | `/api/game/run/daring` | bound wallet | As `/api/game/daring`, same floor restriction |
+| POST | `/api/game/run/advance` | staging only | Step the run one phase per click (Dev Controls) |
+
+Tables (both public): `runs` (`user_id`, `username`, `difficulty`, `floor`,
+`rooms_left`, `pocong_count`, `ghost_enemy`, `status`; a partial unique index
+`runs_active_user` allows one `active` run per user) and the `wins` winner
+history. `rounds` gained `run_id`, `difficulty`, `floor`, `ghost_enemy`,
+`pocong_count`, `rooms_left` and `target_rooms`; the shared open round leaves
+`run_id` NULL and behaves exactly as before.
+
+### Settings — sound level and ghost enemy
+
+`player_settings` holds one row per account (`sound_volume` 0-100,
+`ghost_enemy`). The ghost is chosen from three hunters — Pocong, Sumala,
+Raminom — and copied onto the opened round (`rounds.ghost_enemy`), so a later
+settings change cannot alter a round already in flight. This build changes the
+hunter's art, name and jump-scare image only; per-ghost behaviour is deferred.
+
+**Unlock rule:** Sumala unlocks once a floor >= 2 has been won, Raminom once a
+floor >= 3 has. It is derived from the player's own `wins` rows at read time,
+never stored and never seeded, so no seed can fabricate the signal the code
+reads. A locked ghost is clamped back to Pocong, and `#ghost-note` always shows
+the locked line for any locked hunter ("Sumala stays locked until you win Floor
+2; Raminom until you win Floor 3."). Seeding must never write a `runs`,
+`player_settings` or `wins` row for whoever opens the preview.
 
 ### Party endpoints
 
@@ -385,6 +465,45 @@ CREATE TABLE player_stats (
   rounds_survived INTEGER NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- runs: one player's solo run of a difficulty. Public (username, difficulty,
+-- floor, a hunter, a status). One active run per user via a partial index.
+CREATE TABLE runs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  username VARCHAR(255) NOT NULL,
+  difficulty VARCHAR(12) NOT NULL DEFAULT 'novice',  -- novice|challenging|diehard
+  floor INTEGER NOT NULL DEFAULT 1,
+  rooms_left INTEGER NOT NULL DEFAULT 11,
+  pocong_count INTEGER NOT NULL DEFAULT 1,
+  ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+  status VARCHAR(12) NOT NULL DEFAULT 'active',      -- active|lost|won
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX runs_active_user ON runs (user_id) WHERE status='active';
+
+-- wins: the winner history the leaderboard shows. Public: username, points,
+-- difficulty, ghost, floor, won_at. Rows are written only by a cleared run.
+CREATE TABLE wins (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  username VARCHAR(255) NOT NULL,
+  points BIGINT NOT NULL DEFAULT 0,
+  difficulty VARCHAR(12) NOT NULL DEFAULT 'novice',
+  ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+  floor INTEGER NOT NULL DEFAULT 1,
+  won_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- player_settings: a per-account sound level and ghost choice. Public.
+CREATE TABLE player_settings (
+  user_id INTEGER PRIMARY KEY,
+  username VARCHAR(255) NOT NULL,
+  sound_volume INTEGER NOT NULL DEFAULT 50,
+  ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
 ```sql
@@ -404,8 +523,10 @@ CREATE TABLE wallet_challenges (
 `bets` and `presses` still exist (created by earlier migrations, with their old
 rows preserved) but nothing reads or writes them. Dropping them is deferred.
 
-All three live tables are public (a stranger seeing every row is fine: a
-username, a room slug and a score).
+Every live table is public (a stranger seeing every row is fine: a username, a
+room slug, a difficulty, a hunter and a score). The `rounds` additions
+(`run_id`, `difficulty`, `floor`, `ghost_enemy`, `pocong_count`, `rooms_left`,
+`target_rooms`) all default, so a pre-existing row keeps working.
 
 ## 10. Staging seed data
 
@@ -420,15 +541,29 @@ On boot in staging, if `rounds` is empty:
    in several rooms, so the map shows figures.
 3. Six `player_stats` rows with varied `best_score` and `current_streak`, so the
    leaderboard renders with a real ranking.
+4. Six `wins` rows (fake identities only) with varied difficulty and ghost, so
+   the winner-history card renders rows instead of its empty state. The newest
+   is `staging-demo-user` 10000 DieHard Raminom Floor 3.
 
 All fake identities, `ON CONFLICT DO NOTHING`, gated on `if (IS_STAGING)`.
 
+The seed writes **no** `runs` row, **no** `player_settings` row and **no** `wins`
+row for whoever opens the preview: those are the signals the run code and the
+ghost-unlock code read, so seeding them would fabricate the answer and make that
+path untestable. The default no-wins account is what shows Sumala and Raminom
+locked. (The Wallet rows carry static demo figures in the page, not stored
+rows, so nothing pretends to be a stored on-chain balance.)
+
 ## 11. Polling
 
-`setInterval(pollState, 2000)`. While the start page is up (`startOpen`),
+`setInterval(pollState, 2000)`. While the start poster is up (`startOpen`),
 `pollState` still fetches and renders state, but never starts the Pocong walk,
-the result banner or the jump-scare; the poll right after Mulai brings those
-back. Each poll refreshes the phase, the figures, the
+the result banner or the jump-scare; the poll right after Play Game brings those
+back. In **run mode** (`isRun()`) the poll reads `/api/game/run/state` instead
+of `/api/game/state`, and when the run has ended (`st.run` null: won or lost) it
+clears run mode, the result banner and the state before the normal poll. The
+phase line carries a `Floor N · M rooms · ` prefix only in run mode, and the
+Party selector is hidden while a run is on. Each poll refreshes the phase, the figures, the
 HUD and, on a resolved round, the result banner. `visibilitychange` and
 `pageshow` trigger an immediate poll so a returning tab re-reads the truth.
 The countdown is re-derived from `hiding_ends_at` on every frame and never
@@ -437,8 +572,10 @@ decremented.
 ## 12. Dev Controls panel (staging only)
 
 `#btn-advance` calls `POST /api/game/advance` once per click, forcing
-`hiding -> hunt -> resolved -> next hiding`. In production the same transitions
-happen on the clock without it. The endpoint still guards admin in production.
+`hiding -> hunt -> resolved -> next hiding`. In run mode it calls
+`POST /api/game/run/advance` instead, stepping the run one phase per click. In
+production the same transitions happen on the clock without it. The endpoints
+still guard admin in production.
 
 ## 13. Auth flow
 
@@ -449,7 +586,10 @@ verifies it with `USERNODE_JWT_PUBLIC_KEY` (RS256, issuer `usernode`, audience
 `req.user = { id, username, usernode_pubkey, locale }`.
 
 Public routes: `/health`, `/api/game/state`, `/api/game/env`,
-`/api/game/leaderboard`. All others require a valid token.
+`/api/game/leaderboard`, `/api/game/run/state`, `/api/settings`. All others
+require a valid token. The two new GETs answer a signed-out caller with defaults
+(no run, the app's settings) and only reveal the caller's own data when signed
+in, which is why they are public.
 
 "Time now" is read through the platform (`usernode.now()` in the page,
 `req.now` on the server) per the time-dependent-features convention, so a
@@ -471,6 +611,9 @@ UTC.
 - A leaderboard that recomputes from full history for a long-lived season.
 - Real wallet signature verification (`SIGNING_REQUIRED = true`) once the
   platform allows in-app `signMessage` and documents how to verify it.
+- Per-ghost behaviour (speed, route, sound) for Sumala and Raminom; this build
+  changes their art, name and jump-scare image only.
+- A smaller/compressed start poster (the committed `poster.jpg` is ~800 KB).
 
 ### Other notes
 
@@ -484,8 +627,15 @@ UTC.
 ## 15. App-specific conventions
 
 - **No wagering.** No stake, no wallet signing, no slash, no multiplier payout,
-  no coin balance. Points, streak and leaderboard only. Do not reintroduce any
-  TKN amount, chip, balance or payout copy.
+  no coin balance. Points, streak and leaderboard only.
+- **The Wallet card is display-only** (amended this change; the old blanket "no
+  TKN amount or balance copy" rule is scoped here). The start page's Wallet
+  button may show a token row with a static demo figure and disabled-ish Swap /
+  Withdraw buttons, but nothing is transactional: no code path moves coins, the
+  figures are page constants, and the buttons only open a sheet that says the
+  platform has no swap, withdrawal or fee support. Never add a real balance
+  read, a wager, a stake, a payout or a fee. Platform content rules forbid
+  gambling and simulated gambling, so this stays strictly a labelled preview.
 - `HIDING_ROOMS` in `server.js` and the slugged `ROOMS` entries in
   `index.html` are the single source of truth for the 11 hiding rooms and must
   stay in sync. A new room needs both.

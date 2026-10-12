@@ -17,6 +17,10 @@ const PUBLIC_API_PATHS = new Set([
   '/api/game/leaderboard',
   // Answers a signed-out caller with signed_in: false and nothing else.
   '/api/wallet/me',
+  // Both answer a signed-out caller with defaults (no run, the default
+  // settings) and only reveal the caller's own data when signed in.
+  '/api/game/run/state',
+  '/api/settings',
 ]);
 const PUBLIC_PREFIXES = ['/explorer-api/'];
 // A party's state is readable like the open round's (a username, a room slug
@@ -46,6 +50,41 @@ const HIDING_ROOMS = [
 ];
 const ROOM_SLUGS = HIDING_ROOMS.map((r) => r.slug);
 const STEP_BY_SLUG = Object.fromEntries(HIDING_ROOMS.map((r) => [r.slug, r.step]));
+
+// ── Solo runs: a difficulty is a sequence of floors on the one drawn map ─────
+// Floors are the same 11 rooms with only `rooms_left` of them in play (rooms
+// are fenced off, not deleted, so the map, hotspots and roomGeo keep working
+// and the 11-room single source of truth is not forked). Winning a floor means
+// surviving the round in which rooms_left reaches zero.
+const RUN_FLOORS = {
+  novice:      [{ floor: 1, rooms: 11, pocong: 1 }],
+  challenging: [{ floor: 2, rooms: 6,  pocong: 1 }],
+  diehard:     [{ floor: 2, rooms: 3,  pocong: 2 }, { floor: 3, rooms: 3, pocong: 2 }],
+};
+// The Attic is the top floor, so it is named rather than numbered.
+const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Attic' };
+function floorLabel(floor) { return FLOOR_LABELS[floor] || ('Floor ' + floor); }
+// Novice x1, Challenging x2, DieHard x3, applied where survivalPoints is used.
+const DIFFICULTY_FACTOR = { novice: 1, challenging: 2, diehard: 3 };
+const GHOSTS = ['pocong', 'sumala', 'raminom'];
+const GHOST_LABELS = { pocong: 'Pocong', sumala: 'Sumala', raminom: 'Raminom' };
+const DIFFICULTIES = Object.keys(RUN_FLOORS);
+const DEFAULT_ROOMS_LEFT = RUN_FLOORS.novice[0].rooms;
+// The same 11 slugs carry every floor, so a run's rooms are the first
+// `rooms_left` of them. Fixed for a run, so a resumed run keeps its room set.
+function runFloorsFor(difficulty) { return RUN_FLOORS[difficulty] || RUN_FLOORS.novice; }
+function roomSlugsFor(rooms) { return ROOM_SLUGS.slice(0, Math.max(1, Math.min(rooms, ROOM_SLUGS.length))); }
+// Draws `count` distinct rooms (without replacement): with 3 rooms and 2
+// Pocong exactly one room is never entered, which is DieHard's "only 1 room
+// survives".
+function pickTargets(count, allowed) {
+  const pool = (allowed && allowed.length ? allowed : ROOM_SLUGS).slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+  }
+  return pool.slice(0, Math.max(1, Math.min(count || 1, pool.length)));
+}
 
 const PREVIEW_NOW = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 function requestNow(req) {
@@ -98,28 +137,83 @@ function pickTarget() {
 // cannot both pick a target.
 const LIVE_STATUSES = ['hiding', 'hunt', 'resolved'];
 
-// Opens the next hiding round after `afterRoundNumber` (0 for an empty
-// table), guarded so concurrent requests open it once.
+// The shared open round (everyone in the app, all 11 rooms, one Pocong) and
+// the Novice difficulty. A solo run on another difficulty gets its own
+// sequence of rounds through openRunHidingRound.
+async function currentOpenRound() {
+  const r = await pool.query(
+    `SELECT * FROM rounds WHERE run_id IS NULL ORDER BY round_number DESC LIMIT 1`);
+  return r.rows[0] || null;
+}
+
+// The current shape of the shared open round (all 11 rooms, one Pocong,
+// Novice). Every round a player sees is normalized to it at read time, so a
+// row written by any earlier version of the game still renders correctly
+// instead of showing stale fields. Columns are only ever raised, so an
+// existing `ghost_enemy` choice survives.
+async function normalizeRoundShape(round) {
+  if (!round) return round;
+  const fixes = {};
+  if (round.pocong_count == null) fixes.pocong_count = 1;
+  if (round.rooms_left == null) fixes.rooms_left = DEFAULT_ROOMS_LEFT;
+  if (round.difficulty == null) fixes.difficulty = 'novice';
+  if (round.floor == null) fixes.floor = 1;
+  if (round.ghost_enemy == null) fixes.ghost_enemy = 'pocong';
+  const keys = Object.keys(fixes);
+  if (!keys.length) return round;
+  const set = keys.map((k, i) => `${k}=$${i + 1}`).join(', ');
+  await pool.query(`UPDATE rounds SET ${set} WHERE id=$${keys.length + 1}`,
+    keys.map((k) => fixes[k]).concat([round.id]));
+  return Object.assign({}, round, fixes);
+}
+
+// Opens the next hiding round after `afterRoundNumber` (0 for an empty table)
+// for the shared open round, guarded so concurrent requests open it once.
 async function openHidingRound(now, afterRoundNumber) {
   const ins = await pool.query(
     `INSERT INTO rounds (round_number, status, hiding_ends_at)
      SELECT $1, 'hiding', $2
-     WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE round_number > $3)`,
+     WHERE NOT EXISTS (SELECT 1 FROM rounds WHERE run_id IS NULL AND round_number > $3)`,
     [afterRoundNumber + 1, new Date(now.getTime() + HIDING_MS), afterRoundNumber]
   );
   return ins.rowCount > 0;
 }
 
+// The draw for one round: `pocong_count` distinct rooms. `allowed` fences the
+// draw to a run's remaining rooms; the shared open round passes null (all 11).
+function drawTargets(count, allowed) {
+  return pickTargets(count || 1, allowed || null);
+}
+
+async function toHunt(round, now, allowed) {
+  const targets = drawTargets(round.pocong_count, allowed);
+  const upd = await pool.query(
+    `UPDATE rounds SET status='hunt', target_room=$1, target_rooms=$2, hunt_ends_at=$3
+     WHERE id=$4 AND status='hiding' RETURNING id`,
+    [targets[0], targets, new Date(now.getTime() + HUNT_MS), round.id]
+  );
+  return upd.rows.length > 0;
+}
+
+async function toResolved(round, now) {
+  const upd = await pool.query(
+    `UPDATE rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt' RETURNING id`,
+    [now, round.id]
+  );
+  if (!upd.rows.length) return false;
+  await resolveRound(round);
+  return true;
+}
+
 async function runTransitions(now) {
   for (let i = 0; i < 4; i++) {
-    const r = await pool.query(`SELECT * FROM rounds ORDER BY round_number DESC LIMIT 1`);
-    if (!r.rows.length) {
+    const round = await currentOpenRound();
+    if (!round) {
       // No round at all (a production database that never had one): open
       // round 1 so the game runs from the first load, in every environment.
       await openHidingRound(now, 0);
       continue;
     }
-    const round = r.rows[0];
 
     // Self-heal from state this machine cannot advance. Production carried
     // rounds from the earlier betting version ('active' / 'resolving' /
@@ -148,27 +242,16 @@ async function runTransitions(now) {
     }
 
     if (round.status === 'hiding' && now > new Date(round.hiding_ends_at)) {
-      const target = pickTarget();
-      const upd = await pool.query(
-        `UPDATE rounds SET status='hunt', target_room=$1, hunt_ends_at=$2
-         WHERE id=$3 AND status='hiding' RETURNING id`,
-        [target, new Date(now.getTime() + HUNT_MS), round.id]
-      );
-      if (!upd.rows.length) continue; // another request won the race
       // Anyone who never locked a room is disqualified to the Spectator
       // Lounge. They have no hides row, so there is nothing to rewrite here:
       // a locked-in hide also carries outcome 'pending' until resolve, and
       // must NOT be caught. Disqualification is reported at read time.
-      continue;
+      if (await toHunt(round, now, null)) continue;
+      continue; // another request won the race
     }
 
     if (round.status === 'hunt' && round.hunt_ends_at && now > new Date(round.hunt_ends_at)) {
-      const upd = await pool.query(
-        `UPDATE rounds SET status='resolved', resolved_at=$1 WHERE id=$2 AND status='hunt' RETURNING id`,
-        [now, round.id]
-      );
-      if (!upd.rows.length) continue;
-      await resolveRound(round.id, round.target_room);
+      if (await toResolved(round, now)) continue;
       continue;
     }
 
@@ -181,20 +264,34 @@ async function runTransitions(now) {
   }
 }
 
-// Points for surviving a round. Shared by the open round and party rounds.
-function survivalPoints(hide, total, counts, streakBefore) {
+// Points for surviving a round. Shared by the open round, solo runs and party
+// rounds. `difficulty` scales the base score (Novice x1, Challenging x2,
+// DieHard x3); the open round and party rounds keep the x1 default.
+function survivalPoints(hide, total, counts, streakBefore, difficulty) {
   const base = 100;
   const distance = 25 * (STEP_BY_SLUG[hide.room_slug] || 1);
   const scarcity = Math.min(300, Math.round(50 * total / Math.max(1, counts[hide.room_slug] || 1)));
   let points = Math.round((base + distance + scarcity) * Math.min(3, 1 + 0.1 * streakBefore));
   if (hide.daring_room_slug) points = Math.round(points * 1.5);
+  const factor = DIFFICULTY_FACTOR[difficulty];
+  if (factor && factor !== 1) points = Math.round(points * factor);
   return points;
 }
 
-async function resolveRound(roundId, targetRoom) {
+// The rooms the round's Pocong entered. `target_rooms` (the full draw) is used
+// when present; the single legacy `target_room` otherwise.
+function roundTargets(round) {
+  if (Array.isArray(round.target_rooms) && round.target_rooms.length) return round.target_rooms;
+  return round.target_room ? [round.target_room] : [];
+}
+
+// `round` is the rounds row. A solo run (`run_id` set) gets the difficulty
+// factor and advances its floor; the open round behaves as before.
+async function resolveRound(round) {
+  const targets = roundTargets(round);
   const hides = await pool.query(
     `SELECT id, user_id, username, room_slug, daring_room_slug FROM hides WHERE round_id=$1 AND outcome='pending'`,
-    [roundId]
+    [round.id]
   );
   const counts = {};
   for (const h of hides.rows) counts[h.room_slug] = (counts[h.room_slug] || 0) + 1;
@@ -203,17 +300,19 @@ async function resolveRound(roundId, targetRoom) {
   for (const h of hides.rows) {
     // A daring second pick doubles the exposure: the Pocong entering either
     // room is an elimination. Surviving both earns x1.5 on the round.
-    const survived = h.room_slug !== targetRoom && h.daring_room_slug !== targetRoom;
+    const survived = !targets.includes(h.room_slug) && !targets.includes(h.daring_room_slug);
     let points = 0;
     if (survived) {
       const stats = await pool.query(`SELECT current_streak FROM player_stats WHERE user_id=$1`, [h.user_id]);
       const streakBefore = stats.rows[0] ? stats.rows[0].current_streak : 0;
-      points = survivalPoints(h, total, counts, streakBefore);
+      points = survivalPoints(h, total, counts, streakBefore, round.difficulty);
     }
     const outcome = survived ? 'survived' : 'eliminated';
     await pool.query(`UPDATE hides SET outcome=$1, points_awarded=$2 WHERE id=$3`, [outcome, points, h.id]);
     await applyStats(h.user_id, h.username, survived, points);
   }
+
+  if (round.run_id) await advanceRun(round.run_id, round.id);
 }
 
 async function applyStats(userId, username, survived, points) {
@@ -246,7 +345,7 @@ app.get('/api/game/state', async (req, res) => {
     if (!roundRes.rows.length) {
       return res.json({ round: null, my_hide: null, hides: [], stats: null, server_now: req.now.toISOString() });
     }
-    const round = roundRes.rows[0];
+    const round = await normalizeRoundShape(roundRes.rows[0]);
 
     const hidesRes = await pool.query(
       `SELECT username, room_slug, outcome, points_awarded FROM hides WHERE round_id=$1`,
@@ -270,15 +369,25 @@ app.get('/api/game/state', async (req, res) => {
       stats = st.rows[0] || null;
     }
 
+    const roundPayload = {
+      id: round.id,
+      round_number: round.round_number,
+      status: round.status,
+      target_room: round.target_room,
+      hiding_ends_at: round.hiding_ends_at,
+      hunt_ends_at: round.hunt_ends_at,
+    };
+    // The start-page slice's extra round fields are appended AFTER the fields
+    // that were already here, so a serialized round keeps the same leading
+    // shape (the existing "auto-opens from a legacy round" check pins the
+    // order of status/target_room/hiding_ends_at).
+    roundPayload.target_rooms = roundTargets(round);
+    roundPayload.difficulty = round.difficulty || 'novice';
+    roundPayload.floor = round.floor || 1;
+    roundPayload.rooms_left = round.rooms_left || DEFAULT_ROOMS_LEFT;
+    roundPayload.ghost_enemy = round.ghost_enemy || 'pocong';
     res.json({
-      round: {
-        id: round.id,
-        round_number: round.round_number,
-        status: round.status,
-        target_room: round.target_room,
-        hiding_ends_at: round.hiding_ends_at,
-        hunt_ends_at: round.hunt_ends_at,
-      },
+      round: roundPayload,
       my_hide: myHide,
       hides: hidesRes.rows,
       stats,
@@ -829,6 +938,392 @@ app.post('/api/party/:code/advance', async (req, res) => {
   }
 });
 
+// ── Solo runs: Play Game's three difficulties ────────────────────────────────
+// A run is a sequence of rounds on its own clock, apart from the shared open
+// round, so players on different difficulties never share one round. Novice is
+// the shared open round (all 11 rooms, one Pocong); Challenging and DieHard get
+// their own run whose rounds are fenced to `rooms_left` of the same 11 slugs.
+
+async function activeRun(userId) {
+  const r = await pool.query(
+    `SELECT * FROM runs WHERE user_id=$1 AND status='active'
+     ORDER BY updated_at DESC LIMIT 1`, [userId]);
+  return r.rows[0] || null;
+}
+
+// Sumala is unlocked once a floor >= 2 has been won, Raminom once a floor >= 3
+// has. Derived from its own wins, not stored, so no seed can fabricate the
+// signal this code reads.
+async function unlockedGhosts(userId) {
+  const r = await pool.query(`SELECT MAX(floor) AS best FROM wins WHERE user_id=$1`, [userId]);
+  const best = r.rows[0] && r.rows[0].best ? Number(r.rows[0].best) : 0;
+  const unlocked = { pocong: true, sumala: best >= 2, raminom: best >= 3 };
+  return unlocked;
+}
+
+function ghostFor(settingsGhost, unlocked) {
+  const g = GHOSTS.includes(settingsGhost) ? settingsGhost : 'pocong';
+  return unlocked[g] ? g : 'pocong';
+}
+
+async function playerSettings(userId) {
+  const r = await pool.query(`SELECT * FROM player_settings WHERE user_id=$1`, [userId]);
+  return r.rows[0] || { sound_volume: 50, ghost_enemy: 'pocong' };
+}
+
+// Opens a run round: `rooms_left` of the same 11 slugs, `pocong_count` Pocong,
+// the chosen ghost (clamped to an unlocked one), on the run's own clock.
+async function openRunHidingRound(run, now) {
+  try {
+    const ins = await pool.query(
+      `INSERT INTO rounds (round_number, run_id, difficulty, floor, ghost_enemy, pocong_count, rooms_left, status, hiding_ends_at)
+       SELECT COALESCE(MAX(round_number), 0) + 1, $1, $2, $3, $4, $5, $6, 'hiding', $7
+       FROM rounds
+       HAVING NOT EXISTS (SELECT 1 FROM rounds WHERE run_id=$1 AND status IN ('hiding','hunt'))`,
+      [run.id, run.difficulty, run.floor, run.ghost_enemy, run.pocong_count, run.rooms_left,
+       new Date(now.getTime() + HIDING_MS)]
+    );
+    return ins.rowCount > 0;
+  } catch (err) {
+    if (err.code === '23505') return false;
+    throw err;
+  }
+}
+
+async function currentRunRound(runId) {
+  const r = await pool.query(
+    `SELECT * FROM rounds WHERE run_id=$1 ORDER BY round_number DESC LIMIT 1`, [runId]);
+  return r.rows[0] || null;
+}
+
+// On resolve, a run's floor advances when its `rooms_left` reaches zero. The
+// player clears the floor by surviving the round in which the whole floor was
+// in play (they were not in the room the Pocong entered). DieHard then moves
+// Floor 2 to the Attic and refills; the others win the run.
+async function advanceRun(runId, roundId) {
+  const rr = await pool.query(`SELECT * FROM runs WHERE id=$1`, [runId]);
+  const run = rr.rows[0];
+  if (!run || run.status !== 'active') return;
+  const floors = runFloorsFor(run.difficulty);
+  const idx = floors.findIndex((f) => f.floor === run.floor);
+  if (idx === -1) return;
+  const mine = await pool.query(
+    `SELECT outcome, username FROM hides WHERE round_id=$1 AND user_id=$2`, [roundId, run.user_id]);
+  const survived = !!(mine.rows[0] && mine.rows[0].outcome === 'survived');
+
+  if (survived) {
+    if (idx + 1 < floors.length) {
+      const next = floors[idx + 1];
+      await pool.query(
+        `UPDATE runs SET floor=$1, rooms_left=$2, pocong_count=$3, status='active', updated_at=NOW() WHERE id=$4`,
+        [next.floor, next.rooms, next.pocong, run.id]);
+      return;
+    }
+    // Cleared the last floor: the run is won and the win is written to the
+    // winner history (points = the run's points, summed from its hides rows).
+    const pts = await pool.query(
+      `SELECT COALESCE(SUM(points_awarded), 0)::bigint AS pts FROM hides
+       WHERE user_id=$1 AND round_id IN (SELECT id FROM rounds WHERE run_id=$2)`,
+      [run.user_id, run.id]);
+    const points = Number(pts.rows[0].pts || 0);
+    // `wins.username` is NOT NULL: take it from the round's own hide row, which
+    // always carries the name the player played under.
+    const winner = (mine.rows[0] && mine.rows[0].username) || run.username || 'player';
+    await pool.query(
+      `INSERT INTO wins (user_id, username, points, difficulty, ghost_enemy, floor)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [run.user_id, winner, points, run.difficulty, run.ghost_enemy, run.floor]);
+    await pool.query(`UPDATE runs SET status='won', updated_at=NOW() WHERE id=$1`, [run.id]);
+    return;
+  }
+
+  // Eliminated: the run is lost but stays saved, so the next START resumes the
+  // same floor with the rooms it had left.
+  await pool.query(`UPDATE runs SET status='lost', updated_at=NOW() WHERE id=$1 AND status='active'`, [run.id]);
+}
+
+// The run's own time-gated transitions, in the shape of runTransitions. After a
+// floor resolves and the run is still active (DieHard's Floor 2 cleared, ready
+// for the Attic), the next floor's hiding round opens once RESULT_MS has shown
+// the result.
+async function runRunTransitions(run, now) {
+  for (let i = 0; i < 4; i++) {
+    const round = await currentRunRound(run.id);
+    if (!round) return;
+    if (round.status === 'hiding' && (!round.hiding_ends_at || now > new Date(round.hiding_ends_at))) {
+      if (!round.hiding_ends_at) {
+        await pool.query(`UPDATE rounds SET hiding_ends_at=$1 WHERE id=$2`, [new Date(now.getTime() + HIDING_MS), round.id]);
+        continue;
+      }
+      await toHunt(round, now, roomSlugsFor(round.rooms_left));
+      continue;
+    }
+    if (round.status === 'hunt' && round.hunt_ends_at && now > new Date(round.hunt_ends_at)) {
+      await toResolved(round, now);
+      continue;
+    }
+    if (round.status === 'resolved' && round.resolved_at &&
+        now.getTime() >= new Date(round.resolved_at).getTime() + RESULT_MS) {
+      const fresh = await pool.query(`SELECT * FROM runs WHERE id=$1`, [run.id]);
+      if (fresh.rows[0] && fresh.rows[0].status === 'active') {
+        await openRunHidingRound(fresh.rows[0], now);
+        continue;
+      }
+    }
+    return;
+  }
+}
+
+async function runPayload(run, round, req) {
+  const hides = round ? (await pool.query(
+    `SELECT username, room_slug, outcome, points_awarded FROM hides WHERE round_id=$1`, [round.id])).rows : [];
+  let myHide = null, stats = null;
+  if (req.user) {
+    const mh = round ? await pool.query(
+      `SELECT room_slug, daring_room_slug, outcome, points_awarded FROM hides WHERE round_id=$1 AND user_id=$2`,
+      [round.id, req.user.id]) : { rows: [] };
+    myHide = mh.rows[0] || null;
+    if (round && !myHide && round.status !== 'hiding') {
+      myHide = { room_slug: null, daring_room_slug: null, outcome: 'disqualified', points_awarded: 0 };
+    }
+    const st = await pool.query(`SELECT * FROM player_stats WHERE user_id=$1`, [req.user.id]);
+    stats = st.rows[0] || null;
+  }
+  return {
+    run: { difficulty: run.difficulty, floor: run.floor, rooms_left: run.rooms_left,
+           pocong_count: run.pocong_count, ghost_enemy: run.ghost_enemy, status: run.status },
+    round: round ? {
+      id: round.id, round_number: round.round_number, status: round.status,
+      target_room: round.target_room, target_rooms: roundTargets(round),
+      hiding_ends_at: round.hiding_ends_at, hunt_ends_at: round.hunt_ends_at,
+      resolved_at: round.resolved_at,
+    } : null,
+    my_hide: myHide, hides, stats,
+    result_ms: RESULT_MS,
+    server_now: req.now.toISOString(),
+  };
+}
+
+// The caller's active run and its current round.
+app.get('/api/game/run/state', async (req, res) => {
+  const empty = { run: null, round: null, my_hide: null, hides: [], stats: null,
+    difficulty_options: DIFFICULTIES, result_ms: RESULT_MS, server_now: req.now.toISOString() };
+  if (!req.user) return res.json(empty); // signed out: no run, nothing of anyone's
+  try {
+    const run = await activeRun(req.user.id);
+    if (!run) return res.json(empty);
+    await runRunTransitions(run, req.now);
+    const fresh = await activeRun(req.user.id) || run;
+    const round = await currentRunRound(fresh.id);
+    const payload = await runPayload(fresh, round, req);
+    payload.difficulty_options = DIFFICULTIES;
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// START. Resumes the saved run of that difficulty if one is active, otherwise
+// opens the difficulty's first floor. Novice's first floor is the shared open
+// round: no run is created and nothing is resumed.
+app.post('/api/game/run/start', requireBoundWallet, async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'play a run' });
+  const { difficulty } = req.body || {};
+  if (!DIFFICULTIES.includes(difficulty)) return res.status(400).json({ error: 'Unknown difficulty' });
+  try {
+    if (difficulty === 'novice') {
+      await runTransitions(req.now);
+      const round = await currentOpenRound();
+      return res.json({ ok: true, difficulty, run: null, round: round ? { id: round.id, status: round.status } : null });
+    }
+    const floors = runFloorsFor(difficulty);
+    // The saved run of this difficulty: resumable whether it is still active or
+    // was lost (eliminated runs stay saved on their floor).
+    let run = await pool.query(
+      `SELECT * FROM runs WHERE user_id=$1 AND difficulty=$2 AND status IN ('active','lost')
+       ORDER BY updated_at DESC LIMIT 1`, [req.user.id, difficulty]);
+    run = run.rows[0] || null;
+    if (run && run.username !== req.user.username) {
+      await pool.query(`UPDATE runs SET username=$1, updated_at=NOW() WHERE id=$2`,
+        [req.user.username, run.id]);
+      run.username = req.user.username;
+    }
+    const unlocked = await unlockedGhosts(req.user.id);
+    const ghost = ghostFor((await playerSettings(req.user.id)).ghost_enemy, unlocked);
+
+    // Only one run is active at a time: a START on another difficulty parks the
+    // current one as lost, so switching back later resumes it.
+    if (!run || run.status !== 'active') {
+      await pool.query(
+        `UPDATE runs SET status='lost', updated_at=NOW() WHERE user_id=$1 AND status='active'
+         AND (difficulty <> $2 OR id <> $3)`, [req.user.id, difficulty, run ? run.id : -1]);
+    }
+    if (run && run.status !== 'active') {
+      await pool.query(`UPDATE runs SET status='active', ghost_enemy=$1, updated_at=NOW() WHERE id=$2`, [ghost, run.id]);
+      run = (await pool.query(`SELECT * FROM runs WHERE id=$1`, [run.id])).rows[0];
+    }
+    if (!run) {
+      const first = floors[0];
+      const ins = await pool.query(
+        `INSERT INTO runs (user_id, username, difficulty, floor, rooms_left, pocong_count, ghost_enemy, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active') RETURNING *`,
+        [req.user.id, req.user.username, difficulty, first.floor, first.rooms, first.pocong, ghost]);
+      run = ins.rows[0];
+    } else {
+      await pool.query(`UPDATE runs SET ghost_enemy=$1, updated_at=NOW() WHERE id=$2`, [ghost, run.id]);
+      run.ghost_enemy = ghost;
+    }
+
+    // Open the run's first hiding round unless one is already live (a resolved
+    // floor is left to show for RESULT_MS; runRunTransitions opens its next one).
+    await runRunTransitions(run, req.now);
+    const cur = await currentRunRound(run.id);
+    if (!cur) await openRunHidingRound(run, req.now);
+    res.json({ ok: true, difficulty });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Shared guard for a run's writes: the caller has an active run and it is live.
+async function liveRunHidingRound(req, res) {
+  if (!req.user) { res.status(401).json({ error: 'account_required', action: 'hide in a room' }); return null; }
+  const run = await activeRun(req.user.id);
+  if (!run) { res.status(409).json({ error: 'No run is on' }); return null; }
+  await runRunTransitions(run, req.now);
+  const round = await currentRunRound(run.id);
+  if (!round || round.status !== 'hiding' || req.now > new Date(round.hiding_ends_at)) {
+    res.status(409).json({ error: 'No hiding phase' }); return null;
+  }
+  return { run, round };
+}
+
+app.post('/api/game/run/hide', requireBoundWallet, async (req, res) => {
+  const { room_slug } = req.body || {};
+  try {
+    const live = await liveRunHidingRound(req, res);
+    if (!live) return;
+    const allowed = roomSlugsFor(live.round.rooms_left);
+    if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
+    if (!allowed.includes(room_slug)) return res.status(400).json({ error: 'That room is not on this floor' });
+    const hide = await pool.query(
+      `INSERT INTO hides (user_id, username, round_id, room_slug, locked_at)
+       VALUES ($1,$2,$3,$4,$5) RETURNING room_slug, outcome`,
+      [req.user.id, req.user.username, live.round.id, room_slug, req.now]);
+    res.json({ ok: true, hide: hide.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Already locked' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/game/run/daring', requireBoundWallet, async (req, res) => {
+  const { room_slug } = req.body || {};
+  try {
+    const live = await liveRunHidingRound(req, res);
+    if (!live) return;
+    const allowed = roomSlugsFor(live.round.rooms_left);
+    if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
+    if (!allowed.includes(room_slug)) return res.status(400).json({ error: 'That room is not on this floor' });
+    const mine = await pool.query(
+      `SELECT id, room_slug, daring_room_slug FROM hides WHERE round_id=$1 AND user_id=$2`,
+      [live.round.id, req.user.id]);
+    if (!mine.rows.length) return res.status(409).json({ error: 'Lock a hiding room first' });
+    if (mine.rows[0].daring_room_slug) return res.status(409).json({ error: 'Already dared' });
+    if (mine.rows[0].room_slug === room_slug) return res.status(400).json({ error: 'Pick a different room' });
+    const upd = await pool.query(
+      `UPDATE hides SET daring_room_slug=$1 WHERE id=$2 AND daring_room_slug IS NULL
+       RETURNING room_slug, daring_room_slug, outcome`,
+      [room_slug, mine.rows[0].id]);
+    if (!upd.rows.length) return res.status(409).json({ error: 'Already dared' });
+    res.json({ ok: true, hide: upd.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Staging only: step the run one phase per click, like the open round's button.
+app.post('/api/game/run/advance', async (req, res) => {
+  if (!IS_STAGING) return res.status(403).json({ error: 'Staging only' });
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'advance the round' });
+  try {
+    const run = await activeRun(req.user.id);
+    if (!run) return res.status(409).json({ error: 'No run is on' });
+    const round = await currentRunRound(run.id);
+    if (round && round.status === 'hiding') await toHunt(round, req.now, roomSlugsFor(round.rooms_left));
+    else if (round && round.status === 'hunt') await toResolved(round, req.now);
+    else {
+      const fresh = await activeRun(req.user.id) || run;
+      if (fresh.status === 'active') await openRunHidingRound(fresh, req.now);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Player settings: the sound slider and the ghost enemy ────────────────────
+
+app.get('/api/settings', async (req, res) => {
+  // Signed out, answer the app defaults (nothing of anyone's): sound 50 and
+  // Pocong, with Sumala and Raminom locked. The page keeps them client-side
+  // until the player signs in.
+  if (!req.user) {
+    return res.json({
+      sound_volume: 50, ghost_enemy: 'pocong',
+      ghosts: GHOSTS.map((g) => ({ key: g, label: GHOST_LABELS[g], unlocked: g === 'pocong' })),
+    });
+  }
+  try {
+    const s = await playerSettings(req.user.id);
+    const unlocked = await unlockedGhosts(req.user.id);
+    res.json({
+      sound_volume: s.sound_volume,
+      ghost_enemy: ghostFor(s.ghost_enemy, unlocked),
+      ghosts: GHOSTS.map((g) => ({ key: g, label: GHOST_LABELS[g], unlocked: !!unlocked[g] })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/settings', async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'account_required', action: 'save your settings' });
+  const body = req.body || {};
+  try {
+    const cur = await playerSettings(req.user.id);
+    let volume = cur.sound_volume;
+    if (body.sound_volume !== undefined) {
+      volume = Number(body.sound_volume);
+      if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
+        return res.status(400).json({ error: 'Sound must be between 0 and 100' });
+      }
+      volume = Math.round(volume);
+    }
+    let ghost = cur.ghost_enemy;
+    if (body.ghost_enemy !== undefined) {
+      if (!GHOSTS.includes(body.ghost_enemy)) return res.status(400).json({ error: 'Unknown ghost' });
+      const unlocked = await unlockedGhosts(req.user.id);
+      ghost = ghostFor(body.ghost_enemy, unlocked); // clamp a locked ghost back to pocong
+    }
+    await pool.query(
+      `INSERT INTO player_settings (user_id, username, sound_volume, ghost_enemy, updated_at)
+       VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (user_id) DO UPDATE SET username=EXCLUDED.username,
+         sound_volume=EXCLUDED.sound_volume, ghost_enemy=EXCLUDED.ghost_enemy, updated_at=NOW()`,
+      [req.user.id, req.user.username, volume, ghost]);
+    const unlocked = await unlockedGhosts(req.user.id);
+    res.json({
+      ok: true,
+      sound_volume: volume,
+      ghost_enemy: ghostFor(ghost, unlocked),
+      ghosts: GHOSTS.map((g) => ({ key: g, label: GHOST_LABELS[g], unlocked: !!unlocked[g] })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Leaderboard (public) ─────────────────────────────────────────────────────
 
 app.get('/api/game/leaderboard', async (_req, res) => {
@@ -839,7 +1334,14 @@ app.get('/api/game/leaderboard', async (_req, res) => {
       ORDER BY best_score DESC, total_score DESC
       LIMIT 20
     `);
-    res.json({ leaderboard: rows });
+    // Winner history: every cleared run, newest first.
+    const w = await pool.query(`
+      SELECT username, points, difficulty, ghost_enemy, floor, won_at
+      FROM wins
+      ORDER BY won_at DESC, points DESC
+      LIMIT 20
+    `);
+    res.json({ leaderboard: rows, winners: w.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -889,6 +1391,64 @@ async function migrate() {
   await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS hiding_ends_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS hunt_ends_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ`);
+
+  // ── Solo runs: difficulty, floor and the rooms left in play. All default,
+  // so every existing row (the shared open round) keeps working.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS runs (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      difficulty VARCHAR(12) NOT NULL DEFAULT 'novice',
+      floor INTEGER NOT NULL DEFAULT 1,
+      rooms_left INTEGER NOT NULL DEFAULT 11,
+      pocong_count INTEGER NOT NULL DEFAULT 1,
+      ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+      status VARCHAR(12) NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong'`);
+  // One open run per user (a differing START parks the current one as lost).
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS runs_active_user ON runs (user_id) WHERE status='active'`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS run_id INTEGER REFERENCES runs(id)`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS difficulty VARCHAR(12) DEFAULT 'novice'`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS floor INTEGER DEFAULT 1`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS ghost_enemy VARCHAR(16) DEFAULT 'pocong'`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS pocong_count INTEGER DEFAULT 1`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS rooms_left INTEGER`);
+  await pool.query(`ALTER TABLE rounds ADD COLUMN IF NOT EXISTS target_rooms TEXT[]`);
+
+  // ── Winner history: this is the leaderboard the app shows. Public: a
+  // username, a difficulty, a ghost and a score.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS wins (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      username VARCHAR(255) NOT NULL,
+      points BIGINT NOT NULL DEFAULT 0,
+      difficulty VARCHAR(12) NOT NULL DEFAULT 'novice',
+      ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+      floor INTEGER NOT NULL DEFAULT 1,
+      won_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS wins_points_won ON wins (points DESC, won_at DESC)`);
+
+  // ── Player settings: a sound level and a ghost choice. Public (neither is
+  // sensitive); it holds per-account data, so seeding must never write a row
+  // for whoever opens the preview.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS player_settings (
+      user_id INTEGER PRIMARY KEY,
+      username VARCHAR(255) NOT NULL,
+      sound_volume INTEGER NOT NULL DEFAULT 50,
+      ghost_enemy VARCHAR(16) NOT NULL DEFAULT 'pocong',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 
   // Legacy betting table, kept in place so no data is destroyed. No longer read.
   await pool.query(`
@@ -1072,6 +1632,29 @@ async function migrate() {
         );
       }
     }
+    // Winner history so the winner-history card renders with rows instead of
+    // its empty state. Fake identities only, and never the viewer's: a run, a
+    // settings row or a win for the preview's own account would fabricate the
+    // signal the run and unlock code reads.
+    const haveWins = await pool.query(`SELECT COUNT(*) FROM wins`);
+    if (haveWins.rows[0].count === '0') {
+      const now0 = new Date();
+      const wins = [
+        [900001, 'staging-demo-user', 10000, 'diehard',     'raminom', 3, -6 * 60],
+        [900003, 'staging-user-02',    3150, 'diehard',     'sumala',  3, -14 * 60],
+        [900002, 'staging-user-01',    2600, 'challenging', 'sumala',  2, -52 * 60],
+        [900004, 'staging-user-03',    1480, 'challenging', 'pocong',  2, -95 * 60],
+        [900005, 'staging-user-04',     760, 'novice',      'pocong',  1, -140 * 60],
+        [900001, 'staging-demo-user',   520, 'novice',      'pocong',  1, -200 * 60],
+      ];
+      for (const [uid, username, points, difficulty, ghost, floor, minsAgo] of wins) {
+        await pool.query(
+          `INSERT INTO wins (user_id, username, points, difficulty, ghost_enemy, floor, won_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [uid, username, points, difficulty, ghost, floor, new Date(now0.getTime() + minsAgo * 60 * 1000)]);
+      }
+    }
+
     // A demo party, DEMO1, with fake members, scores and one finished round,
     // so the party screen has a scoreboard and figures. Anyone opening the
     // preview joins it like any other party; nobody real is seeded into it.
