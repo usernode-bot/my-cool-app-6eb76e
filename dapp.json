@@ -190,5 +190,9 @@
       "path": "/api/wallet/me",
       "expectText": "linked_wallet"
     }
-  ]
+  ],
+  "governance": {
+    "approvers": "invited",
+    "approvals": "default"
+  }
 }
