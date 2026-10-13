@@ -192,7 +192,6 @@
     }
   ],
   "governance": {
-    "approvers": "invited",
-    "approvals": "default"
+    "preset": "you_or_the_group"
   }
 }
