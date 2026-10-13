@@ -5,17 +5,20 @@
 at deploy time; the app never serves it, which is why it lives outside
 `public/`.
 
-The tile is custom artwork, not the shared Homeroom tile style: the pocong
-character drawn by scraido2 for this app (Homeroom request #23), used with
-their permission as the app's creator.
+The tile is custom artwork, not the shared Homeroom tile style: a white
+line-art pocong from the image attached to Homeroom request #38 by scraido2,
+the app's creator.
 
-- Artwork: the pocong figure — knotted shroud on top, angry shouting face,
-  crossed wrappings, tattered trailing tail to the lower left — cropped from
-  the image attached to that request.
-- Colour: the badge's own dark navy (`#3d4c5f`) as one continuous field all
-  the way to the edges; none of the original photo's background shows.
+- Artwork: a simple white outline drawing of a pocong — a knot on top, an
+  oval head, crossed wrapping over the body, and a curling tail to the lower
+  left — no face. Cropped from the rounded-square tile in that image (the
+  purple gradient around it was the mockup backdrop, not the icon).
+- Colour: the tile's own dark slate-teal (`#324e59`) as one continuous field
+  all the way to the edges; none of the mockup's purple backdrop or its
+  rounded-corner curve shows.
 - 512 × 512 PNG, full bleed, no text, no transparency (8-bit RGB, no alpha
-  channel). The platform rounds and crops the tile itself.
+  channel). The platform rounds and crops the tile itself. The app name is
+  not on the tile; the platform prints it underneath.
 
 To change the tile, replace `icon.png` and update this note. The change
 applies once the proposal is voted in and deployed.
