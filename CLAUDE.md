@@ -286,14 +286,19 @@ time in any post-hiding phase, so it works even though no row exists for them.
 `Play Game` opens a **run**: a sequence of floors on its own clock, apart from
 the shared open round, so players on different difficulties never share a
 round. Novice is the shared open round (all 11 rooms, one Pocong); Challenging
-and DieHard get their own run whose rounds are fenced to `rooms_left` of the
-same 11 slugs (rooms are fenced off, not deleted, so the map and `roomGeo` are
-untouched and the 11-room source of truth is not forked).
+and DieHard get their own run whose rounds are fenced to a per-floor slug list
+in `RUN_FLOORS` (`floorRoomSlugs(round)`; rooms are fenced off, not deleted, so
+the map and `roomGeo` are untouched and the 11-room source of truth is not
+forked). During a Challenging run the page renames the six rooms of Floor 2
+(`FLOOR_ROOM_LABELS`: Brother Room, Sister Room, Shared Bathroom, Activity
+Room, Reading Room, Working Room), greys out and blocks the other five, and the
+run state's `round` carries `difficulty`, `floor`, `rooms_left`, `pocong_count`
+and `rooms` (the floor's slugs) so it can fence and relabel from that list.
 
 | Difficulty | Floors (floor · rooms in play · Pocong) | Score factor |
 |---|---|---|
 | Novice | 1 · 11 · 1 | x1 |
-| Challenging | 2 · 6 · 1 | x2 |
+| Challenging | 2 · 6 · 2 | x2 |
 | DieHard | 2 · 3 · 2, then 3 (Attic) · 3 · 2 | x3 |
 
 A floor is cleared by surviving the round in which the whole floor was in play;

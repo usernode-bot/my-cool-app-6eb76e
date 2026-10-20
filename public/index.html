@@ -116,6 +116,7 @@
     .hotspot.locked { fill: rgba(124,58,237,0.32); }
     .hotspot.daring { fill: rgba(224,140,24,0.30); }
     .hotspot.target { fill: rgba(205,20,20,0.38); }
+    .hotspot.fenced { fill: rgba(26,22,19,0.28); }
 
     /* Frightened avatars tremble; faster once the Pocong is on the route. */
     @keyframes tremble {
@@ -210,6 +211,7 @@
       font-family: sans-serif; font-size: 0.68rem; line-height: 1.2; padding: 6px 3px; min-height: 36px;
       color: #e8d9b5; background: #2e2721; border: 1px solid #6b5a42; border-radius: 4px; cursor: pointer;
     }
+    #room-grid button.fenced { opacity: 0.25; text-decoration: line-through; }
     #room-grid button:hover:not(:disabled) { background: #3a3129; }
     #room-grid button:focus-visible, #btn-confirm:focus-visible, #btn-daring:focus-visible,
     #btn-leaderboard:focus-visible, #btn-back:focus-visible, #btn-mute:focus-visible, select:focus-visible {
@@ -905,12 +907,12 @@
     const DIFFICULTY_LABEL = { novice: 'Novice', challenging: 'Challenging', diehard: 'DieHard' };
     const DIFFICULTY_HELP = {
       novice: 'One mansion floor, all 11 rooms, one Pocong.',
-      challenging: 'Floor 2 with 6 rooms and one Pocong. Win it to unlock Sumala.',
+      challenging: 'Floor 2 with 6 rooms and 2 Pocong. Win it to unlock Sumala.',
       diehard: 'Floor 2 with 3 rooms and 2 Pocong, then the Attic, where only one room survives. Win it to unlock Raminom.',
     };
     const DIFF_FLOORS = {
       novice: [{ floor: 1, rooms: 11 }, { floor: 1, rooms: 11 }],
-      challenging: [{ floor: 2, rooms: 6 }],
+      challenging: [{ floor: 2, rooms: 6, pocong: 2 }],
       diehard: [{ floor: 2, rooms: 3 }, { floor: 3, rooms: 3 }],
     };
     // The run's rooms in the same order the server fences them (ROOMS order).
@@ -922,13 +924,21 @@
     // In run mode, currentState is the run's own round (from /api/game/run/state).
     function isRun() { return sessionStorage.getItem('aap_run') === '1'; }
     function setRun(on) { try { if (on) sessionStorage.setItem('aap_run', '1'); else sessionStorage.removeItem('aap_run'); } catch (_) {} }
-    // A run's rounds are fenced to the first `rooms_left` of the 11 slugs, the
-    // same set the server draws from.
-    function runRoomsLeft() {
-      const r = (isRun() && currentState.round) ? currentState.round.rooms_left : null;
-      return r || ROOM_ORDER().length;
+    // Challenging's second floor has its own room names; other difficulties
+    // and the open round keep the ROOMS labels. The server owns the slug list.
+    const FLOOR_ROOM_LABELS = {
+      challenging: { 2: {
+        'kamar-anak': 'Brother Room', 'kamar-utama': 'Sister Room',
+        'kamar-mandi': 'Shared Bathroom', 'living-room': 'Activity Room',
+        'ruang-baca': 'Reading Room', 'kamar-asisten': 'Working Room',
+      } },
+    };
+    // A run's round carries its own floor's slugs (`rooms`), the same set the
+    // server fences and draws from; outside a run all 11 are in play.
+    function allowedRooms() {
+      const r = (isRun() && currentState.round) ? currentState.round.rooms : null;
+      return Array.isArray(r) && r.length ? r : ROOM_ORDER();
     }
-    function allowedRooms() { return ROOM_ORDER().slice(0, runRoomsLeft()); }
     function roomAllowed(slug) { return allowedRooms().includes(slug); }
     function ghostsUnlocked() { return (settings.ghosts || []).reduce((m, g) => (m[g.key] = g.unlocked, m), { pocong: true }); }
 
@@ -963,7 +973,12 @@
       { slug: 'living-room',       label: 'Living Room',        gridX: 3, gridZ: 4, type: 'living'    },
     ];
     const ROOM_BY_SLUG = Object.fromEntries(ROOMS.map(r => [r.slug, r]));
-    function roomLabel(slug) { return (ROOM_BY_SLUG[slug] || {}).label || slug || '—'; }
+    function roomLabel(slug) {
+      const r = currentState && currentState.round;
+      const names = (r && isRun() && FLOOR_ROOM_LABELS[r.difficulty]) ? FLOOR_ROOM_LABELS[r.difficulty][r.floor] : null;
+      if (names && names[slug]) return names[slug];
+      return (ROOM_BY_SLUG[slug] || {}).label || slug || '—';
+    }
 
     const ISO = { hw: 96, hh: 55, wallH: 18, ox: 585, oy: 140 };
     function iso(gx, gz) { return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh }; }
@@ -1116,6 +1131,7 @@
     // ── Build the blueprint ────────────────────────────────────────────────────
     const roomGeo = {};   // slug → { cx, cy, door, inside, spot }
     const hotspotEls = {};
+    const roomLabelEls = {};
     const DOOR_GAP = [0.34, 0.66];
 
     function wall(g, p0, p1, gap, fill) {
@@ -1196,17 +1212,22 @@
         const outward = onPlusX ? [ISO.hw * 0.13, ISO.hh * 0.13] : [-ISO.hw * 0.13, -ISO.hh * 0.13];
         labelsG.appendChild(svgText(mid[0] + outward[0], mid[1] + outward[1] + 3, 'Door', { 'font-size': 8.5, fill: '#3a3530', 'text-anchor': 'middle', 'font-style': 'italic' }));
 
-        // Label tag outside the map, with a leader to the outer wall.
+        // Label tag outside the map, with a leader to the outer wall. Kept in
+        // roomLabelEls so a run's floor names can be swapped in later.
         const m = onPlusX ? iso(gx - 0.5, gz) : iso(gx + 0.5, gz);
         const w = r.label.length * 6.4 + 14;
         const tx = onPlusX ? m.x - 16 - w : m.x + 16;
         const ty = onPlusX ? m.y - ISO.wallH - 22 : m.y - 24;
-        labelsG.appendChild(svgEl('line', {
+        const leader = svgEl('line', {
           x1: onPlusX ? tx + w : tx, y1: ty + 9, x2: m.x, y2: onPlusX ? m.y - ISO.wallH : m.y - 6,
           stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '2 2',
-        }));
-        labelsG.appendChild(svgEl('rect', { x: tx.toFixed(1), y: ty.toFixed(1), width: w.toFixed(1), height: 18, rx: 3, fill: '#fff', stroke: INK, 'stroke-width': 1.3 }));
-        labelsG.appendChild(svgText((tx + w / 2).toFixed(1), (ty + 12.5).toFixed(1), r.label, { 'font-size': 11, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' }));
+        });
+        labelsG.appendChild(leader);
+        const tagRect = svgEl('rect', { x: tx.toFixed(1), y: ty.toFixed(1), width: w.toFixed(1), height: 18, rx: 3, fill: '#fff', stroke: INK, 'stroke-width': 1.3 });
+        labelsG.appendChild(tagRect);
+        const tagText = svgText((tx + w / 2).toFixed(1), (ty + 12.5).toFixed(1), r.label, { 'font-size': 11, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' });
+        labelsG.appendChild(tagText);
+        roomLabelEls[r.slug] = { leader, rect: tagRect, text: tagText, onPlusX, m };
 
         const hs = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'hotspot' });
         hs.dataset.slug = r.slug;
@@ -1224,7 +1245,7 @@
         const room = r;
         hs.addEventListener('pointerenter', () => { if (canHide()) hs.classList.add('hovered'); });
         hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
-        hs.addEventListener('click', () => { if (canHide()) selectRoom(room); });
+        hs.addEventListener('click', () => { if (canHide() && roomAllowed(room.slug)) selectRoom(room); });
       }
 
       // North arrow (bottom-left) and legend (bottom-right).
@@ -1781,19 +1802,49 @@
         dare.appendChild(o2);
         const b = document.createElement('button');
         b.type = 'button'; b.textContent = r.label; b.dataset.slug = r.slug;
-        b.addEventListener('click', () => { if (canHide()) selectRoom(r); });
+        b.addEventListener('click', () => { if (canHide() && roomAllowed(r.slug)) selectRoom(r); });
         grid.appendChild(b);
         roomButtons[r.slug] = b;
       }
       sel.addEventListener('change', () => {
         const r = ROOM_BY_SLUG[sel.value];
-        if (r && canHide()) selectRoom(r);
+        if (r && canHide() && roomAllowed(r.slug)) selectRoom(r);
       });
       dare.addEventListener('change', () => { $('btn-daring').disabled = !(canDare() && dare.value); });
     })();
 
+    // Swap in the current round's floor names (Challenging's six) on the map
+    // tags, the room grid and both dropdowns. Same tag geometry as buildMap.
+    function relabelRooms() {
+      for (const r of ROOMS) {
+        const label = roomLabel(r.slug);
+        const els = roomLabelEls[r.slug];
+        if (els) {
+          const w = label.length * 6.4 + 14;
+          const tx = els.onPlusX ? els.m.x - 16 - w : els.m.x + 16;
+          els.rect.setAttribute('x', tx.toFixed(1));
+          els.rect.setAttribute('width', w.toFixed(1));
+          els.leader.setAttribute('x1', (els.onPlusX ? tx + w : tx).toFixed(1));
+          els.text.setAttribute('x', (tx + w / 2).toFixed(1));
+          els.text.textContent = label;
+        }
+        const b = roomButtons[r.slug];
+        if (b) {
+          b.textContent = label;
+          b.classList.toggle('fenced', !roomAllowed(r.slug));
+        }
+      }
+      for (const id of ['room-select', 'daring-select']) {
+        for (const o of $(id).options) {
+          if (!o.value) continue;
+          o.textContent = roomLabel(o.value);
+          o.hidden = !roomAllowed(o.value);
+        }
+      }
+    }
+
     function selectRoom(room) {
-      if (!canHide()) return;
+      if (!canHide() || !roomAllowed(room.slug)) return;
       selectedRoom = room;
       $('room-select').value = room.slug;
       updateHUD();
@@ -1818,7 +1869,7 @@
       const r = currentState.round;
       if (!isRun() || !r) return '';
       return (FLOOR_LABELS[r.floor] || ('Floor ' + r.floor)) + ' · ' +
-        (r.rooms_left || ROOM_ORDER().length) + ' rooms · ';
+        ((Array.isArray(r.rooms) && r.rooms.length) || r.rooms_left || ROOM_ORDER().length) + ' rooms · ';
     }
     function tickTimer() {
       const r = currentState.round;
@@ -1922,7 +1973,8 @@
       $('room-select').value = canHide() && selectedRoom ? selectedRoom.slug : (my_hide && my_hide.room_slug ? my_hide.room_slug : '');
       for (const slug in roomButtons) {
         const b = roomButtons[slug];
-        b.disabled = !canHide();
+        b.disabled = !canHide() || !roomAllowed(slug);
+        b.classList.toggle('fenced', !roomAllowed(slug));
         b.classList.toggle('selected', !!(canHide() && selectedRoom && selectedRoom.slug === slug));
         b.classList.toggle('locked', !!(my_hide && my_hide.room_slug === slug));
         b.classList.toggle('daring', !!(my_hide && my_hide.daring_room_slug === slug));
@@ -1931,7 +1983,13 @@
       // Daring second pick (the restyled double down).
       const dare = $('daring-select');
       const dareBtn = $('btn-daring');
-      for (const o of dare.options) o.hidden = !!(o.value && my_hide && my_hide.room_slug === o.value);
+      for (const o of dare.options) {
+        if (!o.value) continue;
+        o.hidden = !roomAllowed(o.value) || !!(my_hide && my_hide.room_slug === o.value);
+      }
+      for (const o of $('room-select').options) {
+        if (o.value) o.hidden = !roomAllowed(o.value);
+      }
       dare.disabled = !canDare();
       if (my_hide && my_hide.daring_room_slug) dare.value = my_hide.daring_room_slug;
       else if (!canDare()) dare.value = '';
@@ -2233,6 +2291,7 @@
               currentState = { round: null, my_hide: null, hides: [], stats: null };
               lastRoundId = null; lastStatus = null; selectedRoom = null;
               ghostWalking = false; walk = null;
+              relabelRooms();
             }
           }
         } catch (_) {}
@@ -2251,6 +2310,7 @@
         if (base !== apiBase()) return;
         if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
+        relabelRooms();
 
         const roundChanged  = state.round && state.round.id !== lastRoundId;
         const statusChanged = (state.round && state.round.status) !== lastStatus;
