@@ -286,14 +286,14 @@ time in any post-hiding phase, so it works even though no row exists for them.
 `Play Game` opens a **run**: a sequence of floors on its own clock, apart from
 the shared open round, so players on different difficulties never share a
 round. Novice is the shared open round (all 11 rooms, one Pocong); Challenging
-and DieHard get their own run whose rounds are fenced to `rooms_left` of the
-same 11 slugs (rooms are fenced off, not deleted, so the map and `roomGeo` are
+and DieHard get their own run whose rounds are fenced to the floor's own
+`slugs` list (rooms are fenced off, not deleted, so the map and `roomGeo` are
 untouched and the 11-room source of truth is not forked).
 
 | Difficulty | Floors (floor · rooms in play · Pocong) | Score factor |
 |---|---|---|
 | Novice | 1 · 11 · 1 | x1 |
-| Challenging | 2 · 6 · 1 | x2 |
+| Challenging | 2 · 6 · 2 | x2 |
 | DieHard | 2 · 3 · 2, then 3 (Attic) · 3 · 2 | x3 |
 
 A floor is cleared by surviving the round in which the whole floor was in play;
@@ -302,9 +302,20 @@ lost when the player is eliminated. A lost run stays saved on its floor, so the
 next START of that difficulty resumes it. Only one run is active per user: a
 START on another difficulty parks the current one as lost.
 
+Each `RUN_FLOORS` entry in `server.js` carries an explicit `slugs` list (the
+rooms in play for that floor); `floorRoomSlugs(round)` reads the round's
+`difficulty`/`floor` and falls back to the `rooms_left` slice for rows written
+before the lists existed. The page fences and relabels from the run state's
+`round.rooms` (the same list, echoed in `/api/game/run/state`). Challenging's
+Floor 2 renames its six rooms in the page only (`FLOOR_ROOM_LABELS` in
+`public/index.html`): Kids' Bedroom → Brother Room, Master Bedroom → Sister
+Room, Bathroom → Shared Bathroom, Living Room → Activity Room, Reading Room
+keeps its name, Assistant's Room → Working Room. Novice and DieHard keep the
+default names.
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/game/run/state` | public | `{ run, round, my_hide, hides, stats, difficulty_options, result_ms, server_now }`; `run` is null signed out or with no active run |
+| GET | `/api/game/run/state` | public | `{ run, round, my_hide, hides, stats, difficulty_options, result_ms, server_now }`; `run` is null signed out or with no active run. In run mode `round` also carries `difficulty`, `floor`, `rooms_left`, `pocong_count` and `rooms` (the floor's slug list), appended after the shared fields. | |
 | POST | `/api/game/run/start` | bound wallet | `{ difficulty }`. Novice reuses the shared open round (no run); the others resume or open the first floor. 400 unknown difficulty |
 | POST | `/api/game/run/hide` | bound wallet | As `/api/game/hide`, but restricted to the floor's rooms (400 `That room is not on this floor`) |
 | POST | `/api/game/run/daring` | bound wallet | As `/api/game/daring`, same floor restriction |
@@ -547,7 +558,11 @@ On boot in staging, if `rounds` is empty:
    the winner-history card renders rows instead of its empty state. The newest
    is `staging-demo-user` 10000 DieHard Raminom Floor 3.
 
-All fake identities, `ON CONFLICT DO NOTHING`, gated on `if (IS_STAGING)`.
+All fake identities, `ON CONFLICT DO NOTHING`, gated on `if (IS_STAGING)`. The
+fake user ids are negative (`-900001`…), so they can never collide with a real
+platform identity id (previews and checks sign in with their own positive id) —
+a seed row on the viewer's id would fabricate the signal the ghost-unlock code
+reads.
 
 The seed writes **no** `runs` row, **no** `player_settings` row and **no** `wins`
 row for whoever opens the preview: those are the signals the run code and the

@@ -52,14 +52,17 @@ const ROOM_SLUGS = HIDING_ROOMS.map((r) => r.slug);
 const STEP_BY_SLUG = Object.fromEntries(HIDING_ROOMS.map((r) => [r.slug, r.step]));
 
 // ── Solo runs: a difficulty is a sequence of floors on the one drawn map ─────
-// Floors are the same 11 rooms with only `rooms_left` of them in play (rooms
-// are fenced off, not deleted, so the map, hotspots and roomGeo keep working
-// and the 11-room single source of truth is not forked). Winning a floor means
-// surviving the round in which rooms_left reaches zero.
+// Each floor has an explicit `slugs` list (rooms are fenced off, not deleted,
+// so the map, hotspots and roomGeo keep working and the 11-room single source
+// of truth is not forked). Winning a floor means surviving the round in which
+// the whole floor was in play. Challenging's Floor 2 is six named rooms hunted
+// by two Pocong; DieHard's two floors keep the first three slugs of the list.
 const RUN_FLOORS = {
-  novice:      [{ floor: 1, rooms: 11, pocong: 1 }],
-  challenging: [{ floor: 2, rooms: 6,  pocong: 1 }],
-  diehard:     [{ floor: 2, rooms: 3,  pocong: 2 }, { floor: 3, rooms: 3, pocong: 2 }],
+  novice:      [{ floor: 1, rooms: 11, pocong: 1, slugs: ROOM_SLUGS }],
+  challenging: [{ floor: 2, rooms: 6,  pocong: 2,
+                  slugs: ['kamar-anak', 'kamar-utama', 'kamar-mandi', 'living-room', 'ruang-baca', 'kamar-asisten'] }],
+  diehard:     [{ floor: 2, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-anak', 'library'] },
+                { floor: 3, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-anak', 'library'] }],
 };
 // The Attic is the top floor, so it is named rather than numbered.
 const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Attic' };
@@ -74,6 +77,14 @@ const DEFAULT_ROOMS_LEFT = RUN_FLOORS.novice[0].rooms;
 // `rooms_left` of them. Fixed for a run, so a resumed run keeps its room set.
 function runFloorsFor(difficulty) { return RUN_FLOORS[difficulty] || RUN_FLOORS.novice; }
 function roomSlugsFor(rooms) { return ROOM_SLUGS.slice(0, Math.max(1, Math.min(rooms, ROOM_SLUGS.length))); }
+// A round's rooms come from its difficulty and floor's `slugs`; a row written
+// before floors carried lists (or with neither field) falls back to the
+// `rooms_left` slice.
+function floorDef(difficulty, floor) { return (RUN_FLOORS[difficulty] || []).find((f) => f.floor === floor) || null; }
+function floorRoomSlugs(round) {
+  const f = floorDef(round.difficulty, round.floor);
+  return f ? f.slugs : roomSlugsFor(round.rooms_left);
+}
 // Draws `count` distinct rooms (without replacement): with 3 rooms and 2
 // Pocong exactly one room is never entered, which is DieHard's "only 1 room
 // survives".
@@ -988,12 +999,16 @@ async function playerSettings(userId) {
 // the chosen ghost (clamped to an unlocked one), on the run's own clock.
 async function openRunHidingRound(run, now) {
   try {
+    // The Pocong count comes from the floor definition, so a run saved by an
+    // older build (Challenging with pocong_count 1) still gets its two.
+    const fd = floorDef(run.difficulty, run.floor);
+    const pocong = fd ? fd.pocong : run.pocong_count;
     const ins = await pool.query(
       `INSERT INTO rounds (round_number, run_id, difficulty, floor, ghost_enemy, pocong_count, rooms_left, status, hiding_ends_at)
        SELECT COALESCE(MAX(round_number), 0) + 1, $1, $2, $3, $4, $5, $6, 'hiding', $7
        FROM rounds
        HAVING NOT EXISTS (SELECT 1 FROM rounds WHERE run_id=$1 AND status IN ('hiding','hunt'))`,
-      [run.id, run.difficulty, run.floor, run.ghost_enemy, run.pocong_count, run.rooms_left,
+      [run.id, run.difficulty, run.floor, run.ghost_enemy, pocong, run.rooms_left,
        new Date(now.getTime() + HIDING_MS)]
     );
     return ins.rowCount > 0;
@@ -1068,7 +1083,7 @@ async function runRunTransitions(run, now) {
         await pool.query(`UPDATE rounds SET hiding_ends_at=$1 WHERE id=$2`, [new Date(now.getTime() + HIDING_MS), round.id]);
         continue;
       }
-      await toHunt(round, now, roomSlugsFor(round.rooms_left));
+      await toHunt(round, now, floorRoomSlugs(round));
       continue;
     }
     if (round.status === 'hunt' && round.hunt_ends_at && now > new Date(round.hunt_ends_at)) {
@@ -1110,6 +1125,8 @@ async function runPayload(run, round, req) {
       target_room: round.target_room, target_rooms: roundTargets(round),
       hiding_ends_at: round.hiding_ends_at, hunt_ends_at: round.hunt_ends_at,
       resolved_at: round.resolved_at,
+      difficulty: round.difficulty, floor: round.floor, rooms_left: round.rooms_left,
+      pocong_count: round.pocong_count, rooms: floorRoomSlugs(round),
     } : null,
     my_hide: myHide, hides, stats,
     result_ms: RESULT_MS,
@@ -1216,7 +1233,7 @@ app.post('/api/game/run/hide', requireBoundWallet, async (req, res) => {
   try {
     const live = await liveRunHidingRound(req, res);
     if (!live) return;
-    const allowed = roomSlugsFor(live.round.rooms_left);
+    const allowed = floorRoomSlugs(live.round);
     if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
     if (!allowed.includes(room_slug)) return res.status(400).json({ error: 'That room is not on this floor' });
     const hide = await pool.query(
@@ -1235,7 +1252,7 @@ app.post('/api/game/run/daring', requireBoundWallet, async (req, res) => {
   try {
     const live = await liveRunHidingRound(req, res);
     if (!live) return;
-    const allowed = roomSlugsFor(live.round.rooms_left);
+    const allowed = floorRoomSlugs(live.round);
     if (!ROOM_SLUGS.includes(room_slug)) return res.status(400).json({ error: 'Invalid room' });
     if (!allowed.includes(room_slug)) return res.status(400).json({ error: 'That room is not on this floor' });
     const mine = await pool.query(
@@ -1263,7 +1280,7 @@ app.post('/api/game/run/advance', async (req, res) => {
     const run = await activeRun(req.user.id);
     if (!run) return res.status(409).json({ error: 'No run is on' });
     const round = await currentRunRound(run.id);
-    if (round && round.status === 'hiding') await toHunt(round, req.now, roomSlugsFor(round.rooms_left));
+    if (round && round.status === 'hiding') await toHunt(round, req.now, floorRoomSlugs(round));
     else if (round && round.status === 'hunt') await toResolved(round, req.now);
     else {
       const fresh = await activeRun(req.user.id) || run;
@@ -1587,10 +1604,13 @@ async function migrate() {
 
   // ── Staging seed data ─────────────────────────────────────────────────────
   if (IS_STAGING) {
-    // Fake players' bindings (background data only; never the viewer's).
+    // Fake players' bindings (background data only; never the viewer's). The
+    // fake ids are negative so they can never collide with a real platform
+    // identity: previews and checks sign in with their own positive id, and a
+    // seed row on that id would fabricate the signals the unlock code reads.
     const fakeBindings = [
-      [900001, 'staging-demo-user'], [900002, 'staging-user-01'], [900003, 'staging-user-02'],
-      [900004, 'staging-user-03'], [900005, 'staging-user-04'],
+      [-900001, 'staging-demo-user'], [-900002, 'staging-user-01'], [-900003, 'staging-user-02'],
+      [-900004, 'staging-user-03'], [-900005, 'staging-user-04'],
     ];
     for (const [uid, username] of fakeBindings) {
       await pool.query(
@@ -1616,11 +1636,11 @@ async function migrate() {
       const r = await pool.query(`SELECT id FROM rounds WHERE status='hiding' ORDER BY round_number DESC LIMIT 1`);
       const roundId = r.rows.length ? r.rows[0].id : null;
       const seeded = roundId === null ? [] : [
-        ['staging-demo-user', 900001, 'library'],
-        ['staging-user-01', 900002, 'kamar-utama'],
-        ['staging-user-02', 900003, 'kamar-utama'],
-        ['staging-user-03', 900004, 'gudang'],
-        ['staging-user-04', 900005, 'living-room'],
+        ['staging-demo-user', -900001, 'library'],
+        ['staging-user-01', -900002, 'kamar-utama'],
+        ['staging-user-02', -900003, 'kamar-utama'],
+        ['staging-user-03', -900004, 'gudang'],
+        ['staging-user-04', -900005, 'living-room'],
       ];
       for (const [username, uid, room] of seeded) {
         await pool.query(
@@ -1630,12 +1650,12 @@ async function migrate() {
         );
       }
       const stats = [
-        ['staging-demo-user', 900001, 1240, 1240, 3, 3, 5],
-        ['staging-user-01', 900002, 980, 420, 1, 3, 4],
-        ['staging-user-02', 900003, 760, 380, 0, 2, 3],
-        ['staging-user-03', 900004, 640, 320, 2, 2, 3],
-        ['staging-user-04', 900005, 410, 205, 1, 1, 2],
-        ['staging-user-05', 900006, 180, 90, 0, 1, 1],
+        ['staging-demo-user', -900001, 1240, 1240, 3, 3, 5],
+        ['staging-user-01', -900002, 980, 420, 1, 3, 4],
+        ['staging-user-02', -900003, 760, 380, 0, 2, 3],
+        ['staging-user-03', -900004, 640, 320, 2, 2, 3],
+        ['staging-user-04', -900005, 410, 205, 1, 1, 2],
+        ['staging-user-05', -900006, 180, 90, 0, 1, 1],
       ];
       for (const [username, uid, total, best, cur, bestStreak, survived] of stats) {
         await pool.query(
@@ -1653,12 +1673,12 @@ async function migrate() {
     if (haveWins.rows[0].count === '0') {
       const now0 = new Date();
       const wins = [
-        [900001, 'staging-demo-user', 10000, 'diehard',     'raminom', 3, -6 * 60],
-        [900003, 'staging-user-02',    3150, 'diehard',     'sumala',  3, -14 * 60],
-        [900002, 'staging-user-01',    2600, 'challenging', 'sumala',  2, -52 * 60],
-        [900004, 'staging-user-03',    1480, 'challenging', 'pocong',  2, -95 * 60],
-        [900005, 'staging-user-04',     760, 'novice',      'pocong',  1, -140 * 60],
-        [900001, 'staging-demo-user',   520, 'novice',      'pocong',  1, -200 * 60],
+        [-900001, 'staging-demo-user', 10000, 'diehard',     'raminom', 3, -6 * 60],
+        [-900003, 'staging-user-02',    3150, 'diehard',     'sumala',  3, -14 * 60],
+        [-900002, 'staging-user-01',    2600, 'challenging', 'sumala',  2, -52 * 60],
+        [-900004, 'staging-user-03',    1480, 'challenging', 'pocong',  2, -95 * 60],
+        [-900005, 'staging-user-04',     760, 'novice',      'pocong',  1, -140 * 60],
+        [-900001, 'staging-demo-user',   520, 'novice',      'pocong',  1, -200 * 60],
       ];
       for (const [uid, username, points, difficulty, ghost, floor, minsAgo] of wins) {
         await pool.query(
@@ -1673,15 +1693,15 @@ async function migrate() {
     // preview joins it like any other party; nobody real is seeded into it.
     const demo = await pool.query(
       `INSERT INTO parties (code, created_by_user_id, created_by_username)
-       VALUES ('DEMO1', 900001, 'staging-demo-user') ON CONFLICT (code) DO NOTHING RETURNING id`
+       VALUES ('DEMO1', -900001, 'staging-demo-user') ON CONFLICT (code) DO NOTHING RETURNING id`
     );
     if (demo.rows.length) {
       const partyId = demo.rows[0].id;
       const members = [
-        [900001, 'staging-demo-user', 860, 420, 2],
-        [900002, 'staging-user-01', 610, 380, 1],
-        [900003, 'staging-user-02', 340, 340, 0],
-        [900004, 'staging-user-03', 0, 0, 0],
+        [-900001, 'staging-demo-user', 860, 420, 2],
+        [-900002, 'staging-user-01', 610, 380, 1],
+        [-900003, 'staging-user-02', 340, 340, 0],
+        [-900004, 'staging-user-03', 0, 0, 0],
       ];
       for (const [uid, username, score, best, streak] of members) {
         await pool.query(
@@ -1698,10 +1718,10 @@ async function migrate() {
       );
       if (pr.rows.length) {
         const hides = [
-          [900001, 'staging-demo-user', 'library', 'survived', 420],
-          [900002, 'staging-user-01', 'kamar-utama', 'survived', 380],
-          [900003, 'staging-user-02', 'backyard', 'survived', 340],
-          [900004, 'staging-user-03', 'gudang', 'eliminated', 0],
+          [-900001, 'staging-demo-user', 'library', 'survived', 420],
+          [-900002, 'staging-user-01', 'kamar-utama', 'survived', 380],
+          [-900003, 'staging-user-02', 'backyard', 'survived', 340],
+          [-900004, 'staging-user-03', 'gudang', 'eliminated', 0],
         ];
         for (const [uid, username, room, outcome, pts] of hides) {
           await pool.query(

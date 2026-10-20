@@ -116,6 +116,7 @@
     .hotspot.locked { fill: rgba(124,58,237,0.32); }
     .hotspot.daring { fill: rgba(224,140,24,0.30); }
     .hotspot.target { fill: rgba(205,20,20,0.38); }
+    .hotspot.fenced { fill: rgba(26,22,19,0.28); }
 
     /* Frightened avatars tremble; faster once the Pocong is on the route. */
     @keyframes tremble {
@@ -219,6 +220,7 @@
     #room-grid button.selected { background: #7c3aed; border-color: #b574ff; color: #fff; opacity: 1; }
     #room-grid button.locked { background: #3f2a73; border-color: #b574ff; color: #fff; opacity: 1; }
     #room-grid button.daring { border-color: #e08c18; color: #ffc46b; opacity: 1; }
+    #room-grid button.fenced { opacity: 0.25; text-decoration: line-through; }
     .pp-row { font-size: 0.76rem; color: #c9bda4; line-height: 1.5; }
     .pp-row .lock-state { font-weight: bold; color: #b574ff; letter-spacing: 0.5px; }
     .pp-row .lock-state.none { color: #9b8f78; font-weight: normal; letter-spacing: 0; }
@@ -905,13 +907,22 @@
     const DIFFICULTY_LABEL = { novice: 'Novice', challenging: 'Challenging', diehard: 'DieHard' };
     const DIFFICULTY_HELP = {
       novice: 'One mansion floor, all 11 rooms, one Pocong.',
-      challenging: 'Floor 2 with 6 rooms and one Pocong. Win it to unlock Sumala.',
+      challenging: 'Floor 2 with 6 rooms and 2 Pocong. Win it to unlock Sumala.',
       diehard: 'Floor 2 with 3 rooms and 2 Pocong, then the Attic, where only one room survives. Win it to unlock Raminom.',
     };
     const DIFF_FLOORS = {
       novice: [{ floor: 1, rooms: 11 }, { floor: 1, rooms: 11 }],
-      challenging: [{ floor: 2, rooms: 6 }],
+      challenging: [{ floor: 2, rooms: 6, pocong: 2 }],
       diehard: [{ floor: 2, rooms: 3 }, { floor: 3, rooms: 3 }],
+    };
+    // The server owns which slugs a run floor uses; only the Challenging Floor 2
+    // display names live here (shown while a Challenging round is current).
+    const FLOOR_ROOM_LABELS = {
+      challenging: { 2: {
+        'kamar-anak': 'Brother Room', 'kamar-utama': 'Sister Room',
+        'kamar-mandi': 'Shared Bathroom', 'living-room': 'Activity Room',
+        'ruang-baca': 'Reading Room', 'kamar-asisten': 'Working Room',
+      } },
     };
     // The run's rooms in the same order the server fences them (ROOMS order).
     function ROOM_ORDER() { return ROOMS.map((r) => r.slug); }
@@ -922,13 +933,13 @@
     // In run mode, currentState is the run's own round (from /api/game/run/state).
     function isRun() { return sessionStorage.getItem('aap_run') === '1'; }
     function setRun(on) { try { if (on) sessionStorage.setItem('aap_run', '1'); else sessionStorage.removeItem('aap_run'); } catch (_) {} }
-    // A run's rounds are fenced to the first `rooms_left` of the 11 slugs, the
-    // same set the server draws from.
-    function runRoomsLeft() {
-      const r = (isRun() && currentState.round) ? currentState.round.rooms_left : null;
-      return r || ROOM_ORDER().length;
+    // A run's rounds are fenced to the slug list the server sends in
+    // `round.rooms` (the run floor's own set, not a slice of the 11); without
+    // it, every room is allowed.
+    function allowedRooms() {
+      const rooms = (isRun() && currentState.round) ? currentState.round.rooms : null;
+      return (Array.isArray(rooms) && rooms.length) ? rooms : ROOM_ORDER();
     }
-    function allowedRooms() { return ROOM_ORDER().slice(0, runRoomsLeft()); }
     function roomAllowed(slug) { return allowedRooms().includes(slug); }
     function ghostsUnlocked() { return (settings.ghosts || []).reduce((m, g) => (m[g.key] = g.unlocked, m), { pocong: true }); }
 
@@ -963,7 +974,18 @@
       { slug: 'living-room',       label: 'Living Room',        gridX: 3, gridZ: 4, type: 'living'    },
     ];
     const ROOM_BY_SLUG = Object.fromEntries(ROOMS.map(r => [r.slug, r]));
-    function roomLabel(slug) { return (ROOM_BY_SLUG[slug] || {}).label || slug || '—'; }
+    function roomLabel(slug) {
+      // A Challenging run renames its six rooms while it is on. Scoped to run
+      // mode: the open round is Novice and keeps the default names (a run
+      // round can briefly surface in /api/game/state, since rounds share one
+      // global numbering, and it must not rename the shared view).
+      const r = isRun() && currentState ? currentState.round : null;
+      if (r && r.difficulty && FLOOR_ROOM_LABELS[r.difficulty]) {
+        const names = FLOOR_ROOM_LABELS[r.difficulty][r.floor];
+        if (names && names[slug]) return names[slug];
+      }
+      return (ROOM_BY_SLUG[slug] || {}).label || slug || '—';
+    }
 
     const ISO = { hw: 96, hh: 55, wallH: 18, ox: 585, oy: 140 };
     function iso(gx, gz) { return { x: ISO.ox + (gx - gz) * ISO.hw, y: ISO.oy + (gx + gz) * ISO.hh }; }
@@ -1116,6 +1138,7 @@
     // ── Build the blueprint ────────────────────────────────────────────────────
     const roomGeo = {};   // slug → { cx, cy, door, inside, spot }
     const hotspotEls = {};
+    const roomLabelEls = {};   // slug → the map's label leader, rect and text tag
     const DOOR_GAP = [0.34, 0.66];
 
     function wall(g, p0, p1, gap, fill) {
@@ -1196,17 +1219,22 @@
         const outward = onPlusX ? [ISO.hw * 0.13, ISO.hh * 0.13] : [-ISO.hw * 0.13, -ISO.hh * 0.13];
         labelsG.appendChild(svgText(mid[0] + outward[0], mid[1] + outward[1] + 3, 'Door', { 'font-size': 8.5, fill: '#3a3530', 'text-anchor': 'middle', 'font-style': 'italic' }));
 
-        // Label tag outside the map, with a leader to the outer wall.
+        // Label tag outside the map, with a leader to the outer wall. The
+        // pieces are kept in roomLabelEls so relabelRooms() can rename them.
         const m = onPlusX ? iso(gx - 0.5, gz) : iso(gx + 0.5, gz);
         const w = r.label.length * 6.4 + 14;
         const tx = onPlusX ? m.x - 16 - w : m.x + 16;
         const ty = onPlusX ? m.y - ISO.wallH - 22 : m.y - 24;
-        labelsG.appendChild(svgEl('line', {
+        const leader = svgEl('line', {
           x1: onPlusX ? tx + w : tx, y1: ty + 9, x2: m.x, y2: onPlusX ? m.y - ISO.wallH : m.y - 6,
           stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '2 2',
-        }));
-        labelsG.appendChild(svgEl('rect', { x: tx.toFixed(1), y: ty.toFixed(1), width: w.toFixed(1), height: 18, rx: 3, fill: '#fff', stroke: INK, 'stroke-width': 1.3 }));
-        labelsG.appendChild(svgText((tx + w / 2).toFixed(1), (ty + 12.5).toFixed(1), r.label, { 'font-size': 11, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' }));
+        });
+        const rect = svgEl('rect', { x: tx.toFixed(1), y: ty.toFixed(1), width: w.toFixed(1), height: 18, rx: 3, fill: '#fff', stroke: INK, 'stroke-width': 1.3 });
+        const text = svgText((tx + w / 2).toFixed(1), (ty + 12.5).toFixed(1), r.label, { 'font-size': 11, 'font-weight': 'bold', fill: INK, 'text-anchor': 'middle' });
+        labelsG.appendChild(leader);
+        labelsG.appendChild(rect);
+        labelsG.appendChild(text);
+        roomLabelEls[r.slug] = { leader, rect, text, m, onPlusX };
 
         const hs = svgEl('polygon', { points: ptsStr([top, right, bottom, left]), class: 'hotspot' });
         hs.dataset.slug = r.slug;
@@ -1224,7 +1252,7 @@
         const room = r;
         hs.addEventListener('pointerenter', () => { if (canHide()) hs.classList.add('hovered'); });
         hs.addEventListener('pointerleave', () => hs.classList.remove('hovered'));
-        hs.addEventListener('click', () => { if (canHide()) selectRoom(room); });
+        hs.addEventListener('click', () => { if (canHide() && roomAllowed(room.slug)) selectRoom(room); });
       }
 
       // North arrow (bottom-left) and legend (bottom-right).
@@ -1255,6 +1283,30 @@
       });
       paperG.appendChild(lg);
     })();
+
+    // Rename a run floor's rooms on screen: the map's label tags (re-measured
+    // with the same width formula), the grid buttons and both dropdowns. Called
+    // whenever the polled state changes, so names follow the current round.
+    function relabelRooms() {
+      for (const slug in roomLabelEls) {
+        const el = roomLabelEls[slug];
+        const lbl = roomLabel(slug);
+        if (el.text.textContent === lbl) continue;
+        const w = lbl.length * 6.4 + 14;
+        const tx = el.onPlusX ? el.m.x - 16 - w : el.m.x + 16;
+        el.text.textContent = lbl;
+        el.text.setAttribute('x', (tx + w / 2).toFixed(1));
+        el.rect.setAttribute('x', tx.toFixed(1));
+        el.rect.setAttribute('width', w.toFixed(1));
+        el.leader.setAttribute('x1', (el.onPlusX ? tx + w : tx).toFixed(1));
+        const b = roomButtons[slug];
+        if (b) b.textContent = lbl;
+        for (const sel of [$('room-select'), $('daring-select')]) {
+          const o = sel.querySelector('option[value="' + slug + '"]');
+          if (o) o.textContent = lbl;
+        }
+      }
+    }
 
     // ── Pocong Route: the drawn hallway path, visible in both phases ────────────
     const ROUTE = [];
@@ -1781,7 +1833,7 @@
         dare.appendChild(o2);
         const b = document.createElement('button');
         b.type = 'button'; b.textContent = r.label; b.dataset.slug = r.slug;
-        b.addEventListener('click', () => { if (canHide()) selectRoom(r); });
+        b.addEventListener('click', () => { if (canHide() && roomAllowed(r.slug)) selectRoom(r); });
         grid.appendChild(b);
         roomButtons[r.slug] = b;
       }
@@ -1793,7 +1845,7 @@
     })();
 
     function selectRoom(room) {
-      if (!canHide()) return;
+      if (!canHide() || !roomAllowed(room.slug)) return;
       selectedRoom = room;
       $('room-select').value = room.slug;
       updateHUD();
@@ -1817,8 +1869,8 @@
     function runPrefix() {
       const r = currentState.round;
       if (!isRun() || !r) return '';
-      return (FLOOR_LABELS[r.floor] || ('Floor ' + r.floor)) + ' · ' +
-        (r.rooms_left || ROOM_ORDER().length) + ' rooms · ';
+      const n = (Array.isArray(r.rooms) && r.rooms.length) ? r.rooms.length : (r.rooms_left || ROOM_ORDER().length);
+      return (FLOOR_LABELS[r.floor] || ('Floor ' + r.floor)) + ' · ' + n + ' rooms · ';
     }
     function tickTimer() {
       const r = currentState.round;
@@ -1920,9 +1972,12 @@
 
       $('room-select').disabled = !canHide();
       $('room-select').value = canHide() && selectedRoom ? selectedRoom.slug : (my_hide && my_hide.room_slug ? my_hide.room_slug : '');
+      for (const o of $('room-select').options) o.hidden = !!(o.value && !roomAllowed(o.value));
       for (const slug in roomButtons) {
         const b = roomButtons[slug];
-        b.disabled = !canHide();
+        const allowed = roomAllowed(slug);
+        b.disabled = !canHide() || !allowed;
+        b.classList.toggle('fenced', !allowed);
         b.classList.toggle('selected', !!(canHide() && selectedRoom && selectedRoom.slug === slug));
         b.classList.toggle('locked', !!(my_hide && my_hide.room_slug === slug));
         b.classList.toggle('daring', !!(my_hide && my_hide.daring_room_slug === slug));
@@ -1931,7 +1986,7 @@
       // Daring second pick (the restyled double down).
       const dare = $('daring-select');
       const dareBtn = $('btn-daring');
-      for (const o of dare.options) o.hidden = !!(o.value && my_hide && my_hide.room_slug === o.value);
+      for (const o of dare.options) o.hidden = !!(o.value && ((my_hide && my_hide.room_slug === o.value) || !roomAllowed(o.value)));
       dare.disabled = !canDare();
       if (my_hide && my_hide.daring_room_slug) dare.value = my_hide.daring_room_slug;
       else if (!canDare()) dare.value = '';
@@ -2233,6 +2288,7 @@
               currentState = { round: null, my_hide: null, hides: [], stats: null };
               lastRoundId = null; lastStatus = null; selectedRoom = null;
               ghostWalking = false; walk = null;
+              relabelRooms(); // back to the default room names
             }
           }
         } catch (_) {}
@@ -2251,6 +2307,7 @@
         if (base !== apiBase()) return;
         if (state.server_now) serverSkewMs = new Date(state.server_now).getTime() - Date.now();
         currentState = state;
+        relabelRooms();
 
         const roundChanged  = state.round && state.round.id !== lastRoundId;
         const statusChanged = (state.round && state.round.status) !== lastStatus;
