@@ -903,17 +903,17 @@
     const GHOST_ART = { pocong: '/assets/pocong.jpg', sumala: '/assets/sumala.png', raminom: '/assets/raminom.png' };
     const GHOST_LABEL = { pocong: 'Pocong', sumala: 'Sumala', raminom: 'Raminom' };
     function ghostLabel(key) { return GHOST_LABEL[key] || GHOST_LABEL.pocong; }
-    const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Attic' };
+    const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Fl. 3 - The Attic' };
     const DIFFICULTY_LABEL = { novice: 'Novice', challenging: 'Challenging', diehard: 'DieHard' };
     const DIFFICULTY_HELP = {
       novice: 'One mansion floor, all 11 rooms, one Pocong.',
       challenging: 'Floor 2 with 6 rooms and 2 Pocong. Win it to unlock Sumala.',
-      diehard: 'Floor 2 with 3 rooms and 2 Pocong, then the Attic, where only one room survives. Win it to unlock Raminom.',
+      diehard: 'Fl. 3 - The Attic with 3 rooms and 2 Pocong. Win it to unlock Raminom.',
     };
     const DIFF_FLOORS = {
       novice: [{ floor: 1, rooms: 11 }, { floor: 1, rooms: 11 }],
       challenging: [{ floor: 2, rooms: 6, pocong: 2 }],
-      diehard: [{ floor: 2, rooms: 3 }, { floor: 3, rooms: 3 }],
+      diehard: [{ floor: 2, rooms: 3, pocong: 2 }, { floor: 3, rooms: 3, pocong: 2 }],
     };
     // The run's rooms in the same order the server fences them (ROOMS order).
     function ROOM_ORDER() { return ROOMS.map((r) => r.slug); }
@@ -924,13 +924,18 @@
     // In run mode, currentState is the run's own round (from /api/game/run/state).
     function isRun() { return sessionStorage.getItem('aap_run') === '1'; }
     function setRun(on) { try { if (on) sessionStorage.setItem('aap_run', '1'); else sessionStorage.removeItem('aap_run'); } catch (_) {} }
-    // Challenging's second floor has its own room names; other difficulties
-    // and the open round keep the ROOMS labels. The server owns the slug list.
+    // Challenging's second floor and DieHard's Attic have their own room names;
+    // other floors and the open round keep the ROOMS labels. The server owns
+    // the slug list.
     const FLOOR_ROOM_LABELS = {
       challenging: { 2: {
         'kamar-anak': 'Brother Room', 'kamar-utama': 'Sister Room',
         'kamar-mandi': 'Shared Bathroom', 'living-room': 'Activity Room',
         'ruang-baca': 'Reading Room', 'kamar-asisten': 'Working Room',
+      } },
+      diehard: { 3: {
+        'kamar-utama': 'Big Brother Room', 'kamar-mandi': 'Attic Bathroom',
+        'ruang-baca': 'Telescope Room',
       } },
     };
     // A run's round carries its own floor's slugs (`rooms`), the same set the
@@ -1131,6 +1136,7 @@
     // ── Build the blueprint ────────────────────────────────────────────────────
     const roomGeo = {};   // slug → { cx, cy, door, inside, spot }
     const hotspotEls = {};
+    let mapTitleEl = null;   // the title block text, retitled on the Attic
     const roomLabelEls = {};
     const DOOR_GAP = [0.34, 0.66];
 
@@ -1160,8 +1166,9 @@
       paperG.appendChild(svgEl('rect', { x: 9, y: 9, width: 1082, height: 662, fill: 'none', stroke: INK, 'stroke-width': 2.2 }));
       paperG.appendChild(svgEl('rect', { x: 15, y: 15, width: 1070, height: 650, fill: 'none', stroke: INK, 'stroke-width': 0.9 }));
 
-      // Title block (top-left).
-      paperG.appendChild(svgText(34, 52, 'Mansion Level 1 Hallway Map', { 'font-size': 21, 'font-weight': 'bold', fill: INK, 'letter-spacing': 1 }));
+      // Title block (top-left). Kept so a DieHard Attic run can retitle it.
+      mapTitleEl = svgText(34, 52, 'Mansion Level 1 Hallway Map', { 'font-size': 21, 'font-weight': 'bold', fill: INK, 'letter-spacing': 1 });
+      paperG.appendChild(mapTitleEl);
       paperG.appendChild(svgText(35, 70, 'Blueprint · 11 hiding rooms · 1 Pocong', { 'font-size': 11, fill: '#4a4640' }));
       paperG.appendChild(svgEl('line', { x1: 34, y1: 78, x2: 330, y2: 78, stroke: INK, 'stroke-width': 1.2 }));
 
@@ -1841,6 +1848,15 @@
           o.hidden = !roomAllowed(o.value);
         }
       }
+      // DieHard's Attic carries its own map title; every other floor and the
+      // open round read the mansion's first-floor title.
+      const rr = currentState && currentState.round;
+      const title = (isRun() && rr && rr.difficulty === 'diehard' && rr.floor === 3)
+        ? 'Mansion Level Attic Hallway Map'
+        : 'Mansion Level 1 Hallway Map';
+      if (mapTitleEl) mapTitleEl.textContent = title;
+      const svg = $('game-svg');
+      if (svg) svg.setAttribute('aria-label', title);
     }
 
     function selectRoom(room) {

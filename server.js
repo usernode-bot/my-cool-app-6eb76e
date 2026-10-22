@@ -62,11 +62,12 @@ const RUN_FLOORS = {
   // Challenging is its own second floor of six rooms, hunted by two Pocong.
   challenging: [{ floor: 2, rooms: 6,  pocong: 2,
                   slugs: ['kamar-anak', 'kamar-utama', 'kamar-mandi', 'living-room', 'ruang-baca', 'kamar-asisten'] }],
-  diehard:     [{ floor: 2, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-anak', 'library'] },
-                { floor: 3, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-anak', 'library'] }],
+  // DieHard's third floor is the Attic: three named rooms, hunted by two Pocong.
+  diehard:     [{ floor: 2, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-mandi', 'ruang-baca'] },
+                { floor: 3, rooms: 3,  pocong: 2, slugs: ['kamar-utama', 'kamar-mandi', 'ruang-baca'] }],
 };
 // The Attic is the top floor, so it is named rather than numbered.
-const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Attic' };
+const FLOOR_LABELS = { 1: 'Floor 1', 2: 'Floor 2', 3: 'Fl. 3 - The Attic' };
 function floorLabel(floor) { return FLOOR_LABELS[floor] || ('Floor ' + floor); }
 // Novice x1, Challenging x2, DieHard x3, applied where survivalPoints is used.
 const DIFFICULTY_FACTOR = { novice: 1, challenging: 2, diehard: 3 };
