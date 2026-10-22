@@ -295,11 +295,18 @@ Room, Reading Room, Working Room), greys out and blocks the other five, and the
 run state's `round` carries `difficulty`, `floor`, `rooms_left`, `pocong_count`
 and `rooms` (the floor's slugs) so it can fence and relabel from that list.
 
+DieHard's last floor is the Attic (Floor 3). Both DieHard floors use the same
+three rooms — Master Bedroom, Bathroom and Reading Room — and the Attic renames
+them through `FLOOR_ROOM_LABELS.diehard[3]`: Big Brother Room, Attic Bathroom,
+Telescope Room. On the Attic the page also swaps the map title to "Mansion
+Level Attic Hallway Map" (and back everywhere else), and the phase line reads
+"Fl. 3 - The Attic · 3 rooms ·".
+
 | Difficulty | Floors (floor · rooms in play · Pocong) | Score factor |
 |---|---|---|
 | Novice | 1 · 11 · 1 | x1 |
 | Challenging | 2 · 6 · 2 | x2 |
-| DieHard | 2 · 3 · 2, then 3 (Attic) · 3 · 2 | x3 |
+| DieHard | 2 · 3 · 2, then 3 (Fl. 3 - The Attic) · 3 · 2 | x3 |
 
 A floor is cleared by surviving the round in which the whole floor was in play;
 the run is won when its last floor is cleared (a `wins` row is written), or
